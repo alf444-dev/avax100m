@@ -211,7 +211,17 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       <div class="cell"><div class="k">biggest roundtrip</div><div class="v" id="pnl-rt">\u2014</div></div>
       <div class="cell"><div class="k">sold too early</div><div class="v" id="pnl-ste">\u2014</div></div>
     </div>
+    <div class="note" id="pnl-summary" style="display:none;font-size:13px;color:var(--ink)"></div>
     <div class="note" id="pnl-note">syncing trade history\u2026</div>
+    <button class="btn" id="ledger-toggle" style="display:none;margin-top:16px">full ledger \u2192</button>
+    <div id="ledger" style="display:none;margin-top:22px">
+      <div class="grid" style="grid-template-columns:repeat(4,1fr)">
+        <div class="cell"><div class="k">top wins</div><div id="lg-w" style="font-size:12px;margin-top:8px"></div></div>
+        <div class="cell"><div class="k">top losses</div><div id="lg-l" style="font-size:12px;margin-top:8px"></div></div>
+        <div class="cell"><div class="k">roundtrips</div><div id="lg-rt" style="font-size:12px;margin-top:8px"></div></div>
+        <div class="cell"><div class="k">sold too early</div><div id="lg-ste" style="font-size:12px;margin-top:8px"></div></div>
+      </div>
+    </div>
     <div id="pnl-card-wrap" style="display:none;margin-top:22px">
       <canvas id="pnl-card" width="1080" height="1350" style="width:100%;max-width:360px;border:1px solid var(--faint);display:block"></canvas>
       <div style="display:flex;gap:10px;margin-top:12px;max-width:360px">
@@ -280,6 +290,14 @@ fetch(SITE+"/api/pnl?addr="+D.addr).then(function(r){return r.json();}).then(fun
   var note=document.getElementById("pnl-note");
   if(!p || !p.available){ note.textContent="trade history sync coming soon."; return; }
   var s=p.stats||{};
+  renderPnl(s);
+  if(p.stale){
+    fetch(SITE+"/api/pnl?addr="+D.addr+"&refresh=1").then(function(r){return r.json();})
+      .then(function(p2){ if(p2 && p2.available) renderPnl(p2.stats); }).catch(function(){});
+  }
+}).catch(function(){ document.getElementById("pnl-note").textContent="trade history sync coming soon."; });
+
+function renderPnl(s){
   function set(id,o){ var el=document.getElementById(id);
     if(!o){ el.textContent="\u2014"; return; }
     el.innerHTML=o.line+(o.sub?' <small>'+o.sub+'</small>':""); }
@@ -287,9 +305,32 @@ fetch(SITE+"/api/pnl?addr="+D.addr).then(function(r){return r.json();}).then(fun
   set("pnl-l", s.biggestL);
   set("pnl-rt", s.roundtrip);
   set("pnl-ste", s.soldTooEarly);
-  note.textContent = "realized only \xB7 tracked tokens only \xB7 "+(s.tokens||0)+" tokens traded";
+  if(s.summary && s.summary.total){
+    var sm=document.getElementById("pnl-summary");
+    sm.innerHTML="total realized: <b style='color:var(--red)'>"+s.summary.total+"</b>"
+      +(s.summary.winrate?" \xB7 "+s.summary.winrate+" winrate ("+s.summary.wins+"w / "+s.summary.losses+"l)":"");
+    sm.style.display="block";
+  }
+  document.getElementById("pnl-note").textContent = "realized only \xB7 tracked tokens only \xB7 "+(s.tokens||0)+" tokens traded";
+  function list(id, arr){
+    var el=document.getElementById(id);
+    if(!arr || !arr.length){ el.innerHTML='<span style="color:var(--faint)">\u2014</span>'; return; }
+    el.innerHTML=arr.map(function(o){return '<div style="padding:3px 0;border-bottom:1px solid var(--faint)"><b>'+o.line+'</b> <span style="color:var(--dim)">'+o.sub+'</span></div>';}).join("");
+  }
+  var hasLists=(s.topW&&s.topW.length)||(s.topL&&s.topL.length)||(s.roundtrips&&s.roundtrips.length)||(s.soldEarly&&s.soldEarly.length);
+  if(hasLists){
+    list("lg-w", s.topW); list("lg-l", s.topL); list("lg-rt", s.roundtrips); list("lg-ste", s.soldEarly);
+    var tg=document.getElementById("ledger-toggle");
+    tg.style.display="inline-block";
+    tg.onclick=function(){
+      var lg=document.getElementById("ledger");
+      var open=lg.style.display!=="none";
+      lg.style.display=open?"none":"block";
+      tg.textContent=open?"full ledger \u2192":"close ledger";
+    };
+  }
   drawPnlCard(s);
-}).catch(function(){ document.getElementById("pnl-note").textContent="trade history sync coming soon."; });
+}
 
 /* shareable p&l card */
 function drawPnlCard(s){
@@ -305,7 +346,9 @@ function drawPnlCard(s){
   x.fillStyle="#e84142";x.font="800 84px "+mono;
   x.fillText("REALIZED P&L",92,150);
   x.fillStyle="#7a7a7a";x.font="400 27px "+mono;
-  x.fillText(RANK.toLowerCase()+" \xB7 since "+ERA.toLowerCase(),92,254);
+  var subline = RANK.toLowerCase()+" \xB7 since "+ERA.toLowerCase();
+  if(s.summary && s.summary.total) subline += " \xB7 total "+s.summary.total.toLowerCase()+(s.summary.winrate?" \xB7 "+s.summary.winrate+" winrate":"");
+  x.fillText(subline.length>66?subline.slice(0,66):subline,92,254);
   x.fillStyle="#2a2a2a";x.fillRect(92,306,W-184,2);
   function block(k,o,y){
     x.fillStyle="#7a7a7a";x.font="600 26px "+mono;x.fillText(k,92,y);
@@ -355,6 +398,7 @@ var wallet_default = async (req) => {
   const site = (process.env.URL || "https://avax100m.xyz").replace(/\/$/, "");
   const m = url.pathname.match(/^\/w\/(0x[0-9a-fA-F]{40})\/?$/);
   if (!m) return Response.redirect(site, 302);
+  if (m[1] !== m[1].toLowerCase()) return Response.redirect(site + "/w/" + m[1].toLowerCase(), 301);
   let w = null;
   try {
     w = await fetchWallet(m[1]);

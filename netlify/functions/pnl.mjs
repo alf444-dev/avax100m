@@ -779,6 +779,7 @@ var getStore = (input, options) => {
 var HEADERS = { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" };
 var CACHE_MS = 7 * 24 * 3600 * 1e3;
 var MORALIS = "https://deep-index.moralis.io/api/v2.2";
+var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
 var usd = (n) => "$" + Math.round(Math.abs(n)).toLocaleString("en-US");
 var signedUsd = (n) => (n < 0 ? "-" : "+") + usd(n);
 async function mfetch(path, key) {
@@ -811,6 +812,35 @@ async function cgToken(addr, store) {
     } catch {
     }
     return v;
+  } catch {
+    return null;
+  }
+}
+async function replayBag(addr, contract, athTs) {
+  try {
+    const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
+    const j = await r.json();
+    if (!j.result || !Array.isArray(j.result) || !j.result.length) return null;
+    let bal = 0n, peakBeforeAth = 0n, peakEver = 0n, balAtAth = null, dec = null;
+    for (const t of j.result) {
+      if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
+      const ts = parseInt(t.timeStamp, 10) * 1e3;
+      if (athTs && balAtAth === null && ts > athTs) balAtAth = bal;
+      let v;
+      try {
+        v = BigInt(t.value || "0");
+      } catch {
+        continue;
+      }
+      if ((t.to || "").toLowerCase() === addr) bal += v;
+      else if ((t.from || "").toLowerCase() === addr) bal -= v;
+      if (bal > peakEver) peakEver = bal;
+      if (athTs && ts <= athTs && bal > peakBeforeAth) peakBeforeAth = bal;
+    }
+    if (athTs && balAtAth === null) balAtAth = bal;
+    const d = dec === null || isNaN(dec) ? 18 : dec;
+    const f = (x) => Number(x) / Math.pow(10, d);
+    return { peakEver: f(peakEver), peakBeforeAth: f(peakBeforeAth), balAtAth: balAtAth === null ? null : f(balAtAth) };
   } catch {
     return null;
   }
@@ -866,35 +896,15 @@ function parseRows(tokens) {
     };
   });
 }
-var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
-async function replayBag(addr, contract, athTs) {
-  try {
-    const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
-    const j = await r.json();
-    if (!j.result || !Array.isArray(j.result) || !j.result.length) return null;
-    let bal = 0n, peakBeforeAth = 0n, peakEver = 0n, balAtAth = null, dec = null;
-    for (const t of j.result) {
-      if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
-      const ts = parseInt(t.timeStamp, 10) * 1e3;
-      if (athTs && balAtAth === null && ts > athTs) balAtAth = bal;
-      let v;
-      try {
-        v = BigInt(t.value || "0");
-      } catch {
-        continue;
-      }
-      if ((t.to || "").toLowerCase() === addr) bal += v;
-      else if ((t.from || "").toLowerCase() === addr) bal -= v;
-      if (bal > peakEver) peakEver = bal;
-      if (athTs && ts <= athTs && bal > peakBeforeAth) peakBeforeAth = bal;
+async function pool(items, n, fn) {
+  let i = 0;
+  const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (i < items.length) {
+      const k = i++;
+      await fn(items[k]);
     }
-    if (athTs && balAtAth === null) balAtAth = bal;
-    const d = dec === null || isNaN(dec) ? 18 : dec;
-    const f = (x) => Number(x) / Math.pow(10, d);
-    return { peakEver: f(peakEver), peakBeforeAth: f(peakBeforeAth), balAtAth: balAtAth === null ? null : f(balAtAth) };
-  } catch {
-    return null;
-  }
+  });
+  await Promise.all(workers);
 }
 async function enrich(rows, balances, ADDR, store, diag) {
   const byInvested = rows.filter((r) => r.tokenAddress && r.invested > 100 && (balances[r.tokenAddress] || 0) > 0).sort((a, b) => b.invested - a.invested).slice(0, 4);
@@ -908,13 +918,13 @@ async function enrich(rows, balances, ADDR, store, diag) {
     }
   }
   const rts = [], stes = [];
-  for (const c of cands.slice(0, 11)) {
+  await pool(cands.slice(0, 11), 3, async (c) => {
     const d = { sym: c.sym, sold: Math.round(c.sold) };
     if (diag) diag.push(d);
     const cg = await cgToken(c.tokenAddress, store);
     if (!cg) {
       d.skip = "no coingecko data";
-      continue;
+      return;
     }
     d.ath = cg.ath;
     d.athDate = cg.athDate ? new Date(cg.athDate).toISOString().slice(0, 10) : null;
@@ -932,7 +942,7 @@ async function enrich(rows, balances, ADDR, store, diag) {
       const rp = await replayBag(ADDR, c.tokenAddress, cg.athDate);
       if (!rp) {
         d.skip = "replay failed";
-        continue;
+        return;
       }
       d.peakBeforeAth = rp.peakBeforeAth;
       d.balAtAth = rp.balAtAth;
@@ -951,23 +961,35 @@ async function enrich(rows, balances, ADDR, store, diag) {
         d.skip = "held through ath";
       }
     }
-  }
+  });
   rts.sort((a, b) => b.rt - a.rt);
   stes.sort((a, b) => b.missed - a.missed);
-  const roundtrip = rts[0] ? { line: rts[0].line, sub: rts[0].sub } : null;
-  const stePick = stes.find((s) => !rts[0] || s.sym !== rts[0].sym) || null;
-  const soldTooEarly = stePick ? { line: stePick.line, sub: stePick.sub } : null;
-  return { roundtrip, soldTooEarly };
+  const clean = (arr) => arr.slice(0, 5).map((x) => ({ line: x.line, sub: x.sub }));
+  return {
+    roundtrip: rts[0] ? { line: rts[0].line, sub: rts[0].sub } : null,
+    soldTooEarly: stes[0] ? { line: stes[0].line, sub: stes[0].sub } : null,
+    roundtrips: clean(rts),
+    soldEarly: clean(stes)
+  };
 }
 function summarize(rows, capped) {
-  if (!rows.length) return { tokens: 0, biggestW: null, biggestL: null, roundtrip: null, soldTooEarly: null };
+  const base = { tokens: capped ? rows.length + "+" : rows.length, biggestW: null, biggestL: null, topW: [], topL: [], summary: null };
+  if (!rows.length) return base;
   const wins = rows.filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit);
   const losses = rows.filter((r) => r.profit < 0).sort((a, b) => a.profit - b.profit);
-  return {
-    tokens: capped ? rows.length + "+" : rows.length,
-    biggestW: wins[0] ? { line: signedUsd(wins[0].profit), sub: "$" + wins[0].sym } : null,
-    biggestL: losses[0] ? { line: signedUsd(losses[0].profit), sub: "$" + losses[0].sym } : null
+  const total = rows.reduce((s, r) => s + r.profit, 0);
+  const decided = wins.length + losses.length;
+  base.biggestW = wins[0] ? { line: signedUsd(wins[0].profit), sub: "$" + wins[0].sym } : null;
+  base.biggestL = losses[0] ? { line: signedUsd(losses[0].profit), sub: "$" + losses[0].sym } : null;
+  base.topW = wins.slice(0, 5).map((r) => ({ line: signedUsd(r.profit), sub: "$" + r.sym }));
+  base.topL = losses.slice(0, 5).map((r) => ({ line: signedUsd(r.profit), sub: "$" + r.sym }));
+  base.summary = {
+    total: signedUsd(total),
+    winrate: decided ? Math.round(wins.length / decided * 100) + "%" : null,
+    wins: wins.length,
+    losses: losses.length
   };
+  return base;
 }
 var pnl_default = async (req) => {
   const key = process.env.MORALIS_KEY;
@@ -982,16 +1004,18 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v6/" + addr;
-  if (store && url.searchParams.get("debug") !== "1") try {
+  const cacheKey = "v7/" + addr;
+  const debug = url.searchParams.get("debug") === "1";
+  const refresh = url.searchParams.get("refresh") === "1";
+  if (store && !debug && !refresh) try {
     const cached = await store.get(cacheKey, { type: "json" });
-    if (cached && Date.now() - cached.t < CACHE_MS) {
-      return new Response(JSON.stringify({ available: true, stats: cached.stats, cached: true }), { headers: HEADERS });
+    if (cached) {
+      const fresh = Date.now() - cached.t < CACHE_MS;
+      return new Response(JSON.stringify({ available: true, stats: cached.stats, cached: true, stale: !fresh }), { headers: HEADERS });
     }
   } catch {
   }
   try {
-    const debug = url.searchParams.get("debug") === "1";
     const diag = debug ? [] : null;
     const [{ rows: raw, capped }, balances] = await Promise.all([fetchAllProfitability(addr, key), fetchBalances(addr, key)]);
     const rows = parseRows(raw);
@@ -999,6 +1023,8 @@ var pnl_default = async (req) => {
     const extra = await enrich(rows, balances, addr, store, diag);
     stats.roundtrip = extra.roundtrip;
     stats.soldTooEarly = extra.soldTooEarly;
+    stats.roundtrips = extra.roundtrips;
+    stats.soldEarly = extra.soldEarly;
     if (store && !debug) await store.set(cacheKey, JSON.stringify({ t: Date.now(), stats })).catch(() => {
     });
     const out = { available: true, stats };

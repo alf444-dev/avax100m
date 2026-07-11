@@ -651,6 +651,7 @@
     pel.href = SITE+"/w/"+addr;
     document.getElementById("permalink").style.display = "block";
     submitCensus(era[1], rank[1], mv.val, addr);
+    fetch("/api/pnl?addr="+addr).catch(function(){}); // pre-warm the profile's p&l cache
 
     // best-effort extras: tx count + price at arrival. card redraws as each lands.
     fetchTxCount(addr).then(function(n){
