@@ -4403,7 +4403,7 @@ function cleanSymbol(t) {
 function firstInteresting(txs, toks, addr) {
   for (const t of toks) {
     const s = cleanSymbol(t);
-    if (s) return { key: "FIRST TOKEN", val: "$" + s };
+    if (s) return { key: "FIRST TOKEN", val: "$" + s, contract: (t.contractAddress || "").toLowerCase() || null };
   }
   const events = [];
   for (const tx of txs) {

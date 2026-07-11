@@ -67,7 +67,7 @@ function cleanSymbol(t) {
 function firstInteresting(txs, toks, addr) {
   for (const t of toks) {
     const s = cleanSymbol(t);
-    if (s) return { key: "FIRST TOKEN", val: "$" + s };
+    if (s) return { key: "FIRST TOKEN", val: "$" + s, contract: (t.contractAddress || "").toLowerCase() || null };
   }
   const events = [];
   for (const tx of txs) {
@@ -105,34 +105,199 @@ async function fetchWallet(addr) {
 
 // src/wallet.js
 var esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+function page(w, site) {
+  const short = w.addr.slice(0, 8) + "\u2026" + w.addr.slice(-6);
+  const title = `${w.rank[1]} \xB7 ${w.era[1]} \u2014 avax100m.xyz`;
+  const desc = `first seen ${w.dateStr.toLowerCase()} \xB7 ${w.mv.key.toLowerCase()}: ${w.mv.val.toLowerCase()} \xB7 arrived in the first ${w.earlyStr}`;
+  const img = `${site}/card/${w.addr}.png`;
+  const pageUrl = `${site}/w/${w.addr}`;
+  const D = JSON.stringify({ addr: w.addr, ts: w.ts, era: w.era[1], firstContract: w.mv.contract || null, firstToken: w.mv.key === "FIRST TOKEN" ? w.mv.val : null });
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${esc(title)}</title>
+<meta name="description" content="${esc(desc)}">
+<link rel="canonical" href="${pageUrl}">
+<meta property="og:type" content="profile">
+<meta property="og:url" content="${pageUrl}">
+<meta property="og:title" content="${esc(title)}">
+<meta property="og:description" content="${esc(desc)}">
+<meta property="og:image" content="${img}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${esc(title)}">
+<meta name="twitter:description" content="${esc(desc)}">
+<meta name="twitter:image" content="${img}">
+<style>
+:root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e84142;
+--mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6}
+a{color:var(--ink)}
+::selection{background:var(--red);color:#000}
+.wrap{max-width:900px;margin:0 auto;padding:0 20px}
+header{border-bottom:1px solid var(--faint)}
+.hbar{display:flex;justify-content:space-between;align-items:center;height:52px}
+.logo{font-weight:700;letter-spacing:.08em;text-decoration:none}
+.logo b{color:var(--red)}
+.hbar .nav{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);text-decoration:none}
+.hbar .nav:hover{color:var(--red)}
+.hero{padding:64px 0 40px;border-bottom:1px solid var(--faint)}
+.eyebrow{font-size:11px;letter-spacing:.24em;color:var(--dim);text-transform:uppercase;margin-bottom:14px}
+h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:-.01em}
+.tagline{color:var(--dim);margin-top:10px}
+.addrline{margin-top:26px;font-size:12px;color:var(--dim);word-break:break-all;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.addrline .a{color:var(--ink)}
+.btn{background:transparent;border:1px solid var(--faint);color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:6px 12px;cursor:pointer}
+.btn:hover{border-color:var(--red);color:var(--red)}
+.btn.primary{background:var(--red);border-color:var(--red);color:#000;font-weight:700}
+.btn.primary:hover{background:var(--ink);border-color:var(--ink)}
+section{padding:44px 0;border-bottom:1px solid var(--faint)}
+h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red);font-weight:700;margin-bottom:22px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--faint);border:1px solid var(--faint)}
+@media(max-width:760px){.grid{grid-template-columns:repeat(2,1fr)}}
+.cell{background:var(--bg);padding:16px 14px;min-height:86px}
+.cell .k{font-size:10px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase}
+.cell .v{font-size:19px;font-weight:700;margin-top:6px;word-break:break-word}
+.cell .v.red{color:var(--red)}
+.cell .v small{font-size:11px;color:var(--dim);font-weight:400}
+.note{margin-top:14px;font-size:11px;color:var(--dim);letter-spacing:.06em}
+footer{padding:36px 0 64px;color:var(--dim);font-size:12px}
+footer .frow{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+footer a{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--faint)}
+footer a:hover{color:var(--red);border-color:var(--red)}
+</style>
+</head>
+<body>
+<header><div class="wrap hbar">
+  <a class="logo" href="${site}"><b>AVAX</b>/100M</a>
+  <a class="nav" href="${site}">check a wallet \u2192</a>
+</div></header>
+
+<main class="wrap">
+  <div class="hero">
+    <div class="eyebrow">avalanche c-chain \xB7 wallet profile</div>
+    <h1>${esc(w.rank[1])}</h1>
+    <div class="tagline">${esc(w.rank[2])}</div>
+    <div class="addrline">
+      <span class="a">${esc(short)}</span>
+      <button class="btn" id="copy-addr">copy address</button>
+      <button class="btn" id="copy-link">copy page link</button>
+      <button class="btn primary" id="share-x">share on x</button>
+    </div>
+  </div>
+
+  <section>
+    <h2>origin</h2>
+    <div class="grid">
+      <div class="cell"><div class="k">era of arrival</div><div class="v red">${esc(w.era[1])}</div></div>
+      <div class="cell"><div class="k">first seen</div><div class="v">${esc(w.dateStr)}<br><small>#${w.blk.toLocaleString("en-US")}</small></div></div>
+      <div class="cell"><div class="k">${esc(w.mv.key.toLowerCase())}</div><div class="v">${esc(w.mv.val)}</div><div id="holding" style="font-size:11px;color:var(--dim);margin-top:4px"></div></div>
+      <div class="cell"><div class="k">arrived in the first</div><div class="v red">${esc(w.earlyStr)}</div></div>
+      <div class="cell"><div class="k">days on mainnet</div><div class="v">${w.days.toLocaleString("en-US")}</div></div>
+      <div class="cell"><div class="k">mainnet survived</div><div class="v">${w.pct.toFixed(1)}%</div></div>
+      <div class="cell"><div class="k">tx count</div><div class="v">${w.txc === null ? "\u2014" : w.txc.toLocaleString("en-US")}</div></div>
+      <div class="cell"><div class="k">avax at arrival</div><div class="v" id="price">\u2014</div></div>
+    </div>
+    <div class="note" id="cohort"></div>
+  </section>
+
+  <section>
+    <h2>realized p&amp;l</h2>
+    <div class="grid" id="pnl-grid">
+      <div class="cell"><div class="k">biggest w</div><div class="v" id="pnl-w">\u2014</div></div>
+      <div class="cell"><div class="k">biggest l</div><div class="v" id="pnl-l">\u2014</div></div>
+      <div class="cell"><div class="k">biggest roundtrip</div><div class="v" id="pnl-rt">\u2014</div></div>
+      <div class="cell"><div class="k">sold too early</div><div class="v" id="pnl-ste">\u2014</div></div>
+    </div>
+    <div class="note" id="pnl-note">syncing trade history\u2026</div>
+  </section>
+</main>
+
+<footer><div class="wrap frow">
+  <span>no connect \xB7 no signature \xB7 computed live from the chain</span>
+  <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> \xB7 <a href="${site}">avax100m.xyz</a></span>
+</div></footer>
+
+<script>
+(function(){
+"use strict";
+var D=${D};
+var SITE=${JSON.stringify(site)};
+var PAGE=SITE+"/w/"+D.addr;
+
+document.getElementById("copy-addr").addEventListener("click",function(){cp(D.addr,this);});
+document.getElementById("copy-link").addEventListener("click",function(){cp(PAGE,this);});
+function cp(t,btn){ if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){var o=btn.textContent;btn.textContent="copied";setTimeout(function(){btn.textContent=o;},1400);}).catch(function(){});} }
+document.getElementById("share-x").addEventListener("click",function(){
+  var t=document.title.split(" \u2014 ")[0].toLowerCase()+". road to block 100,000,000.";
+  window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(t)+"&url="+encodeURIComponent(PAGE),"_blank");
+});
+
+/* avax at arrival: binance primary, coingecko fallback */
+function fmtPrice(p){return "$"+(p>=100?p.toFixed(0):p>=10?p.toFixed(1):p.toFixed(2));}
+function fmtChange(now,then){var pct=Math.round((now/then-1)*100);return (pct>=0?"+":"")+pct.toLocaleString("en-US")+"%";}
+function binance(ts){var day=ts-(ts%86400000);
+ return Promise.all([
+  fetch("https://api.binance.com/api/v3/klines?symbol=AVAXUSDT&interval=1d&startTime="+day+"&limit=1").then(function(r){return r.json();}).then(function(k){return (k&&k[0]&&k[0][4])?parseFloat(k[0][4]):null;}),
+  fetch("https://api.binance.com/api/v3/ticker/price?symbol=AVAXUSDT").then(function(r){return r.json();}).then(function(j){return (j&&j.price)?parseFloat(j.price):null;})]);}
+function gecko(ts){var d=new Date(ts);var p=function(n){return String(n).padStart(2,"0");};
+ var ds=p(d.getUTCDate())+"-"+p(d.getUTCMonth()+1)+"-"+d.getUTCFullYear();
+ return Promise.all([
+  fetch("https://api.coingecko.com/api/v3/coins/avalanche-2/history?date="+ds).then(function(r){return r.json();}).then(function(j){return j.market_data&&j.market_data.current_price&&j.market_data.current_price.usd;}),
+  fetch("https://api.coingecko.com/api/v3/simple/price?ids=avalanche-2&vs_currencies=usd").then(function(r){return r.json();}).then(function(j){return j["avalanche-2"]&&j["avalanche-2"].usd;})]);}
+binance(D.ts).then(function(pp){return (pp[0]&&pp[1])?pp:gecko(D.ts);}).catch(function(){return gecko(D.ts);})
+ .then(function(pp){ if(pp&&pp[0]&&pp[1]) document.getElementById("price").innerHTML=fmtPrice(pp[0])+' <small>'+fmtChange(pp[1],pp[0])+' since</small>'; })
+ .catch(function(){});
+
+/* census cohort line */
+fetch(SITE+"/api/census").then(function(r){return r.json();}).then(function(c){
+  if(c&&c.total&&c.eras&&c.eras[D.era]){
+    document.getElementById("cohort").textContent="one of "+c.eras[D.era].toLocaleString("en-US")+" "+D.era.toLowerCase()+" wallets in the census \xB7 "+c.total.toLocaleString("en-US")+" counted";
+  }
+}).catch(function(){});
+
+/* first bag: still holding? */
+if(D.firstContract && D.firstToken){
+  fetch("https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api?module=account&action=tokenbalance&contractaddress="+D.firstContract+"&address="+D.addr+"&tag=latest")
+   .then(function(r){return r.json();})
+   .then(function(j){ if(j&&j.result!==undefined&&j.result!==null){
+     document.getElementById("holding").textContent = (String(j.result)!=="0") ? "still holding" : "sold"; } })
+   .catch(function(){});
+}
+
+/* realized p&l via /api/pnl */
+fetch(SITE+"/api/pnl?addr="+D.addr).then(function(r){return r.json();}).then(function(p){
+  var note=document.getElementById("pnl-note");
+  if(!p || !p.available){ note.textContent="trade history sync coming soon."; return; }
+  var s=p.stats||{};
+  function set(id,o){ var el=document.getElementById(id);
+    if(!o){ el.textContent="\u2014"; return; }
+    el.innerHTML=o.line+(o.sub?' <small>'+o.sub+'</small>':""); }
+  set("pnl-w", s.biggestW);
+  set("pnl-l", s.biggestL);
+  set("pnl-rt", s.roundtrip);
+  set("pnl-ste", s.soldTooEarly);
+  note.textContent = "realized only \xB7 tracked tokens only \xB7 "+(s.tokens||0)+" tokens traded";
+}).catch(function(){ document.getElementById("pnl-note").textContent="trade history sync coming soon."; });
+})();
+</script>
+</body>
+</html>`;
+}
 var wallet_default = async (req) => {
   const url = new URL(req.url);
-  const m = url.pathname.match(/^\/w\/(0x[0-9a-fA-F]{40})\/?$/);
   const site = (process.env.URL || "https://avax100m.xyz").replace(/\/$/, "");
+  const m = url.pathname.match(/^\/w\/(0x[0-9a-fA-F]{40})\/?$/);
   if (!m) return Response.redirect(site, 302);
-  const addr = m[1];
-  let base;
-  try {
-    base = await fetch(site + "/index.html").then((r) => {
-      if (!r.ok) throw 0;
-      return r.text();
-    });
-  } catch {
-    return Response.redirect(site, 302);
-  }
   let w = null;
   try {
-    w = await fetchWallet(addr);
+    w = await fetchWallet(m[1]);
   } catch {
   }
-  const short = addr.slice(0, 6) + "\u2026" + addr.slice(-4);
-  const title = w ? `${w.rank[1]} \xB7 ${w.era[1]} \u2014 road to block 100,000,000` : `${short} \u2014 road to block 100,000,000`;
-  const desc = w ? `first seen ${w.dateStr.toLowerCase()} \xB7 ${w.mv.key.toLowerCase()}: ${w.mv.val.toLowerCase()} \xB7 arrived in the first ${w.earlyStr}` : `check when this wallet joined avalanche. no connect, no signature.`;
-  const img = `${site}/card/${addr}.png`;
-  const pageUrl = `${site}/w/${addr}`;
-  base = base.replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(title)}</title>`).replace(/<meta property="og:url"[^>]*>/, `<meta property="og:url" content="${pageUrl}">`).replace(/<meta property="og:title"[^>]*>/, `<meta property="og:title" content="${esc(title)}">`).replace(/<meta property="og:description"[^>]*>/, `<meta property="og:description" content="${esc(desc)}">`).replace(/<meta property="og:image"[^>]*>/, `<meta property="og:image" content="${img}">`).replace(/<meta name="twitter:title"[^>]*>/, `<meta name="twitter:title" content="${esc(title)}">`).replace(/<meta name="twitter:description"[^>]*>/, `<meta name="twitter:description" content="${esc(desc)}">`).replace(/<meta name="twitter:image"[^>]*>/, `<meta name="twitter:image" content="${img}">`).replace("</head>", `<script>window.PREFILL=${JSON.stringify(addr)};</script>
-</head>`);
-  return new Response(base, {
+  if (!w) return Response.redirect(site, 302);
+  return new Response(page(w, site), {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" }
   });
 };
