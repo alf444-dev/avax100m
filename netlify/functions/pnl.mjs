@@ -851,7 +851,32 @@ function parseRows(tokens) {
     };
   });
 }
-async function enrich(rows, balances) {
+var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
+async function peakBag(addr, contract) {
+  try {
+    const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
+    const j = await r.json();
+    if (!j.result || !Array.isArray(j.result) || !j.result.length) return null;
+    let bal = 0n, peak = 0n, dec = null;
+    for (const t of j.result) {
+      if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
+      let v;
+      try {
+        v = BigInt(t.value || "0");
+      } catch {
+        continue;
+      }
+      if ((t.to || "").toLowerCase() === addr) bal += v;
+      else if ((t.from || "").toLowerCase() === addr) bal -= v;
+      if (bal > peak) peak = bal;
+    }
+    const d = dec === null || isNaN(dec) ? 18 : dec;
+    return Number(peak) / Math.pow(10, d);
+  } catch {
+    return null;
+  }
+}
+async function enrich(rows, balances, ADDR) {
   const byInvested = rows.filter((r) => r.tokenAddress && r.invested > 100 && (balances[r.tokenAddress] || 0) > 0).sort((a, b) => b.invested - a.invested).slice(0, 6);
   const bySold = rows.filter((r) => r.tokenAddress && r.sold > 50).sort((a, b) => b.sold - a.sold).slice(0, 6);
   const seen = {};
@@ -876,9 +901,13 @@ async function enrich(rows, balances) {
       }
     }
     if (c.soldTk > 0 && c.sold > 50) {
-      const athValue = c.soldTk * cg.ath;
-      if (athValue > c.sold * 3) {
-        stes.push({ missed: athValue - c.sold, sym: c.sym, line: "$" + c.sym, sub: "sold for " + usd(c.sold) + " \xB7 " + usd(athValue) + " at ath" });
+      const pk = await peakBag(ADDR, c.tokenAddress);
+      const bagTk = pk && pk > 0 ? Math.min(pk, c.soldTk) : c.soldTk;
+      const avgSell = c.soldTk > 0 ? c.sold / c.soldTk : 0;
+      const proceeds = bagTk * avgSell;
+      const athValue = bagTk * cg.ath;
+      if (proceeds > 50 && athValue > proceeds * 3) {
+        stes.push({ missed: athValue - proceeds, sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at ath" });
       }
     }
   }
@@ -912,7 +941,7 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v3/" + addr;
+  const cacheKey = "v4/" + addr;
   if (store) try {
     const cached = await store.get(cacheKey, { type: "json" });
     if (cached && Date.now() - cached.t < CACHE_MS) {
@@ -924,7 +953,7 @@ var pnl_default = async (req) => {
     const [{ rows: raw, capped }, balances] = await Promise.all([fetchAllProfitability(addr, key), fetchBalances(addr, key)]);
     const rows = parseRows(raw);
     const stats = summarize(rows, capped);
-    const extra = await enrich(rows, balances);
+    const extra = await enrich(rows, balances, addr);
     stats.roundtrip = extra.roundtrip;
     stats.soldTooEarly = extra.soldTooEarly;
     if (store) await store.set(cacheKey, JSON.stringify({ t: Date.now(), stats })).catch(() => {
