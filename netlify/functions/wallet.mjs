@@ -310,16 +310,18 @@ function renderPnl(s){
     var sm=document.getElementById("pnl-summary");
     sm.innerHTML="total realized: <b style='color:var(--red)'>"+s.summary.total+"</b>"
       +(s.summary.winrate?" \xB7 "+s.summary.winrate+" winrate ("+s.summary.wins+"w / "+s.summary.losses+"l)":"");
-    sm.style.display="block";
+    sm.style.display=(s.thin && s.summary.wins+s.summary.losses<=1)?"none":"block";
   }
-  document.getElementById("pnl-note").textContent = "realized only \xB7 tracked tokens only \xB7 "+(s.tokens||0)+" tokens traded";
+  document.getElementById("pnl-note").textContent = s.thin
+    ? "thin dex history \u2014 we track dex swaps only. arena launchpad, perps and cex trades don't show here."
+    : "realized dex trades only \xB7 "+(s.tokens||0)+" tokens traded";
   function list(id, arr){
     var el=document.getElementById(id);
     if(!arr || !arr.length){ el.innerHTML='<span style="color:var(--faint)">\u2014</span>'; return; }
     el.innerHTML=arr.map(function(o){return '<div style="padding:3px 0;border-bottom:1px solid var(--faint)"><b>'+o.line+'</b> <span style="color:var(--dim)">'+o.sub+'</span></div>';}).join("");
   }
-  var hasLists=(s.topW&&s.topW.length)||(s.topL&&s.topL.length)||(s.roundtrips&&s.roundtrips.length)||(s.soldEarly&&s.soldEarly.length);
-  if(hasLists){
+  var nLists=((s.topW||[]).length)+((s.topL||[]).length)+((s.roundtrips||[]).length)+((s.soldEarly||[]).length);
+  if(nLists>=3){
     list("lg-w", s.topW); list("lg-l", s.topL); list("lg-rt", s.roundtrips); list("lg-ste", s.soldEarly);
     var tg=document.getElementById("ledger-toggle");
     tg.style.display="inline-block";

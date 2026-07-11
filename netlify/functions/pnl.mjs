@@ -990,10 +990,11 @@ function summarize(rows, capped) {
   base.topL = losses.slice(0, 5).map((r) => ({ line: signedUsd(r.profit), sub: "$" + r.sym }));
   base.summary = {
     total: signedUsd(total),
-    winrate: decided ? Math.round(wins.length / decided * 100) + "%" : null,
+    winrate: decided >= 3 ? Math.round(wins.length / decided * 100) + "%" : null,
     wins: wins.length,
     losses: losses.length
   };
+  base.thin = decided < 3;
   return base;
 }
 var pnl_default = async (req) => {
@@ -1009,7 +1010,7 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v8/" + addr;
+  const cacheKey = "v9/" + addr;
   const debug = url.searchParams.get("debug") === "1";
   const refresh = url.searchParams.get("refresh") === "1";
   if (store && !debug && !refresh) try {
@@ -1035,6 +1036,7 @@ var pnl_default = async (req) => {
         if (!verified[r.tokenAddress]) diag.push({ sym: r.sym, skip: "big claim, not cg-listed \u2014 dropped", profit: r.profit });
       });
     }
+    if (diag) diag.push({ rowsAfterFilters: rows.length, rows: rows.slice(0, 30).map((r) => ({ sym: r.sym, profit: Math.round(r.profit), invested: Math.round(r.invested), sold: Math.round(r.sold) })) });
     const stats = summarize(rows, capped);
     const extra = await enrich(rows, balances, addr, store, diag);
     stats.roundtrip = extra.roundtrip;
