@@ -786,9 +786,18 @@ async function mfetch(path, key) {
   if (!r.ok) throw new Error("moralis " + r.status);
   return r.json();
 }
-async function cgToken(addr) {
+async function cgToken(addr, store) {
+  if (store) try {
+    const c = await store.get("cg/" + addr, { type: "json" });
+    if (c && Date.now() - c.t < 24 * 3600 * 1e3) return c.v;
+  } catch {
+  }
   try {
-    const r = await fetch("https://api.coingecko.com/api/v3/coins/avalanche/contract/" + addr);
+    let r = await fetch("https://api.coingecko.com/api/v3/coins/avalanche/contract/" + addr);
+    if (r.status === 429) {
+      await new Promise((res) => setTimeout(res, 2200));
+      r = await fetch("https://api.coingecko.com/api/v3/coins/avalanche/contract/" + addr);
+    }
     if (!r.ok) return null;
     const j = await r.json();
     const md = j && j.market_data;
@@ -796,7 +805,12 @@ async function cgToken(addr) {
     const ath = md.ath && md.ath.usd;
     const cur = md.current_price && md.current_price.usd;
     const athDate = md.ath_date && md.ath_date.usd ? Date.parse(md.ath_date.usd) : null;
-    return ath && ath > 0 ? { ath, cur: cur || 0, athDate } : null;
+    const v = ath && ath > 0 ? { ath, cur: cur || 0, athDate } : null;
+    if (store && v) try {
+      await store.set("cg/" + addr, JSON.stringify({ t: Date.now(), v }));
+    } catch {
+    }
+    return v;
   } catch {
     return null;
   }
@@ -882,9 +896,9 @@ async function replayBag(addr, contract, athTs) {
     return null;
   }
 }
-async function enrich(rows, balances, ADDR) {
-  const byInvested = rows.filter((r) => r.tokenAddress && r.invested > 100 && (balances[r.tokenAddress] || 0) > 0).sort((a, b) => b.invested - a.invested).slice(0, 6);
-  const bySold = rows.filter((r) => r.tokenAddress && r.sold > 50).sort((a, b) => b.sold - a.sold).slice(0, 6);
+async function enrich(rows, balances, ADDR, store, diag) {
+  const byInvested = rows.filter((r) => r.tokenAddress && r.invested > 100 && (balances[r.tokenAddress] || 0) > 0).sort((a, b) => b.invested - a.invested).slice(0, 4);
+  const bySold = rows.filter((r) => r.tokenAddress && r.sold > 50).sort((a, b) => b.sold - a.sold).slice(0, 9);
   const seen = {};
   const cands = [];
   for (const c of byInvested.concat(bySold)) {
@@ -894,28 +908,47 @@ async function enrich(rows, balances, ADDR) {
     }
   }
   const rts = [], stes = [];
-  for (const c of cands.slice(0, 10)) {
-    const cg = await cgToken(c.tokenAddress);
-    if (!cg) continue;
+  for (const c of cands.slice(0, 11)) {
+    const d = { sym: c.sym, sold: Math.round(c.sold) };
+    if (diag) diag.push(d);
+    const cg = await cgToken(c.tokenAddress, store);
+    if (!cg) {
+      d.skip = "no coingecko data";
+      continue;
+    }
+    d.ath = cg.ath;
+    d.athDate = cg.athDate ? new Date(cg.athDate).toISOString().slice(0, 10) : null;
     const heldTk = balances[c.tokenAddress] || 0;
     if (heldTk > 0) {
       const peak = heldTk * cg.ath;
       const now = heldTk * cg.cur;
       const rt = peak - now;
       if (peak > 500 && rt > 250 && rt / peak > 0.5) {
+        d.rtQualified = true;
         rts.push({ rt, sym: c.sym, line: "-" + usd(rt), sub: "$" + c.sym + " \xB7 " + usd(peak) + " at peak \xB7 " + usd(now) + " now" });
       }
     }
     if (c.soldTk > 0 && c.sold > 50 && cg.athDate) {
       const rp = await replayBag(ADDR, c.tokenAddress, cg.athDate);
-      if (rp && rp.peakBeforeAth > 0 && rp.balAtAth !== null && rp.balAtAth < rp.peakBeforeAth * 0.2) {
+      if (!rp) {
+        d.skip = "replay failed";
+        continue;
+      }
+      d.peakBeforeAth = rp.peakBeforeAth;
+      d.balAtAth = rp.balAtAth;
+      if (rp.peakBeforeAth > 0 && rp.balAtAth !== null && rp.balAtAth < rp.peakBeforeAth * 0.2) {
         const exitedTk = rp.peakBeforeAth - rp.balAtAth;
         const avgSell = c.soldTk > 0 ? c.sold / c.soldTk : 0;
         const proceeds = exitedTk * avgSell;
         const athValue = exitedTk * cg.ath;
+        d.proceeds = Math.round(proceeds);
+        d.athValue = Math.round(athValue);
         if (proceeds > 50 && athValue > 500 && athValue > proceeds * 3) {
+          d.steQualified = true;
           stes.push({ missed: athValue - proceeds, sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at ath" });
         }
+      } else {
+        d.skip = "held through ath";
       }
     }
   }
@@ -949,8 +982,8 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v5/" + addr;
-  if (store) try {
+  const cacheKey = "v6/" + addr;
+  if (store && url.searchParams.get("debug") !== "1") try {
     const cached = await store.get(cacheKey, { type: "json" });
     if (cached && Date.now() - cached.t < CACHE_MS) {
       return new Response(JSON.stringify({ available: true, stats: cached.stats, cached: true }), { headers: HEADERS });
@@ -958,15 +991,19 @@ var pnl_default = async (req) => {
   } catch {
   }
   try {
+    const debug = url.searchParams.get("debug") === "1";
+    const diag = debug ? [] : null;
     const [{ rows: raw, capped }, balances] = await Promise.all([fetchAllProfitability(addr, key), fetchBalances(addr, key)]);
     const rows = parseRows(raw);
     const stats = summarize(rows, capped);
-    const extra = await enrich(rows, balances, addr);
+    const extra = await enrich(rows, balances, addr, store, diag);
     stats.roundtrip = extra.roundtrip;
     stats.soldTooEarly = extra.soldTooEarly;
-    if (store) await store.set(cacheKey, JSON.stringify({ t: Date.now(), stats })).catch(() => {
+    if (store && !debug) await store.set(cacheKey, JSON.stringify({ t: Date.now(), stats })).catch(() => {
     });
-    return new Response(JSON.stringify({ available: true, stats }), { headers: HEADERS });
+    const out = { available: true, stats };
+    if (debug) out.diag = diag;
+    return new Response(JSON.stringify(out), { headers: HEADERS });
   } catch (e) {
     return new Response(JSON.stringify({ available: false }), { headers: HEADERS });
   }
