@@ -795,7 +795,8 @@ async function cgToken(addr) {
     if (!md) return null;
     const ath = md.ath && md.ath.usd;
     const cur = md.current_price && md.current_price.usd;
-    return ath && ath > 0 ? { ath, cur: cur || 0 } : null;
+    const athDate = md.ath_date && md.ath_date.usd ? Date.parse(md.ath_date.usd) : null;
+    return ath && ath > 0 ? { ath, cur: cur || 0, athDate } : null;
   } catch {
     return null;
   }
@@ -852,14 +853,16 @@ function parseRows(tokens) {
   });
 }
 var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
-async function peakBag(addr, contract) {
+async function replayBag(addr, contract, athTs) {
   try {
     const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
     const j = await r.json();
     if (!j.result || !Array.isArray(j.result) || !j.result.length) return null;
-    let bal = 0n, peak = 0n, dec = null;
+    let bal = 0n, peakBeforeAth = 0n, peakEver = 0n, balAtAth = null, dec = null;
     for (const t of j.result) {
       if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
+      const ts = parseInt(t.timeStamp, 10) * 1e3;
+      if (athTs && balAtAth === null && ts > athTs) balAtAth = bal;
       let v;
       try {
         v = BigInt(t.value || "0");
@@ -868,10 +871,13 @@ async function peakBag(addr, contract) {
       }
       if ((t.to || "").toLowerCase() === addr) bal += v;
       else if ((t.from || "").toLowerCase() === addr) bal -= v;
-      if (bal > peak) peak = bal;
+      if (bal > peakEver) peakEver = bal;
+      if (athTs && ts <= athTs && bal > peakBeforeAth) peakBeforeAth = bal;
     }
+    if (athTs && balAtAth === null) balAtAth = bal;
     const d = dec === null || isNaN(dec) ? 18 : dec;
-    return Number(peak) / Math.pow(10, d);
+    const f = (x) => Number(x) / Math.pow(10, d);
+    return { peakEver: f(peakEver), peakBeforeAth: f(peakBeforeAth), balAtAth: balAtAth === null ? null : f(balAtAth) };
   } catch {
     return null;
   }
@@ -900,14 +906,16 @@ async function enrich(rows, balances, ADDR) {
         rts.push({ rt, sym: c.sym, line: "-" + usd(rt), sub: "$" + c.sym + " \xB7 " + usd(peak) + " at peak \xB7 " + usd(now) + " now" });
       }
     }
-    if (c.soldTk > 0 && c.sold > 50) {
-      const pk = await peakBag(ADDR, c.tokenAddress);
-      const bagTk = pk && pk > 0 ? Math.min(pk, c.soldTk) : c.soldTk;
-      const avgSell = c.soldTk > 0 ? c.sold / c.soldTk : 0;
-      const proceeds = bagTk * avgSell;
-      const athValue = bagTk * cg.ath;
-      if (proceeds > 50 && athValue > proceeds * 3) {
-        stes.push({ missed: athValue - proceeds, sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at ath" });
+    if (c.soldTk > 0 && c.sold > 50 && cg.athDate) {
+      const rp = await replayBag(ADDR, c.tokenAddress, cg.athDate);
+      if (rp && rp.peakBeforeAth > 0 && rp.balAtAth !== null && rp.balAtAth < rp.peakBeforeAth * 0.2) {
+        const exitedTk = rp.peakBeforeAth - rp.balAtAth;
+        const avgSell = c.soldTk > 0 ? c.sold / c.soldTk : 0;
+        const proceeds = exitedTk * avgSell;
+        const athValue = exitedTk * cg.ath;
+        if (proceeds > 50 && athValue > 500 && athValue > proceeds * 3) {
+          stes.push({ missed: athValue - proceeds, sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at ath" });
+        }
       }
     }
   }
@@ -941,7 +949,7 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v4/" + addr;
+  const cacheKey = "v5/" + addr;
   if (store) try {
     const cached = await store.get(cacheKey, { type: "json" });
     if (cached && Date.now() - cached.t < CACHE_MS) {
