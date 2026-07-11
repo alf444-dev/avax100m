@@ -779,55 +779,104 @@ var getStore = (input, options) => {
 var HEADERS = { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" };
 var CACHE_MS = 7 * 24 * 3600 * 1e3;
 var MORALIS = "https://deep-index.moralis.io/api/v2.2";
-var money = (n) => {
-  const a = Math.abs(n);
-  const s = a >= 1e3 ? "$" + Math.round(a).toLocaleString("en-US") : "$" + a.toFixed(a >= 100 ? 0 : 2);
-  return (n < 0 ? "-" : "+") + s;
-};
+var usd = (n) => "$" + Math.round(Math.abs(n)).toLocaleString("en-US");
+var signedUsd = (n) => (n < 0 ? "-" : "+") + usd(n);
 async function mfetch(path, key) {
   const r = await fetch(MORALIS + path, { headers: { "X-API-Key": key, accept: "application/json" } });
   if (!r.ok) throw new Error("moralis " + r.status);
   return r.json();
 }
-function summarize(tokens) {
-  const rows = (tokens || []).filter((t) => t && typeof t.realized_profit_usd !== "undefined").map((t) => ({
-    sym: (t.symbol || t.token_symbol || "").toUpperCase() || (t.token_address || "").slice(0, 8),
-    profit: parseFloat(t.realized_profit_usd) || 0,
-    invested: parseFloat(t.total_usd_invested) || 0,
-    sold: parseFloat(t.total_sold_usd) || 0,
-    avgSell: parseFloat(t.avg_sell_price_usd) || 0,
-    tokenAddress: t.token_address || null
-  }));
-  if (!rows.length) return null;
-  const wins = rows.filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit);
-  const losses = rows.filter((r) => r.profit < 0).sort((a, b) => a.profit - b.profit);
-  const trips = rows.filter((r) => r.sold > 0).sort((a, b) => b.invested + b.sold - (a.invested + a.sold));
-  return {
-    tokens: rows.length,
-    biggestW: wins[0] ? { line: money(wins[0].profit), sub: "$" + wins[0].sym } : null,
-    biggestL: losses[0] ? { line: money(losses[0].profit), sub: "$" + losses[0].sym } : null,
-    roundtrip: trips[0] ? { line: "$" + Math.round(trips[0].invested + trips[0].sold).toLocaleString("en-US"), sub: "$" + trips[0].sym + " in+out" } : null,
-    _steCandidates: trips.slice(0, 5).filter((r) => r.avgSell > 0 && r.tokenAddress)
-  };
+async function cgToken(addr) {
+  try {
+    const r = await fetch("https://api.coingecko.com/api/v3/coins/avalanche/contract/" + addr);
+    if (!r.ok) return null;
+    const j = await r.json();
+    const md = j && j.market_data;
+    if (!md) return null;
+    const ath = md.ath && md.ath.usd;
+    const cur = md.current_price && md.current_price.usd;
+    return ath && ath > 0 ? { ath, cur: cur || 0 } : null;
+  } catch {
+    return null;
+  }
 }
-async function soldTooEarly(cands, key) {
-  let best = null;
+async function fetchAllProfitability(addr, key) {
+  let rows = [], cursor = null, pages = 0, capped = false;
+  do {
+    const q = "/wallets/" + addr + "/profitability?chain=avalanche" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : "");
+    const data = await mfetch(q, key);
+    const batch = data && (data.result || data.data) || [];
+    rows = rows.concat(batch);
+    cursor = data && data.cursor;
+    pages++;
+    if (pages >= 3 && cursor) {
+      capped = true;
+      break;
+    }
+  } while (cursor);
+  return { rows, capped };
+}
+function parseRows(tokens) {
+  return (tokens || []).filter((t) => t && typeof t.realized_profit_usd !== "undefined").map((t) => {
+    const invested = parseFloat(t.total_usd_invested) || 0;
+    const sold = parseFloat(t.total_sold_usd) || 0;
+    const avgBuy = parseFloat(t.avg_buy_price_usd) || 0;
+    const avgSell = parseFloat(t.avg_sell_price_usd) || 0;
+    let boughtTk = parseFloat(t.total_tokens_bought) || 0;
+    let soldTk = parseFloat(t.total_tokens_sold) || 0;
+    if (!boughtTk && avgBuy > 0) boughtTk = invested / avgBuy;
+    if (!soldTk && avgSell > 0) soldTk = sold / avgSell;
+    return {
+      sym: (t.symbol || t.token_symbol || "").toUpperCase() || (t.token_address || "").slice(0, 8),
+      profit: parseFloat(t.realized_profit_usd) || 0,
+      invested,
+      sold,
+      boughtTk,
+      soldTk,
+      tokenAddress: (t.token_address || "").toLowerCase() || null
+    };
+  });
+}
+async function enrich(rows) {
+  const cands = rows.filter((r) => r.tokenAddress && r.invested + r.sold > 100).sort((a, b) => b.invested + b.sold - (a.invested + a.sold)).slice(0, 8);
+  let roundtrip = null, soldTooEarly = null;
   for (const c of cands) {
-    try {
-      const p = await mfetch("/erc20/" + c.tokenAddress + "/price?chain=avalanche", key);
-      const now = parseFloat(p && p.usdPrice) || 0;
-      if (!now || !c.avgSell) continue;
-      const missed = (now - c.avgSell) / c.avgSell * 100;
-      if (missed > 50 && (!best || missed > best.missed)) {
-        best = { missed, sym: c.sym, avgSell: c.avgSell, now };
+    const cg = await cgToken(c.tokenAddress);
+    if (!cg) continue;
+    const remaining = c.boughtTk > 0 ? Math.max(0, c.boughtTk - c.soldTk) : 0;
+    const remainingRatio = c.boughtTk > 0 ? remaining / c.boughtTk : 0;
+    if (c.boughtTk > 0 && remainingRatio >= 0.5) {
+      const peak = c.boughtTk * cg.ath;
+      const walked = c.sold + remaining * cg.cur;
+      const rt = peak - walked;
+      if (peak > 500 && rt > 250 && rt / peak > 0.5) {
+        if (!roundtrip || rt > roundtrip._rt) {
+          roundtrip = { _rt: rt, line: "-" + usd(rt), sub: "$" + c.sym + " \xB7 " + usd(peak) + " at peak \xB7 still holding" };
+        }
       }
-    } catch {
+    }
+    if (c.soldTk > 0 && c.sold > 50 && remainingRatio < 0.5) {
+      const athValue = c.soldTk * cg.ath;
+      if (athValue > c.sold * 2) {
+        const missed = athValue - c.sold;
+        if (!soldTooEarly || missed > soldTooEarly._missed) {
+          soldTooEarly = { _missed: missed, line: "$" + c.sym, sub: "sold for " + usd(c.sold) + " \xB7 " + usd(athValue) + " at ath" };
+        }
+      }
     }
   }
-  if (!best) return null;
+  if (roundtrip) delete roundtrip._rt;
+  if (soldTooEarly) delete soldTooEarly._missed;
+  return { roundtrip, soldTooEarly };
+}
+function summarize(rows, capped) {
+  if (!rows.length) return { tokens: 0, biggestW: null, biggestL: null, roundtrip: null, soldTooEarly: null };
+  const wins = rows.filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit);
+  const losses = rows.filter((r) => r.profit < 0).sort((a, b) => a.profit - b.profit);
   return {
-    line: "$" + best.sym,
-    sub: "sold ~$" + (best.avgSell >= 1 ? best.avgSell.toFixed(2) : best.avgSell.toPrecision(2)) + " \xB7 now +" + Math.round(best.missed).toLocaleString("en-US") + "%"
+    tokens: capped ? rows.length + "+" : rows.length,
+    biggestW: wins[0] ? { line: signedUsd(wins[0].profit), sub: "$" + wins[0].sym } : null,
+    biggestL: losses[0] ? { line: signedUsd(losses[0].profit), sub: "$" + losses[0].sym } : null
   };
 }
 var pnl_default = async (req) => {
@@ -837,15 +886,13 @@ var pnl_default = async (req) => {
   if (!/^0x[0-9a-f]{40}$/.test(addr)) {
     return new Response(JSON.stringify({ available: false, error: "bad address" }), { status: 400, headers: HEADERS });
   }
-  if (!key) {
-    return new Response(JSON.stringify({ available: false }), { headers: HEADERS });
-  }
+  if (!key) return new Response(JSON.stringify({ available: false }), { headers: HEADERS });
   let store = null;
   try {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v1/" + addr;
+  const cacheKey = "v2/" + addr;
   if (store) try {
     const cached = await store.get(cacheKey, { type: "json" });
     if (cached && Date.now() - cached.t < CACHE_MS) {
@@ -854,19 +901,15 @@ var pnl_default = async (req) => {
   } catch {
   }
   try {
-    const data = await mfetch("/wallets/" + addr + "/profitability?chain=avalanche", key);
-    const s = summarize(data && (data.result || data.data || []));
-    if (!s) {
-      const empty = { tokens: 0, biggestW: null, biggestL: null, roundtrip: null, soldTooEarly: null };
-      if (store) await store.set(cacheKey, JSON.stringify({ t: Date.now(), stats: empty })).catch(() => {
-      });
-      return new Response(JSON.stringify({ available: true, stats: empty }), { headers: HEADERS });
-    }
-    s.soldTooEarly = await soldTooEarly(s._steCandidates, key);
-    delete s._steCandidates;
-    if (store) await store.set(cacheKey, JSON.stringify({ t: Date.now(), stats: s })).catch(() => {
+    const { rows: raw, capped } = await fetchAllProfitability(addr, key);
+    const rows = parseRows(raw);
+    const stats = summarize(rows, capped);
+    const extra = await enrich(rows);
+    stats.roundtrip = extra.roundtrip;
+    stats.soldTooEarly = extra.soldTooEarly;
+    if (store) await store.set(cacheKey, JSON.stringify({ t: Date.now(), stats })).catch(() => {
     });
-    return new Response(JSON.stringify({ available: true, stats: s }), { headers: HEADERS });
+    return new Response(JSON.stringify({ available: true, stats }), { headers: HEADERS });
   } catch (e) {
     return new Response(JSON.stringify({ available: false }), { headers: HEADERS });
   }
