@@ -181,7 +181,7 @@
           <div class="r-row"><span class="k">era</span><span class="v" id="r-era">—</span></div>
           <div class="r-row"><span class="k" id="r-move-k">first move</span><span class="v" id="r-move">—</span></div>
           <div class="r-row"><span class="k">days on mainnet</span><span class="v" id="r-days">—</span></div>
-          <div class="r-row"><span class="k">tx count</span><span class="v" id="r-txc">—</span></div>
+          <div class="r-row"><span class="k">txs sent</span><span class="v" id="r-txc">—</span></div>
           <div class="r-row" id="r-price-row" style="display:none"><span class="k">avax at arrival</span><span class="v" id="r-price">—</span></div>
           <div class="r-row"><span class="k">mainnet lifetime survived</span><span class="v" id="r-pct">—</span></div>
           <div class="r-row"><span class="k">arrived in the first</span><span class="v big" id="r-early">—</span></div>
@@ -577,15 +577,21 @@
       +a+"&startblock=0&endblock=999999999&page=1&offset=25&sort=asc";
     var pTx = fetch(base+"&action=txlist").then(function(r){return r.json();});
     var pTok = fetch(base+"&action=tokentx").then(function(r){return r.json();}).catch(function(){return {result:[]};});
-    Promise.all([pTx,pTok]).then(function(res2){
+    var pInt = fetch(base+"&action=txlistinternal").then(function(r){return r.json();}).catch(function(){return {result:[]};});
+    Promise.all([pTx,pTok,pInt]).then(function(res2){
       btn.disabled = false;
-      var j=res2[0], tj=res2[1];
-      if(!j.result || !j.result.length){
-        msg.className="err"; msg.textContent="no c-chain transactions found for this address."; return;
+      var j=res2[0], tj=res2[1], ij=res2[2];
+      var heads=[];
+      if(j.result&&j.result.length) heads.push(j.result[0]);
+      if(tj&&tj.result&&tj.result.length) heads.push(tj.result[0]);
+      if(ij&&ij.result&&ij.result.length) heads.push(ij.result[0]);
+      if(!heads.length){
+        msg.className="err"; msg.textContent="no c-chain activity found for this address."; return;
       }
-      var tx=j.result[0];
+      var tx=heads.reduce(function(a,b){return parseInt(a.timeStamp,10)<=parseInt(b.timeStamp,10)?a:b;});
       var ts=parseInt(tx.timeStamp,10)*1000;
       var blk=parseInt(tx.blockNumber,10);
+      if(!j.result) j={result:[]};
       var mv=firstInteresting(j.result, (tj&&tj.result&&tj.result.length)?tj.result:[], a);
       render(a, ts, blk, mv);
       if(lastDraw && avvyName){ lastDraw.name = avvyName; drawCard(lastDraw); }
@@ -623,7 +629,7 @@
   }
   function binancePrices(ts){
     var day = ts - (ts % 86400000); // UTC midnight of the arrival day
-    var pThen=fetch("https://api.binance.com/api/v3/klines?symbol=AVAXUSDT&interval=1d&startTime="+day+"&limit=1")
+    var pThen=fetch("https://api.binance.com/api/v3/klines?symbol=AVAXUSDT&interval=1h&startTime="+hour+"&limit=1")
       .then(function(r){return r.json();})
       .then(function(k){return (k && k[0] && k[0][4]) ? parseFloat(k[0][4]) : null;});
     var pNow=fetch("https://api.binance.com/api/v3/ticker/price?symbol=AVAXUSDT")
@@ -726,7 +732,7 @@
     row(s.mv.key, s.mv.val.toUpperCase(), 630);
     row("DAYS", s.days.toLocaleString("en-US"), 764, false, 92);
     row("SURVIVED", s.pct.toFixed(1)+"%", 764, false, 430);
-    row("TX COUNT", s.txc===null?"—":s.txc.toLocaleString("en-US"), 764, false, 720);
+    row("TXS SENT", s.txc===null?"—":s.txc.toLocaleString("en-US"), 764, false, 720);
     row("ARRIVED IN THE FIRST", s.earlyStr.toUpperCase(), 898, true);
     if(s.priceStr){
       row("AVAX AT ARRIVAL", s.priceStr.toUpperCase(), 1032);

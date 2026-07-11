@@ -81,16 +81,21 @@ function firstInteresting(txs, toks, addr) {
 var API = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
 async function fetchWallet(addr) {
   const base = API + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=25&sort=asc";
-  const [txj, tokj, cntj, blkj] = await Promise.all([
+  const [txj, tokj, intj, cntj, blkj] = await Promise.all([
     fetch(base + "&action=txlist").then((r) => r.json()),
     fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => ({ result: [] })),
+    fetch(base + "&action=txlistinternal").then((r) => r.json()).catch(() => ({ result: [] })),
     fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest").then((r) => r.json()).catch(() => null),
     fetch(API + "?module=proxy&action=eth_blockNumber").then((r) => r.json()).catch(() => null)
   ]);
-  if (!txj.result || !txj.result.length) return null;
-  const tx = txj.result[0];
-  const ts = parseInt(tx.timeStamp, 10) * 1e3;
-  const blk = parseInt(tx.blockNumber, 10);
+  const heads = [];
+  if (txj.result && txj.result.length) heads.push(txj.result[0]);
+  if (tokj && Array.isArray(tokj.result) && tokj.result.length) heads.push(tokj.result[0]);
+  if (intj && Array.isArray(intj.result) && intj.result.length) heads.push(intj.result[0]);
+  if (!heads.length) return null;
+  const first = heads.reduce((a, b) => parseInt(a.timeStamp, 10) <= parseInt(b.timeStamp, 10) ? a : b);
+  const ts = parseInt(first.timeStamp, 10) * 1e3;
+  const blk = parseInt(first.blockNumber, 10);
   const now = Date.now();
   const days = Math.floor((now - ts) / 864e5);
   const pct = Math.min(100, (now - ts) / (now - GENESIS) * 100);
@@ -98,7 +103,7 @@ async function fetchWallet(addr) {
   const early = blk / curBlock * 100;
   const earlyStr = (early < 0.01 ? "<0.01" : early < 1 ? early.toFixed(2) : early.toFixed(1)) + "% of all blocks";
   const txc = cntj && cntj.result ? parseInt(cntj.result, 16) : null;
-  const mv = firstInteresting(txj.result, tokj && tokj.result || [], addr);
+  const mv = firstInteresting(txj && txj.result || [], tokj && tokj.result || [], addr);
   const dateStr = new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).toUpperCase();
   return { addr, ts, blk, days, pct, era: eraFor(ts), rank: rankFor(days), mv, txc, earlyStr, dateStr };
 }
@@ -198,7 +203,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       <div class="cell"><div class="k">arrived in the first</div><div class="v red">${esc(w.earlyStr)}</div></div>
       <div class="cell"><div class="k">days on mainnet</div><div class="v">${w.days.toLocaleString("en-US")}</div></div>
       <div class="cell"><div class="k">mainnet survived</div><div class="v">${w.pct.toFixed(1)}%</div></div>
-      <div class="cell"><div class="k">tx count</div><div class="v">${w.txc === null ? "\u2014" : w.txc.toLocaleString("en-US")}</div></div>
+      <div class="cell"><div class="k">txs sent</div><div class="v">${w.txc === null ? "\u2014" : w.txc.toLocaleString("en-US")}</div></div>
       <div class="cell"><div class="k">avax at arrival</div><div class="v" id="price">\u2014</div></div>
     </div>
     <div class="note" id="cohort"></div>
@@ -257,9 +262,9 @@ document.getElementById("share-x").addEventListener("click",function(){
 /* avax at arrival: binance primary, coingecko fallback */
 function fmtPrice(p){return "$"+(p>=100?p.toFixed(0):p>=10?p.toFixed(1):p.toFixed(2));}
 function fmtChange(now,then){var pct=Math.round((now/then-1)*100);return (pct>=0?"+":"")+pct.toLocaleString("en-US")+"%";}
-function binance(ts){var day=ts-(ts%86400000);
+function binance(ts){var hour=ts-(ts%3600000);
  return Promise.all([
-  fetch("https://api.binance.com/api/v3/klines?symbol=AVAXUSDT&interval=1d&startTime="+day+"&limit=1").then(function(r){return r.json();}).then(function(k){return (k&&k[0]&&k[0][4])?parseFloat(k[0][4]):null;}),
+  fetch("https://api.binance.com/api/v3/klines?symbol=AVAXUSDT&interval=1h&startTime="+hour+"&limit=1").then(function(r){return r.json();}).then(function(k){return (k&&k[0]&&k[0][4])?parseFloat(k[0][4]):null;}),
   fetch("https://api.binance.com/api/v3/ticker/price?symbol=AVAXUSDT").then(function(r){return r.json();}).then(function(j){return (j&&j.price)?parseFloat(j.price):null;})]);}
 function gecko(ts){var d=new Date(ts);var p=function(n){return String(n).padStart(2,"0");};
  var ds=p(d.getUTCDate())+"-"+p(d.getUTCMonth()+1)+"-"+d.getUTCFullYear();

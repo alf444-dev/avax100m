@@ -4417,16 +4417,21 @@ function firstInteresting(txs, toks, addr) {
 var API = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
 async function fetchWallet(addr) {
   const base = API + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=25&sort=asc";
-  const [txj, tokj, cntj, blkj] = await Promise.all([
+  const [txj, tokj, intj, cntj, blkj] = await Promise.all([
     fetch(base + "&action=txlist").then((r) => r.json()),
     fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => ({ result: [] })),
+    fetch(base + "&action=txlistinternal").then((r) => r.json()).catch(() => ({ result: [] })),
     fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest").then((r) => r.json()).catch(() => null),
     fetch(API + "?module=proxy&action=eth_blockNumber").then((r) => r.json()).catch(() => null)
   ]);
-  if (!txj.result || !txj.result.length) return null;
-  const tx = txj.result[0];
-  const ts = parseInt(tx.timeStamp, 10) * 1e3;
-  const blk = parseInt(tx.blockNumber, 10);
+  const heads = [];
+  if (txj.result && txj.result.length) heads.push(txj.result[0]);
+  if (tokj && Array.isArray(tokj.result) && tokj.result.length) heads.push(tokj.result[0]);
+  if (intj && Array.isArray(intj.result) && intj.result.length) heads.push(intj.result[0]);
+  if (!heads.length) return null;
+  const first = heads.reduce((a, b) => parseInt(a.timeStamp, 10) <= parseInt(b.timeStamp, 10) ? a : b);
+  const ts = parseInt(first.timeStamp, 10) * 1e3;
+  const blk = parseInt(first.blockNumber, 10);
   const now = Date.now();
   const days = Math.floor((now - ts) / 864e5);
   const pct = Math.min(100, (now - ts) / (now - GENESIS) * 100);
@@ -4434,7 +4439,7 @@ async function fetchWallet(addr) {
   const early = blk / curBlock * 100;
   const earlyStr = (early < 0.01 ? "<0.01" : early < 1 ? early.toFixed(2) : early.toFixed(1)) + "% of all blocks";
   const txc = cntj && cntj.result ? parseInt(cntj.result, 16) : null;
-  const mv = firstInteresting(txj.result, tokj && tokj.result || [], addr);
+  const mv = firstInteresting(txj && txj.result || [], tokj && tokj.result || [], addr);
   const dateStr = new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).toUpperCase();
   return { addr, ts, blk, days, pct, era: eraFor(ts), rank: rankFor(days), mv, txc, earlyStr, dateStr };
 }
@@ -4488,7 +4493,7 @@ function draw(w) {
   const R = 690;
   cell("DAYS", w.days.toLocaleString("en-US"), R, 272);
   cell("SURVIVED", w.pct.toFixed(1) + "%", R + 230, 272);
-  if (w.txc !== null) cell("TX COUNT", w.txc.toLocaleString("en-US"), R, 360);
+  if (w.txc !== null) cell("TXS SENT", w.txc.toLocaleString("en-US"), R, 360);
   cell("ARRIVED IN THE FIRST", w.earlyStr.toUpperCase(), R, 452, true);
   x.fillStyle = "#2a2a2a";
   x.fillRect(L, 556, W - 2 * L, 2);

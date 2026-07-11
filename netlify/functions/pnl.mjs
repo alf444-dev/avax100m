@@ -821,10 +821,11 @@ async function replayBag(addr, contract, athTs) {
     const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
     const j = await r.json();
     if (!j.result || !Array.isArray(j.result) || !j.result.length) return null;
-    let bal = 0n, peakBeforeAth = 0n, peakEver = 0n, balAtAth = null, dec = null;
+    let bal = 0n, peakBeforeAth = 0n, peakEver = 0n, balAtAth = null, dec = null, firstTs = null;
     for (const t of j.result) {
       if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
       const ts = parseInt(t.timeStamp, 10) * 1e3;
+      if (firstTs === null) firstTs = ts;
       if (athTs && balAtAth === null && ts > athTs) balAtAth = bal;
       let v;
       try {
@@ -840,7 +841,43 @@ async function replayBag(addr, contract, athTs) {
     if (athTs && balAtAth === null) balAtAth = bal;
     const d = dec === null || isNaN(dec) ? 18 : dec;
     const f = (x) => Number(x) / Math.pow(10, d);
-    return { peakEver: f(peakEver), peakBeforeAth: f(peakBeforeAth), balAtAth: balAtAth === null ? null : f(balAtAth) };
+    return { peakEver: f(peakEver), peakBeforeAth: f(peakBeforeAth), balAtAth: balAtAth === null ? null : f(balAtAth), firstTs };
+  } catch {
+    return null;
+  }
+}
+async function peakSince(contract, fromTs, store) {
+  const bucket = Math.floor(fromTs / (30 * 864e5));
+  const ck = "peak/" + contract + "/" + bucket;
+  if (store) try {
+    const c = await store.get(ck, { type: "json" });
+    if (c && Date.now() - c.t < 7 * 24 * 3600 * 1e3) return c.v;
+  } catch {
+  }
+  try {
+    const u = "https://api.coingecko.com/api/v3/coins/avalanche/contract/" + contract + "/market_chart/range?vs_currency=usd&from=" + Math.floor(fromTs / 1e3) + "&to=" + Math.floor(Date.now() / 1e3);
+    let r = await fetch(u);
+    if (r.status === 429) {
+      await new Promise((res) => setTimeout(res, 2200));
+      r = await fetch(u);
+    }
+    if (!r.ok) return null;
+    const j = await r.json();
+    const prices = j && j.prices || [];
+    if (!prices.length) return null;
+    let maxP = 0, maxTs = null;
+    for (const p of prices) {
+      if (p[1] > maxP) {
+        maxP = p[1];
+        maxTs = p[0];
+      }
+    }
+    const v = maxP > 0 ? { price: maxP, ts: maxTs } : null;
+    if (store && v) try {
+      await store.set(ck, JSON.stringify({ t: Date.now(), v }));
+    } catch {
+    }
+    return v;
   } catch {
     return null;
   }
@@ -931,11 +968,22 @@ async function enrich(rows, balances, ADDR, store, diag) {
       d.skip = "no coingecko data";
       return;
     }
-    d.ath = cg.ath;
-    d.athDate = cg.athDate ? new Date(cg.athDate).toISOString().slice(0, 10) : null;
     const heldTk = balances[c.tokenAddress] || 0;
-    if (heldTk > 0) {
-      const peak = heldTk * cg.ath;
+    const wantsRt = heldTk > 0;
+    const wantsSte = c.soldTk > 0 && c.sold > 50;
+    if (!wantsRt && !wantsSte) return;
+    const rp = await replayBag(ADDR, c.tokenAddress, null);
+    if (!rp || !rp.firstTs) {
+      d.skip = "replay failed";
+      return;
+    }
+    d.firstHeld = new Date(rp.firstTs).toISOString().slice(0, 10);
+    const pk = await peakSince(c.tokenAddress, rp.firstTs, store);
+    const peakPrice = pk ? pk.price : cg.ath;
+    const peakTs = pk ? pk.ts : cg.athDate;
+    d.peakSinceHeld = peakPrice;
+    if (wantsRt) {
+      const peak = heldTk * peakPrice;
       const now = heldTk * cg.cur;
       const rt = peak - now;
       if (peak > 500 && rt > 250 && rt / peak > 0.5) {
@@ -943,27 +991,21 @@ async function enrich(rows, balances, ADDR, store, diag) {
         rts.push({ rt, sym: c.sym, line: "-" + usd(rt), sub: "$" + c.sym + " \xB7 " + usd(peak) + " at peak \xB7 " + usd(now) + " now" });
       }
     }
-    if (c.soldTk > 0 && c.sold > 50 && cg.athDate) {
-      const rp = await replayBag(ADDR, c.tokenAddress, cg.athDate);
-      if (!rp) {
-        d.skip = "replay failed";
-        return;
-      }
-      d.peakBeforeAth = rp.peakBeforeAth;
-      d.balAtAth = rp.balAtAth;
-      if (rp.peakBeforeAth > 0 && rp.balAtAth !== null && rp.balAtAth < rp.peakBeforeAth * 0.2) {
-        const exitedTk = rp.peakBeforeAth - rp.balAtAth;
+    if (wantsSte && peakTs) {
+      const rp2 = await replayBag(ADDR, c.tokenAddress, peakTs);
+      if (rp2 && rp2.peakBeforeAth > 0 && rp2.balAtAth !== null && rp2.balAtAth < rp2.peakBeforeAth * 0.2) {
+        const exitedTk = rp2.peakBeforeAth - rp2.balAtAth;
         const avgSell = c.soldTk > 0 ? c.sold / c.soldTk : 0;
         const proceeds = exitedTk * avgSell;
-        const athValue = exitedTk * cg.ath;
+        const athValue = exitedTk * peakPrice;
         d.proceeds = Math.round(proceeds);
         d.athValue = Math.round(athValue);
         if (proceeds > 50 && athValue > 500 && athValue > proceeds * 3) {
           d.steQualified = true;
-          stes.push({ missed: athValue - proceeds, sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at ath" });
+          stes.push({ missed: athValue - proceeds, sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at peak" });
         }
-      } else {
-        d.skip = "held through ath";
+      } else if (rp2) {
+        d.skip = "held through peak";
       }
     }
   });
@@ -1010,7 +1052,7 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v9/" + addr;
+  const cacheKey = "v10/" + addr;
   const debug = url.searchParams.get("debug") === "1";
   const refresh = url.searchParams.get("refresh") === "1";
   if (store && !debug && !refresh) try {
