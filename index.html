@@ -192,6 +192,10 @@
             <button id="dl">Download card</button>
             <button id="share">Share on X</button>
           </div>
+          <div id="permalink" style="display:none;margin-top:12px;font-size:11px;color:var(--dim);letter-spacing:.06em;word-break:break-all">
+            your page: <span id="permalink-url" style="color:var(--ink)"></span>
+            <button id="permalink-copy" style="background:transparent;border:1px solid var(--faint);color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;margin-left:8px;cursor:pointer">copy</button>
+          </div>
         </div>
       </div>
     </section>
@@ -640,7 +644,10 @@
     lastDraw = {addr:addr, dateStr:dateStr, blk:blk, era:era, rank:rank, days:days,
                 pct:pct, earlyStr:earlyStr, mv:mv, txc:null, priceStr:null};
     drawCard(lastDraw);
-    lastCard = {era:era[1], rank:rank[1], days:days, blk:blk, early:earlyStr, price:null};
+    lastCard = {era:era[1], rank:rank[1], days:days, blk:blk, early:earlyStr, price:null, addr:addr};
+    var plink = SITE.replace(/^https?:\/\//,"")+"/w/"+addr;
+    document.getElementById("permalink-url").textContent = plink;
+    document.getElementById("permalink").style.display = "block";
     submitCensus(era[1], rank[1], mv.val, addr);
 
     // best-effort extras: tx count + price at arrival. card redraws as each lands.
@@ -738,11 +745,29 @@
         }).catch(function(){});
       }catch(e){}
     }
+    var shareUrl = (lastCard && lastCard.addr) ? SITE+"/w/"+lastCard.addr : SITE;
     if(isMobile && lastCard){
       msg.className=""; msg.textContent="tip: download the card, then attach it in your post.";
     }
-    window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(t)+"&url="+encodeURIComponent(SITE),"_blank");
+    window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(t)+"&url="+encodeURIComponent(shareUrl),"_blank");
   });
+
+  document.getElementById("permalink-copy").addEventListener("click",function(){
+    if(!lastCard || !lastCard.addr) return;
+    var u=SITE+"/w/"+lastCard.addr;
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(u).then(function(){
+        document.getElementById("permalink-copy").textContent="copied";
+        setTimeout(function(){document.getElementById("permalink-copy").textContent="copy";},1500);
+      }).catch(function(){});
+    }
+  });
+
+  // /w/0x... visits arrive with a prefilled address — run the check automatically
+  if(window.PREFILL && /^0x[0-9a-fA-F]{40}$/.test(window.PREFILL)){
+    inp.value = window.PREFILL;
+    check();
+  }
 })();
 </script>
 </body>
