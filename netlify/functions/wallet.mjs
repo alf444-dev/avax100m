@@ -111,7 +111,7 @@ function page(w, site) {
   const desc = `first seen ${w.dateStr.toLowerCase()} \xB7 ${w.mv.key.toLowerCase()}: ${w.mv.val.toLowerCase()} \xB7 arrived in the first ${w.earlyStr}`;
   const img = `${site}/card/${w.addr}.png`;
   const pageUrl = `${site}/w/${w.addr}`;
-  const D = JSON.stringify({ addr: w.addr, ts: w.ts, era: w.era[1], firstContract: w.mv.contract || null, firstToken: w.mv.key === "FIRST TOKEN" ? w.mv.val : null });
+  const D = JSON.stringify({ addr: w.addr, ts: w.ts, era: w.era[1], rank: w.rank[1], firstContract: w.mv.contract || null, firstToken: w.mv.key === "FIRST TOKEN" ? w.mv.val : null });
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -212,6 +212,13 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       <div class="cell"><div class="k">sold too early</div><div class="v" id="pnl-ste">\u2014</div></div>
     </div>
     <div class="note" id="pnl-note">syncing trade history\u2026</div>
+    <div id="pnl-card-wrap" style="display:none;margin-top:22px">
+      <canvas id="pnl-card" width="1080" height="1350" style="width:100%;max-width:360px;border:1px solid var(--faint);display:block"></canvas>
+      <div style="display:flex;gap:10px;margin-top:12px;max-width:360px">
+        <button class="btn" id="pnl-dl" style="flex:1">download p&amp;l card</button>
+        <button class="btn primary" id="pnl-share" style="flex:1">share on x</button>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -224,6 +231,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
 (function(){
 "use strict";
 var D=${D};
+var RANK=D.rank, ERA=D.era;
 var SITE=${JSON.stringify(site)};
 var PAGE=SITE+"/w/"+D.addr;
 
@@ -280,7 +288,63 @@ fetch(SITE+"/api/pnl?addr="+D.addr).then(function(r){return r.json();}).then(fun
   set("pnl-rt", s.roundtrip);
   set("pnl-ste", s.soldTooEarly);
   note.textContent = "realized only \xB7 tracked tokens only \xB7 "+(s.tokens||0)+" tokens traded";
+  drawPnlCard(s);
 }).catch(function(){ document.getElementById("pnl-note").textContent="trade history sync coming soon."; });
+
+/* shareable p&l card */
+function drawPnlCard(s){
+  if(!s.biggestW && !s.biggestL && !s.roundtrip && !s.soldTooEarly) return;
+  var c=document.getElementById("pnl-card"),x=c.getContext("2d");
+  var W=1080,H=1350,mono="monospace";
+  x.fillStyle="#0a0a0a";x.fillRect(0,0,W,H);
+  x.strokeStyle="#e84142";x.lineWidth=6;x.strokeRect(28,28,W-56,H-56);
+  x.strokeStyle="#2a2a2a";x.lineWidth=2;x.strokeRect(48,48,W-96,H-96);
+  x.textBaseline="top";
+  x.fillStyle="#7a7a7a";x.font="600 30px "+mono;
+  x.fillText("AVALANCHE C-CHAIN",92,104);
+  x.fillStyle="#e84142";x.font="800 84px "+mono;
+  x.fillText("REALIZED P&L",92,150);
+  x.fillStyle="#7a7a7a";x.font="400 27px "+mono;
+  x.fillText(RANK.toLowerCase()+" \xB7 since "+ERA.toLowerCase(),92,254);
+  x.fillStyle="#2a2a2a";x.fillRect(92,306,W-184,2);
+  function block(k,o,y){
+    x.fillStyle="#7a7a7a";x.font="600 26px "+mono;x.fillText(k,92,y);
+    if(!o){ x.fillStyle="#3d3d3d";x.font="700 54px "+mono;x.fillText("\u2014",92,y+38); return; }
+    x.fillStyle="#e84142";x.font="800 60px "+mono;
+    x.fillText(o.line.replace(/<[^>]*>/g,""),92,y+38);
+    if(o.sub){ x.fillStyle="#f2f2f2";x.font="400 28px "+mono;
+      var t=o.sub.replace(/<[^>]*>/g,"");
+      x.fillText(t.length>58?t.slice(0,58):t,92,y+112); }
+  }
+  block("BIGGEST W", s.biggestW, 352);
+  block("BIGGEST L", s.biggestL, 552);
+  block("BIGGEST ROUNDTRIP", s.roundtrip, 752);
+  block("SOLD TOO EARLY", s.soldTooEarly, 952);
+  x.fillStyle="#3d3d3d";x.font="400 24px "+mono;
+  x.fillText("realized only \xB7 tracked tokens only",92,1152);
+  x.fillStyle="#2a2a2a";x.fillRect(92,1200,W-184,2);
+  x.fillStyle="#7a7a7a";x.font="600 24px "+mono;
+  x.fillText(D.addr.slice(0,10)+"\u2026"+D.addr.slice(-8),92,1228);
+  x.fillStyle="#e84142";x.textAlign="right";
+  x.fillText("AVAX100M.XYZ",W-92,1228);
+  x.textAlign="left";
+  document.getElementById("pnl-card-wrap").style.display="block";
+  document.getElementById("pnl-dl").onclick=function(){
+    var a=document.createElement("a");a.download="avax-pnl.png";a.href=c.toDataURL("image/png");a.click();
+  };
+  document.getElementById("pnl-share").onclick=function(){
+    var bits=[];
+    if(s.biggestW) bits.push("biggest w: "+s.biggestW.line.toLowerCase()+" on "+s.biggestW.sub.toLowerCase());
+    if(s.roundtrip) bits.push("roundtripped "+s.roundtrip.line.toLowerCase().replace("-","")+" like a champ");
+    var t="my avalanche p&l. "+bits.join(". ")+". road to block 100,000,000.";
+    var isMobile=/android|iphone|ipad|ipod/i.test(navigator.userAgent);
+    if(!isMobile && window.ClipboardItem && navigator.clipboard && navigator.clipboard.write){
+      try{ navigator.clipboard.write([new ClipboardItem({"image/png":new Promise(function(res){c.toBlob(res,"image/png");})})])
+        .then(function(){ document.getElementById("pnl-note").textContent="card copied \u2014 paste it (ctrl+v) into your post."; }).catch(function(){}); }catch(e){}
+    } else if(isMobile){ document.getElementById("pnl-note").textContent="tip: download the card, then attach it in your post."; }
+    window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(t)+"&url="+encodeURIComponent(PAGE),"_blank");
+  };
+}
 })();
 </script>
 </body>

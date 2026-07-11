@@ -816,6 +816,20 @@ async function fetchAllProfitability(addr, key) {
   } while (cursor);
   return { rows, capped };
 }
+async function fetchBalances(addr, key) {
+  try {
+    const data = await mfetch("/wallets/" + addr + "/tokens?chain=avalanche", key);
+    const map = {};
+    for (const t of data && data.result || []) {
+      const a = (t.token_address || "").toLowerCase();
+      const tk = parseFloat(t.balance_formatted) || 0;
+      if (a && tk > 0) map[a] = tk;
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
 function parseRows(tokens) {
   return (tokens || []).filter((t) => t && typeof t.realized_profit_usd !== "undefined").map((t) => {
     const invested = parseFloat(t.total_usd_invested) || 0;
@@ -837,36 +851,42 @@ function parseRows(tokens) {
     };
   });
 }
-async function enrich(rows) {
-  const cands = rows.filter((r) => r.tokenAddress && r.invested + r.sold > 100).sort((a, b) => b.invested + b.sold - (a.invested + a.sold)).slice(0, 8);
-  let roundtrip = null, soldTooEarly = null;
-  for (const c of cands) {
+async function enrich(rows, balances) {
+  const byInvested = rows.filter((r) => r.tokenAddress && r.invested > 100 && (balances[r.tokenAddress] || 0) > 0).sort((a, b) => b.invested - a.invested).slice(0, 6);
+  const bySold = rows.filter((r) => r.tokenAddress && r.sold > 50).sort((a, b) => b.sold - a.sold).slice(0, 6);
+  const seen = {};
+  const cands = [];
+  for (const c of byInvested.concat(bySold)) {
+    if (!seen[c.tokenAddress]) {
+      seen[c.tokenAddress] = 1;
+      cands.push(c);
+    }
+  }
+  const rts = [], stes = [];
+  for (const c of cands.slice(0, 10)) {
     const cg = await cgToken(c.tokenAddress);
     if (!cg) continue;
-    const remaining = c.boughtTk > 0 ? Math.max(0, c.boughtTk - c.soldTk) : 0;
-    const remainingRatio = c.boughtTk > 0 ? remaining / c.boughtTk : 0;
-    if (c.boughtTk > 0 && remainingRatio >= 0.5) {
-      const peak = c.boughtTk * cg.ath;
-      const walked = c.sold + remaining * cg.cur;
-      const rt = peak - walked;
+    const heldTk = balances[c.tokenAddress] || 0;
+    if (heldTk > 0) {
+      const peak = heldTk * cg.ath;
+      const now = heldTk * cg.cur;
+      const rt = peak - now;
       if (peak > 500 && rt > 250 && rt / peak > 0.5) {
-        if (!roundtrip || rt > roundtrip._rt) {
-          roundtrip = { _rt: rt, line: "-" + usd(rt), sub: "$" + c.sym + " \xB7 " + usd(peak) + " at peak \xB7 still holding" };
-        }
+        rts.push({ rt, sym: c.sym, line: "-" + usd(rt), sub: "$" + c.sym + " \xB7 " + usd(peak) + " at peak \xB7 " + usd(now) + " now" });
       }
     }
-    if (c.soldTk > 0 && c.sold > 50 && remainingRatio < 0.5) {
+    if (c.soldTk > 0 && c.sold > 50) {
       const athValue = c.soldTk * cg.ath;
-      if (athValue > c.sold * 2) {
-        const missed = athValue - c.sold;
-        if (!soldTooEarly || missed > soldTooEarly._missed) {
-          soldTooEarly = { _missed: missed, line: "$" + c.sym, sub: "sold for " + usd(c.sold) + " \xB7 " + usd(athValue) + " at ath" };
-        }
+      if (athValue > c.sold * 3) {
+        stes.push({ missed: athValue - c.sold, sym: c.sym, line: "$" + c.sym, sub: "sold for " + usd(c.sold) + " \xB7 " + usd(athValue) + " at ath" });
       }
     }
   }
-  if (roundtrip) delete roundtrip._rt;
-  if (soldTooEarly) delete soldTooEarly._missed;
+  rts.sort((a, b) => b.rt - a.rt);
+  stes.sort((a, b) => b.missed - a.missed);
+  const roundtrip = rts[0] ? { line: rts[0].line, sub: rts[0].sub } : null;
+  const stePick = stes.find((s) => !rts[0] || s.sym !== rts[0].sym) || null;
+  const soldTooEarly = stePick ? { line: stePick.line, sub: stePick.sub } : null;
   return { roundtrip, soldTooEarly };
 }
 function summarize(rows, capped) {
@@ -892,7 +912,7 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v2/" + addr;
+  const cacheKey = "v3/" + addr;
   if (store) try {
     const cached = await store.get(cacheKey, { type: "json" });
     if (cached && Date.now() - cached.t < CACHE_MS) {
@@ -901,10 +921,10 @@ var pnl_default = async (req) => {
   } catch {
   }
   try {
-    const { rows: raw, capped } = await fetchAllProfitability(addr, key);
+    const [{ rows: raw, capped }, balances] = await Promise.all([fetchAllProfitability(addr, key), fetchBalances(addr, key)]);
     const rows = parseRows(raw);
     const stats = summarize(rows, capped);
-    const extra = await enrich(rows);
+    const extra = await enrich(rows, balances);
     stats.roundtrip = extra.roundtrip;
     stats.soldTooEarly = extra.soldTooEarly;
     if (store) await store.set(cacheKey, JSON.stringify({ t: Date.now(), stats })).catch(() => {

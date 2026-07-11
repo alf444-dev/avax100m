@@ -193,7 +193,7 @@
             <button id="share">Share on X</button>
           </div>
           <div id="permalink" style="display:none;margin-top:12px;font-size:11px;color:var(--dim);letter-spacing:.06em;word-break:break-all">
-            your page: <span id="permalink-url" style="color:var(--ink)"></span>
+            your page: <a id="permalink-url" href="#" target="_blank" rel="noopener" style="color:var(--ink);text-decoration:underline;text-decoration-color:var(--faint)"></a>
             <button id="permalink-copy" style="background:transparent;border:1px solid var(--faint);color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;margin-left:8px;cursor:pointer">copy</button>
           </div>
         </div>
@@ -646,7 +646,9 @@
     drawCard(lastDraw);
     lastCard = {era:era[1], rank:rank[1], days:days, blk:blk, early:earlyStr, price:null, addr:addr};
     var plink = SITE.replace(/^https?:\/\//,"")+"/w/"+addr;
-    document.getElementById("permalink-url").textContent = plink;
+    var pel = document.getElementById("permalink-url");
+    pel.textContent = plink;
+    pel.href = SITE+"/w/"+addr;
     document.getElementById("permalink").style.display = "block";
     submitCensus(era[1], rank[1], mv.val, addr);
 
@@ -745,7 +747,7 @@
         }).catch(function(){});
       }catch(e){}
     }
-    var shareUrl = (lastCard && lastCard.addr) ? SITE+"/w/"+lastCard.addr : SITE;
+    var shareUrl = SITE;
     if(isMobile && lastCard){
       msg.className=""; msg.textContent="tip: download the card, then attach it in your post.";
     }
