@@ -180,6 +180,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     <div class="eyebrow">avalanche c-chain \xB7 wallet profile</div>
     <h1>${esc(w.rank[1])}</h1>
     <div class="tagline">${esc(w.rank[2])}</div>
+    <div id="avvy" style="display:none;margin-top:24px;font-size:20px;font-weight:700;color:var(--ink);letter-spacing:.02em"></div>
     <div class="addrline">
       <span class="a">${esc(short)}</span>
       <button class="btn" id="copy-addr">copy address</button>
@@ -332,9 +333,23 @@ function renderPnl(s){
   drawPnlCard(s);
 }
 
+/* .avax reverse resolution */
+var AVVY_NAME = null;
+fetch(SITE+"/api/resolve?addr="+D.addr).then(function(r){return r.json();}).then(function(j){
+  if(j && j.name){
+    AVVY_NAME = j.name;
+    var el = document.getElementById("avvy");
+    el.textContent = j.name;
+    el.style.display = "block";
+    if(LAST_PNL) drawPnlCard(LAST_PNL); // re-render the card wearing the name
+  }
+}).catch(function(){});
+var LAST_PNL = null;
+
 /* shareable p&l card */
 function drawPnlCard(s){
   if(!s.biggestW && !s.biggestL && !s.roundtrip && !s.soldTooEarly) return;
+  LAST_PNL = s;
   var c=document.getElementById("pnl-card"),x=c.getContext("2d");
   var W=1080,H=1350,mono="monospace";
   x.fillStyle="#0a0a0a";x.fillRect(0,0,W,H);
@@ -367,7 +382,7 @@ function drawPnlCard(s){
   x.fillText("realized only \xB7 tracked tokens only",92,1152);
   x.fillStyle="#2a2a2a";x.fillRect(92,1200,W-184,2);
   x.fillStyle="#7a7a7a";x.font="600 24px "+mono;
-  x.fillText(D.addr.slice(0,10)+"\u2026"+D.addr.slice(-8),92,1228);
+  x.fillText(AVVY_NAME ? AVVY_NAME : (D.addr.slice(0,10)+"\u2026"+D.addr.slice(-8)),92,1228);
   x.fillStyle="#e84142";x.textAlign="right";
   x.fillText("AVAX100M.XYZ",W-92,1228);
   x.textAlign="left";
@@ -379,7 +394,7 @@ function drawPnlCard(s){
     var bits=[];
     if(s.biggestW) bits.push("biggest w: "+s.biggestW.line.toLowerCase()+" on "+s.biggestW.sub.toLowerCase());
     if(s.roundtrip) bits.push("roundtripped "+s.roundtrip.line.toLowerCase().replace("-","")+" like a champ");
-    var t="my avalanche p&l. "+bits.join(". ")+". road to block 100,000,000.";
+    var t=(AVVY_NAME?AVVY_NAME+". ":"")+"my avalanche p&l. "+bits.join(". ")+". road to block 100,000,000.";
     var isMobile=/android|iphone|ipad|ipod/i.test(navigator.userAgent);
     if(!isMobile && window.ClipboardItem && navigator.clipboard && navigator.clipboard.write){
       try{ navigator.clipboard.write([new ClipboardItem({"image/png":new Promise(function(res){c.toBlob(res,"image/png");})})])

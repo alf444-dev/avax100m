@@ -4494,7 +4494,7 @@ function draw(w) {
   x.fillRect(L, 556, W - 2 * L, 2);
   x.fillStyle = "#7a7a7a";
   x.font = "19px Mono";
-  x.fillText(w.addr.slice(0, 10) + "\u2026" + w.addr.slice(-8), L, 586);
+  x.fillText(w.avvy ? w.avvy : w.addr.slice(0, 10) + "\u2026" + w.addr.slice(-8), L, 586);
   x.fillStyle = "#e84142";
   x.font = "19px MonoB";
   const tag = "AVAX100M.XYZ \xB7 ROAD TO BLOCK 100,000,000";
@@ -4519,8 +4519,12 @@ var card_default = async (req) => {
   if (!m) return Response.redirect(site + "/og.png", 302);
   try {
     await loadFonts();
-    const w = await fetchWallet(m[1]);
+    const [w, nm] = await Promise.all([
+      fetchWallet(m[1]),
+      fetch(site + "/api/resolve?addr=" + m[1].toLowerCase()).then((r) => r.json()).then((j) => j && j.name || null).catch(() => null)
+    ]);
     if (!w) return Response.redirect(site + "/og.png", 302);
+    w.avvy = nm;
     const png = await toPng(draw(w));
     return new Response(png, { headers: {
       "content-type": "image/png",

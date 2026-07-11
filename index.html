@@ -168,7 +168,7 @@
       <h2>check wallet</h2>
       <p class="sub">Paste any C-Chain address. Find the block where it first appeared, the era it survived, and get your card. No connect. No signature. Just a lookup.</p>
       <div class="check-row">
-        <input id="addr" type="text" spellcheck="false" autocomplete="off" placeholder="0x…" aria-label="C-Chain address">
+        <input id="addr" type="text" spellcheck="false" autocomplete="off" placeholder="0x… or name.avax" aria-label="C-Chain address or .avax name">
         <button id="checkbtn">Check</button>
       </div>
       <div id="checkmsg" role="status"></div>
@@ -545,11 +545,32 @@
   var btn=document.getElementById("checkbtn"), inp=document.getElementById("addr"),
       msg=document.getElementById("checkmsg"), res=document.getElementById("result");
 
+  var avvyName = null; // resolved .avax name for the current check
   function check(){
     var a = inp.value.trim();
-    if(!/^0x[0-9a-fA-F]{40}$/.test(a)){
-      msg.className="err"; msg.textContent="that's not a c-chain address. 0x + 40 hex characters."; return;
+    if(/^[a-zA-Z0-9-_]+(\.[a-zA-Z0-9-_]+)*\.avax$/.test(a)){
+      msg.className=""; msg.textContent="resolving "+a.toLowerCase()+"…";
+      btn.disabled = true;
+      fetch("/api/resolve?name="+encodeURIComponent(a.toLowerCase()))
+        .then(function(r){return r.json();})
+        .then(function(j){
+          btn.disabled = false;
+          if(j && j.addr){ avvyName = a.toLowerCase(); runCheck(j.addr); }
+          else { msg.className="err"; msg.textContent="couldn't resolve "+a.toLowerCase()+". try the 0x address."; }
+        })
+        .catch(function(){ btn.disabled=false; msg.className="err"; msg.textContent="resolver unavailable. try the 0x address."; });
+      return;
     }
+    if(!/^0x[0-9a-fA-F]{40}$/.test(a)){
+      msg.className="err"; msg.textContent="that's not a c-chain address. 0x + 40 hex characters. (.avax names work too)"; return;
+    }
+    avvyName = null;
+    // fire-and-forget reverse lookup so the card can wear the name if one exists
+    fetch("/api/resolve?addr="+a.toLowerCase()).then(function(r){return r.json();})
+      .then(function(j){ if(j && j.name){ avvyName = j.name; if(lastDraw){ lastDraw.name = avvyName; drawCard(lastDraw); } } }).catch(function(){});
+    runCheck(a);
+  }
+  function runCheck(a){
     msg.className=""; msg.textContent="scanning…";
     btn.disabled = true;
     var base="https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api?module=account&address="
@@ -567,6 +588,7 @@
       var blk=parseInt(tx.blockNumber,10);
       var mv=firstInteresting(j.result, (tj&&tj.result&&tj.result.length)?tj.result:[], a);
       render(a, ts, blk, mv);
+      if(lastDraw && avvyName){ lastDraw.name = avvyName; drawCard(lastDraw); }
     }).catch(function(){
       btn.disabled = false;
       msg.className="err"; msg.textContent="lookup failed. if you're viewing this in a sandboxed preview, deploy the page — the api works from a real domain.";
@@ -716,7 +738,7 @@
 
     x.fillStyle="#2a2a2a";x.fillRect(92,1200,W-184,2);
     x.fillStyle="#7a7a7a";x.font="600 24px "+mono;
-    x.fillText(s.addr.slice(0,10)+"…"+s.addr.slice(-8),92,1228);
+    x.fillText(s.name ? s.name : (s.addr.slice(0,10)+"…"+s.addr.slice(-8)),92,1228);
     x.fillStyle="#e84142";x.textAlign="right";
     x.fillText("ROAD TO BLOCK 100,000,000",W-92,1228);
     x.textAlign="left";
