@@ -894,6 +894,11 @@ function parseRows(tokens) {
       soldTk,
       tokenAddress: (t.token_address || "").toLowerCase() || null
     };
+  }).filter((r) => {
+    if (!isFinite(r.profit) || !isFinite(r.sold) || !isFinite(r.invested)) return false;
+    if (Math.abs(r.profit) > 1e9 || r.sold > 1e12 || r.invested > 1e12) return false;
+    if (r.profit > 0 && r.profit > r.sold * 1.05 + 100) return false;
+    return true;
   });
 }
 async function pool(items, n, fn) {
@@ -1004,7 +1009,7 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v7/" + addr;
+  const cacheKey = "v8/" + addr;
   const debug = url.searchParams.get("debug") === "1";
   const refresh = url.searchParams.get("refresh") === "1";
   if (store && !debug && !refresh) try {
@@ -1018,7 +1023,18 @@ var pnl_default = async (req) => {
   try {
     const diag = debug ? [] : null;
     const [{ rows: raw, capped }, balances] = await Promise.all([fetchAllProfitability(addr, key), fetchBalances(addr, key)]);
-    const rows = parseRows(raw);
+    let rows = parseRows(raw);
+    const suspects = rows.filter((r) => Math.abs(r.profit) > 25e4 && r.tokenAddress);
+    if (suspects.length) {
+      const verified = {};
+      await pool(suspects, 3, async (r) => {
+        verified[r.tokenAddress] = !!await cgToken(r.tokenAddress, store);
+      });
+      rows = rows.filter((r) => Math.abs(r.profit) <= 25e4 || !r.tokenAddress || verified[r.tokenAddress]);
+      if (diag) suspects.forEach((r) => {
+        if (!verified[r.tokenAddress]) diag.push({ sym: r.sym, skip: "big claim, not cg-listed \u2014 dropped", profit: r.profit });
+      });
+    }
     const stats = summarize(rows, capped);
     const extra = await enrich(rows, balances, addr, store, diag);
     stats.roundtrip = extra.roundtrip;
