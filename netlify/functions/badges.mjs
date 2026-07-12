@@ -775,399 +775,241 @@ var getStore = (input, options) => {
   );
 };
 
-// src/pnl.js
+// src/lib.js
+var GENESIS = Date.UTC(2020, 8, 21);
+var ERAS = [
+  [Date.UTC(2021, 1, 9), "GENESIS", "before the first dex. before everything."],
+  [Date.UTC(2021, 7, 18), "PANGOLIN SPRING", "first native dex. first c-chain boom."],
+  [Date.UTC(2021, 10, 21), "AVALANCHE RUSH", "$180m in incentives. aave and curve move in."],
+  [Date.UTC(2022, 1, 1), "WONDERLAND", "$146 ath. time (9,9). you saw the top."],
+  [Date.UTC(2022, 4, 9), "SUBNET SZN", "summit barcelona. dfk crystalvale. crabada."],
+  [Date.UTC(2023, 0, 1), "THE LONG WINTER", "terra. cryptoleaks. ftx. banff shipped anyway."],
+  [Date.UTC(2023, 9, 1), "THE DESERT", "aws handshake. single digits. blocks anyway."],
+  [Date.UTC(2023, 11, 5), "STARS ARENA", "socialfi mania, exploit, comeback. wild month."],
+  [Date.UTC(2024, 2, 6), "COQ SZN", "memecoins and inscriptions. $9 to $48."],
+  [Date.UTC(2024, 11, 16), "DURANGO", "warp messaging live. the rebuild begins."],
+  [Date.UTC(2025, 0, 25), "AVALANCHE9000", "etna. subnets become l1s. costs drop 99%."],
+  [Date.UTC(2025, 5, 1), "PRESALE SZN", "ket 720x. wink. blub shamefi. forms closed fast."],
+  [Date.UTC(2025, 10, 19), "ARENA SUMMER", "1,800 tokens a day. lambo. wolfi. fifa moves in."],
+  [Infinity, "GRANITE", "sub-second finality. world cup on-chain."]
+];
+var RANKS = [
+  [2e3, "PERMAFROST", "here before most chains existed."],
+  [1600, "OG", "watched the ath from the inside."],
+  [1200, "VETERAN", "held through the long winter."],
+  [800, "SURVIVOR", "outlasted the desert."],
+  [400, "RESIDENT", "settled in for the rebuild."],
+  [120, "SETTLER", "arrived when it got fast."],
+  [0, "FRESH SNOW", "welcome. blocks don't wait."]
+];
+function eraFor(ts) {
+  for (const e of ERAS) {
+    if (ts < e[0]) return e;
+  }
+  return ERAS[ERAS.length - 1];
+}
+function rankFor(days) {
+  for (const r of RANKS) {
+    if (days >= r[0]) return r;
+  }
+  return RANKS[RANKS.length - 1];
+}
+var TOS = {
+  "0x60ae616a28f1f202060ccb7207f87c051f4e5b3b": "swapped on trader joe",
+  "0xe54ca86531e17ef3616d22ca28b0d458b6c89106": "swapped on pangolin",
+  "0x794a61358d6845594f94dc1db02a252b5b4814ad": "deposited into aave",
+  "0x1111111254eeb25477b68fb85ed929f73a960582": "swapped via 1inch",
+  "0x3c2269811836af69497e5f486a85d7316753cf62": "crossed chains via layerzero",
+  "0x45a01e4e04f14f7a4a6702c74187c5f6222033cd": "bridged via stargate",
+  "0x8eb8a3b98659cce290402893d0123abb75e3ab28": "bridged out via avalanche bridge"
+};
+var FROMS = { "0x8eb8a3b98659cce290402893d0123abb75e3ab28": "bridged in from ethereum" };
+var SCAM_RE = /claim|visit|reward|bonus|airdrop|gift|prize|www|http|\.com|\.io|\.xyz|\.net|\.org/i;
+var SKIP_TOKENS = { WAVAX: 1, USDC: 1, USDT: 1, DAI: 1, BUSD: 1, FRAX: 1, MIM: 1, TUSD: 1, USDP: 1, UST: 1, USDD: 1, EURC: 1, AUSD: 1, USD1: 1 };
+function classifyTx(tx, addr) {
+  const a = addr.toLowerCase(), to = (tx.to || "").toLowerCase(), from = (tx.from || "").toLowerCase();
+  if (!to) return "deployed a contract";
+  if (to === a) return FROMS[from] || null;
+  return TOS[to] || null;
+}
+function cleanSymbol(t) {
+  let s = (t.tokenSymbol || "").trim();
+  const n = t.tokenName || "";
+  if (!/^[A-Za-z0-9$]{1,12}$/.test(s)) return null;
+  if (SCAM_RE.test(s) || SCAM_RE.test(n)) return null;
+  s = s.toUpperCase();
+  if (SKIP_TOKENS[s]) return null;
+  return s;
+}
+function firstInteresting(txs, toks, addr) {
+  for (const t of toks) {
+    const s = cleanSymbol(t);
+    if (s) return { key: "FIRST TOKEN", val: "$" + s, contract: (t.contractAddress || "").toLowerCase() || null };
+  }
+  const events = [];
+  for (const tx of txs) {
+    const lbl = classifyTx(tx, addr);
+    if (lbl) events.push({ ts: parseInt(tx.timeStamp, 10), key: "FIRST MOVE", val: lbl });
+  }
+  if (!events.length) return { key: "FIRST MOVE", val: "just avax" };
+  events.sort((a, b) => a.ts - b.ts);
+  return events[0];
+}
+var API = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
+async function fetchWallet(addr) {
+  const base = API + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=25&sort=asc";
+  const [txj, tokj, intj, cntj, blkj] = await Promise.all([
+    fetch(base + "&action=txlist").then((r) => r.json()),
+    fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => ({ result: [] })),
+    fetch(base + "&action=txlistinternal").then((r) => r.json()).catch(() => ({ result: [] })),
+    fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest").then((r) => r.json()).catch(() => null),
+    fetch(API + "?module=proxy&action=eth_blockNumber").then((r) => r.json()).catch(() => null)
+  ]);
+  const heads = [];
+  if (txj.result && txj.result.length) heads.push(txj.result[0]);
+  if (tokj && Array.isArray(tokj.result) && tokj.result.length) heads.push(tokj.result[0]);
+  if (intj && Array.isArray(intj.result) && intj.result.length) heads.push(intj.result[0]);
+  if (!heads.length) return null;
+  const first = heads.reduce((a, b) => parseInt(a.timeStamp, 10) <= parseInt(b.timeStamp, 10) ? a : b);
+  const ts = parseInt(first.timeStamp, 10) * 1e3;
+  const blk = parseInt(first.blockNumber, 10);
+  const now = Date.now();
+  const days = Math.floor((now - ts) / 864e5);
+  const pct = Math.min(100, (now - ts) / (now - GENESIS) * 100);
+  const curBlock = blkj && blkj.result ? parseInt(blkj.result, 16) : 1e8;
+  const early = blk / curBlock * 100;
+  const earlyStr = (early < 0.01 ? "<0.01" : early < 1 ? early.toFixed(2) : early.toFixed(1)) + "% of all blocks";
+  const txc = cntj && cntj.result ? parseInt(cntj.result, 16) : null;
+  const mv = firstInteresting(txj && txj.result || [], tokj && tokj.result || [], addr);
+  const dateStr = new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).toUpperCase();
+  return { addr, ts, blk, days, pct, era: eraFor(ts), rank: rankFor(days), mv, txc, earlyStr, dateStr };
+}
+
+// src/badges.js
 var HEADERS = { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" };
-var CACHE_MS = 7 * 24 * 3600 * 1e3;
-var MORALIS = "https://deep-index.moralis.io/api/v2.2";
 var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
+var CACHE_MS = 7 * 24 * 3600 * 1e3;
+var SCAM = /claim|visit|reward|bonus|airdrop|gift|prize|www|http|\.com|\.io|\.xyz|\.net|\.org/i;
 var usd = (n) => "$" + Math.round(Math.abs(n)).toLocaleString("en-US");
-var signedUsd = (n) => (n < 0 ? "-" : "+") + usd(n);
-async function mfetch(path, key) {
-  const r = await fetch(MORALIS + path, { headers: { "X-API-Key": key, accept: "application/json" } });
-  if (!r.ok) throw new Error("moralis " + r.status);
-  return r.json();
-}
-async function cgToken(addr, store) {
-  if (store) try {
-    const c = await store.get("cg/" + addr, { type: "json" });
-    if (c && Date.now() - c.t < 24 * 3600 * 1e3) return c.v;
-  } catch {
-  }
-  try {
-    let r = await fetch("https://api.coingecko.com/api/v3/coins/avalanche/contract/" + addr);
-    if (r.status === 429) {
-      await new Promise((res) => setTimeout(res, 2200));
-      r = await fetch("https://api.coingecko.com/api/v3/coins/avalanche/contract/" + addr);
-    }
-    if (!r.ok) return null;
-    const j = await r.json();
-    const md = j && j.market_data;
-    if (!md) return null;
-    const ath = md.ath && md.ath.usd;
-    const cur = md.current_price && md.current_price.usd;
-    const athDate = md.ath_date && md.ath_date.usd ? Date.parse(md.ath_date.usd) : null;
-    const v = ath && ath > 0 ? { ath, cur: cur || 0, athDate } : null;
-    if (store && v) try {
-      await store.set("cg/" + addr, JSON.stringify({ t: Date.now(), v }));
-    } catch {
-    }
-    return v;
-  } catch {
-    return null;
-  }
-}
-async function replayBag(addr, contract, athTs, athTs2) {
-  try {
-    const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
-    const j = await r.json();
-    if (!j.result || !Array.isArray(j.result) || !j.result.length) return null;
-    let bal = 0n, peakBeforeAth = 0n, peakEver = 0n, balAtAth = null, balAtAth2 = null, dec = null, firstTs = null, nearOut = 0n;
-    const W = 7 * 864e5;
-    for (const t of j.result) {
-      if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
-      const ts = parseInt(t.timeStamp, 10) * 1e3;
-      if (firstTs === null) firstTs = ts;
-      if (athTs && balAtAth === null && ts > athTs) balAtAth = bal;
-      if (athTs2 && balAtAth2 === null && ts > athTs2) balAtAth2 = bal;
-      let v;
-      try {
-        v = BigInt(t.value || "0");
-      } catch {
-        continue;
-      }
-      if ((t.to || "").toLowerCase() === addr) bal += v;
-      else if ((t.from || "").toLowerCase() === addr) {
-        bal -= v;
-        if (athTs && Math.abs(ts - athTs) <= W) nearOut += v;
-      }
-      if (bal > peakEver) peakEver = bal;
-      if (athTs && ts <= athTs && bal > peakBeforeAth) peakBeforeAth = bal;
-    }
-    if (athTs && balAtAth === null) balAtAth = bal;
-    if (athTs2 && balAtAth2 === null) balAtAth2 = bal;
-    const d = dec === null || isNaN(dec) ? 18 : dec;
-    const f = (x) => Number(x) / Math.pow(10, d);
-    return { peakEver: f(peakEver), peakBeforeAth: f(peakBeforeAth), balAtAth: balAtAth === null ? null : f(balAtAth), balAtAth2: balAtAth2 === null ? null : f(balAtAth2), firstTs, nearOut: f(nearOut) };
-  } catch {
-    return null;
-  }
-}
-async function peakSince(contract, fromTs, store) {
-  const bucket = Math.floor(fromTs / (30 * 864e5));
-  const ck = "peak/" + contract + "/" + bucket;
-  if (store) try {
-    const c = await store.get(ck, { type: "json" });
-    if (c && Date.now() - c.t < 7 * 24 * 3600 * 1e3) return c.v;
-  } catch {
-  }
-  try {
-    const u = "https://api.coingecko.com/api/v3/coins/avalanche/contract/" + contract + "/market_chart/range?vs_currency=usd&from=" + Math.floor(fromTs / 1e3) + "&to=" + Math.floor(Date.now() / 1e3);
-    let r = await fetch(u);
-    if (r.status === 429) {
-      await new Promise((res) => setTimeout(res, 2200));
-      r = await fetch(u);
-    }
-    if (!r.ok) return null;
-    const j = await r.json();
-    const prices = j && j.prices || [];
-    if (!prices.length) return null;
-    let maxP = 0, maxTs = null;
-    for (const p of prices) {
-      if (p[1] > maxP) {
-        maxP = p[1];
-        maxTs = p[0];
-      }
-    }
-    const v = maxP > 0 ? { price: maxP, ts: maxTs } : null;
-    if (store && v) try {
-      await store.set(ck, JSON.stringify({ t: Date.now(), v }));
-    } catch {
-    }
-    return v;
-  } catch {
-    return null;
-  }
-}
-async function fetchAllProfitability(addr, key) {
-  let rows = [], cursor = null, pages = 0, capped = false;
-  do {
-    const q = "/wallets/" + addr + "/profitability?chain=avalanche" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : "");
-    const data = await mfetch(q, key);
-    const batch = data && (data.result || data.data) || [];
-    rows = rows.concat(batch);
-    cursor = data && data.cursor;
-    pages++;
-    if (pages >= 3 && cursor) {
-      capped = true;
-      break;
-    }
-  } while (cursor);
-  return { rows, capped };
-}
-async function fetchBalances(addr, key) {
-  try {
-    const data = await mfetch("/wallets/" + addr + "/tokens?chain=avalanche", key);
-    const map = {};
-    for (const t of data && data.result || []) {
-      const a = (t.token_address || "").toLowerCase();
-      const tk = parseFloat(t.balance_formatted) || 0;
-      const usd2 = parseFloat(t.usd_value) || 0;
-      if (a && tk > 0) map[a] = { tk, usd: usd2 };
-    }
-    return map;
-  } catch {
-    return {};
-  }
-}
-function parseRows(tokens) {
-  return (tokens || []).filter((t) => t && typeof t.realized_profit_usd !== "undefined").map((t) => {
-    const invested = parseFloat(t.total_usd_invested) || 0;
-    const sold = parseFloat(t.total_sold_usd) || 0;
-    const avgBuy = parseFloat(t.avg_buy_price_usd) || 0;
-    const avgSell = parseFloat(t.avg_sell_price_usd) || 0;
-    let boughtTk = parseFloat(t.total_tokens_bought) || 0;
-    let soldTk = parseFloat(t.total_tokens_sold) || 0;
-    if (!boughtTk && avgBuy > 0) boughtTk = invested / avgBuy;
-    if (!soldTk && avgSell > 0) soldTk = sold / avgSell;
-    return {
-      sym: (t.symbol || t.token_symbol || "").toUpperCase() || (t.token_address || "").slice(0, 8),
-      profit: parseFloat(t.realized_profit_usd) || 0,
-      invested,
-      sold,
-      boughtTk,
-      soldTk,
-      tokenAddress: (t.token_address || "").toLowerCase() || null
-    };
-  }).filter((r) => {
-    if (!isFinite(r.profit) || !isFinite(r.sold) || !isFinite(r.invested)) return false;
-    if (Math.abs(r.profit) > 1e9 || r.sold > 1e12 || r.invested > 1e12) return false;
-    if (r.profit > 0 && r.profit > r.sold * 1.05 + 100) return false;
-    return true;
-  });
-}
-async function pool(items, n, fn) {
-  let i = 0;
-  const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
-    while (i < items.length) {
-      const k = i++;
-      await fn(items[k]);
-    }
-  });
-  await Promise.all(workers);
-}
-async function enrich(rows, balances, ADDR, store, diag) {
-  const flags = {};
-  const byInvested = rows.filter((r) => r.tokenAddress && r.invested > 100).sort((a, b) => b.invested - a.invested).slice(0, 4);
-  const bySold = rows.filter((r) => r.tokenAddress && r.sold > 50).sort((a, b) => b.sold - a.sold).slice(0, 9);
-  const seen = {};
-  const cands = [];
-  for (const c of byInvested.concat(bySold)) {
-    if (!seen[c.tokenAddress]) {
-      seen[c.tokenAddress] = 1;
-      cands.push(c);
-    }
-  }
-  const rts = [], stes = [];
-  await pool(cands.slice(0, 11), 3, async (c) => {
-    const d = { sym: c.sym, sold: Math.round(c.sold) };
-    if (diag) diag.push(d);
-    const cg = await cgToken(c.tokenAddress, store);
-    if (!cg) {
-      d.skip = "no coingecko data";
-      return;
-    }
-    const heldTk = balances[c.tokenAddress] && balances[c.tokenAddress].tk || 0;
-    const wantsSte = c.soldTk > 0 && c.sold > 50;
-    if (heldTk <= 0 && !wantsSte) return;
-    const rp = await replayBag(ADDR, c.tokenAddress, null);
-    if (!rp || !rp.firstTs) {
-      d.skip = "replay failed";
-      return;
-    }
-    d.firstHeld = new Date(rp.firstTs).toISOString().slice(0, 10);
-    const pk = await peakSince(c.tokenAddress, rp.firstTs, store);
-    const peakPrice = pk ? pk.price : cg.ath;
-    const peakTs = pk ? pk.ts : cg.athDate;
-    d.peakSinceHeld = peakPrice;
-    if (!peakTs) return;
-    const rp2 = await replayBag(ADDR, c.tokenAddress, peakTs, peakTs - 7 * 864e5);
-    if (!rp2 || rp2.balAtAth === null) {
-      d.skip = "replay failed";
-      return;
-    }
-    const balAtPeak = rp2.balAtAth;
-    d.balAtPeak = balAtPeak;
-    const avgSell = c.soldTk > 0 ? c.sold / c.soldTk : 0;
-    if (heldTk > 0 && heldTk * peakPrice > 500 && cg.cur <= peakPrice * 0.1) {
-      if (!flags.captain) flags.captain = { sym: c.sym, downPct: Math.round((1 - cg.cur / peakPrice) * 100) };
-    }
-    if (c.invested > 100 && c.boughtTk > 0) {
-      const avgBuy = c.invested / c.boughtTk;
-      if (avgBuy >= peakPrice * 0.8 && avgBuy <= peakPrice * 1.5) {
-        if (!flags.boughtTop) flags.boughtTop = { sym: c.sym };
-      }
-    }
-    if (balAtPeak > 0 && !flags.roundVictim) {
-      const pv = balAtPeak * peakPrice;
-      for (const T of [1e4, 1e5, 1e6]) {
-        if (pv >= T * 0.95 && pv < T) {
-          flags.roundVictim = { sym: c.sym, peak: Math.round(pv), target: T };
-          break;
-        }
-      }
-    }
-    if (rp2.balAtAth2 !== null && rp2.balAtAth2 > 0 && rp2.peakBeforeAth > 0 && rp2.balAtAth2 >= rp2.peakBeforeAth * 0.5 && balAtPeak < rp2.peakBeforeAth * 0.1 && rp2.balAtAth2 * peakPrice > 500) {
-      if (!flags.soldTop) flags.soldTop = { sym: c.sym };
-    }
-    if (balAtPeak > 0) {
-      const peakValue = balAtPeak * peakPrice;
-      const heldPart = Math.min(heldTk, balAtPeak);
-      const soldAfter = Math.max(0, balAtPeak - heldPart);
-      const walked = soldAfter * avgSell + heldPart * cg.cur;
-      const rt = peakValue - walked;
-      d.peakValue = Math.round(peakValue);
-      d.walked = Math.round(walked);
-      if (peakValue > 500 && rt > 250 && rt / peakValue > 0.5) {
-        d.rtQualified = true;
-        const tail = soldAfter * avgSell > heldPart * cg.cur ? "walked with ~" + usd(walked) : usd(heldPart * cg.cur) + " now";
-        rts.push({ rt, sym: c.sym, line: "-" + usd(rt), sub: "$" + c.sym + " \xB7 " + usd(peakValue) + " at peak \xB7 " + tail });
-      }
-    } else if (wantsSte && rp2.peakBeforeAth > 0 && balAtPeak < rp2.peakBeforeAth * 0.2) {
-      const exitedTk = rp2.peakBeforeAth - balAtPeak;
-      const proceeds = exitedTk * avgSell;
-      const athValue = exitedTk * peakPrice;
-      d.proceeds = Math.round(proceeds);
-      d.athValue = Math.round(athValue);
-      if (proceeds > 50 && athValue > 500 && athValue > proceeds * 3) {
-        d.steQualified = true;
-        if (athValue > proceeds * 5 && !flags.exitThere) flags.exitThere = { sym: c.sym, x: Math.round(athValue / Math.max(1, proceeds)) };
-        stes.push({ missed: athValue - proceeds, sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at peak" });
-      }
-    }
-  });
-  rts.sort((a, b) => b.rt - a.rt);
-  stes.sort((a, b) => b.missed - a.missed);
-  const clean = (arr) => arr.slice(0, 5).map((x) => ({ line: x.line, sub: x.sub }));
-  if (rts[0]) {
-    const amt = rts[0].rt;
-    flags.fullCircle = { amt: Math.round(amt), tier: amt >= 1e6 ? 3 : amt >= 1e5 ? 2 : amt >= 1e4 ? 1 : 0 };
-    if (!flags.fullCircle.tier) delete flags.fullCircle;
-  }
-  return {
-    flags,
-    roundtrip: rts[0] ? { line: rts[0].line, sub: rts[0].sub } : null,
-    soldTooEarly: stes[0] ? { line: stes[0].line, sub: stes[0].sub } : null,
-    roundtrips: clean(rts),
-    soldEarly: clean(stes)
-  };
-}
-var STABLES = { "USDT": 1, "USDC": 1, "DAI": 1, "BUSD": 1, "FRAX": 1, "MIM": 1, "TUSD": 1, "USDP": 1, "UST": 1, "USDD": 1, "EURC": 1, "AUSD": 1, "USD1": 1, "USDT.E": 1, "USDC.E": 1, "DAI.E": 1 };
-function rowFlags(rows, balances) {
-  const f = {};
-  const n = rows.length;
-  const wins = rows.filter((r) => r.profit > 0), losses = rows.filter((r) => r.profit < 0);
-  const decided = wins.length + losses.length;
-  const total = rows.reduce((s, r) => s + r.profit, 0);
-  if (n >= 100) f.zoo = { n, tier: n >= 300 ? 2 : 1 };
-  const sl = rows.filter((r) => STABLES[r.sym] && r.profit < 0).sort((a, b) => a.profit - b.profit)[0];
-  if (sl) f.stableLoss = { sym: sl.sym, amt: Math.round(sl.profit) };
-  if (total > 0 && n >= 20) f.netUp = { total: Math.round(total) };
-  if (decided >= 20 && wins.length / decided > 0.6) f.sniper = { pct: Math.round(wins.length / decided * 100) };
-  if (decided >= 20 && wins.length / decided < 0.3) f.exitLiq = { pct: Math.round(wins.length / decided * 100) };
-  const c1 = rows.filter((r) => r.invested > 50 && r.profit / r.invested >= 10).sort((a, b) => b.profit / b.invested - a.profit / a.invested)[0];
-  if (c1) f.caughtOne = { sym: c1.sym, x: Math.round(c1.profit / c1.invested) + 1 };
-  const posSum = wins.reduce((s, r) => s + r.profit, 0);
-  if (wins.length >= 3 && posSum > 1e3 && wins[0] && rows.filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit)[0].profit / posSum > 0.9) {
-    const top = rows.filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit)[0];
-    f.oneTrick = { sym: top.sym, pct: Math.round(top.profit / posSum * 100) };
-  }
-  const bench = rows.filter((r) => r.profit > 1e3);
-  if (bench.length >= 5) f.deepBench = { n: bench.length };
-  if (rows.some((r) => r.sym === "TIME")) f.wonderland = true;
-  if (rows.some((r) => r.sym === "COQ")) f.coqVet = true;
-  if (rows.some((r) => r.sym === "ARENA")) f.arenaTraded = true;
-  const grave = Object.values(balances).filter((b) => b.usd > 0 && b.usd < 1).length;
-  if (grave >= 10) f.graveyard = { n: grave };
-  return f;
-}
-function summarize(rows, capped) {
-  const base = { tokens: capped ? rows.length + "+" : rows.length, biggestW: null, biggestL: null, topW: [], topL: [], summary: null };
-  if (!rows.length) return base;
-  const wins = rows.filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit);
-  const losses = rows.filter((r) => r.profit < 0).sort((a, b) => a.profit - b.profit);
-  const total = rows.reduce((s, r) => s + r.profit, 0);
-  const decided = wins.length + losses.length;
-  base.biggestW = wins[0] ? { line: signedUsd(wins[0].profit), sub: "$" + wins[0].sym } : null;
-  base.biggestL = losses[0] ? { line: signedUsd(losses[0].profit), sub: "$" + losses[0].sym } : null;
-  base.topW = wins.slice(0, 5).map((r) => ({ line: signedUsd(r.profit), sub: "$" + r.sym }));
-  base.topL = losses.slice(0, 5).map((r) => ({ line: signedUsd(r.profit), sub: "$" + r.sym }));
-  base.summary = {
-    total: signedUsd(total),
-    winrate: decided >= 3 ? Math.round(wins.length / decided * 100) + "%" : null,
-    wins: wins.length,
-    losses: losses.length
-  };
-  base.thin = decided < 3;
-  return base;
-}
-var pnl_default = async (req) => {
-  const key = process.env.MORALIS_KEY;
+var badges_default = async (req) => {
   const url = new URL(req.url);
   const addr = (url.searchParams.get("addr") || "").toLowerCase();
   if (!/^0x[0-9a-f]{40}$/.test(addr)) {
-    return new Response(JSON.stringify({ available: false, error: "bad address" }), { status: 400, headers: HEADERS });
+    return new Response(JSON.stringify({ badges: [] }), { status: 400, headers: HEADERS });
   }
-  if (!key) return new Response(JSON.stringify({ available: false }), { headers: HEADERS });
+  const debug = url.searchParams.get("debug") === "1";
   let store = null;
   try {
-    store = getStore("pnl");
+    store = getStore("badges");
   } catch {
   }
-  const cacheKey = "v12/" + addr;
-  const debug = url.searchParams.get("debug") === "1";
-  const refresh = url.searchParams.get("refresh") === "1";
-  if (store && !debug && !refresh) try {
-    const cached = await store.get(cacheKey, { type: "json" });
-    if (cached) {
-      const fresh = Date.now() - cached.t < CACHE_MS;
-      return new Response(JSON.stringify({ available: true, stats: cached.stats, cached: true, stale: !fresh }), { headers: HEADERS });
+  if (store && !debug) try {
+    const c = await store.get("w2/" + addr, { type: "json" });
+    if (c && Date.now() - c.t < CACHE_MS) return new Response(JSON.stringify({ badges: c.b }), { headers: HEADERS });
+  } catch {
+  }
+  const site = (process.env.URL || "https://avax100m.xyz").replace(/\/$/, "");
+  const [w, pnlj, resj, tokj] = await Promise.all([
+    fetchWallet(addr).catch(() => null),
+    fetch(site + "/api/pnl?addr=" + addr).then((r) => r.json()).catch(() => null),
+    fetch(site + "/api/resolve?addr=" + addr).then((r) => r.json()).catch(() => null),
+    fetch(RS + "?module=account&action=tokentx&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=100&sort=asc").then((r) => r.json()).catch(() => ({ result: [] }))
+  ]);
+  if (!w) return new Response(JSON.stringify({ badges: [] }), { headers: HEADERS });
+  const earned = [];
+  const push = (id, tier, ev) => earned.push({ id, tier: tier || 0, ev });
+  if (w.rank && w.rank[1] === "PERMAFROST")
+    push("permafrost", 0, "first touch <b>" + w.dateStr.toLowerCase() + "</b>, block #" + w.blk.toLocaleString("en-US") + " \u2014 in the first " + w.earlyStr + ".");
+  if (w.pct >= 75)
+    push("furniture", w.pct >= 95 ? 3 : w.pct >= 90 ? 2 : 1, "survived <b>" + w.pct.toFixed(1) + "%</b> of mainnet's existence.");
+  if (w.txc !== null && w.txc >= 1e3)
+    push("thousand", w.txc >= 1e4 ? 3 : w.txc >= 5e3 ? 2 : 1, "<b>" + w.txc.toLocaleString("en-US") + "</b> transactions sent.");
+  const mvVal = w.mv && w.mv.val || "";
+  if (/bridged in from ethereum/i.test(mvVal))
+    push("immigrant", 0, "first touch was a <b>bridge in from ethereum</b>. came here on purpose.");
+  if (/pangolin/i.test(mvVal))
+    push("pangolin", 0, "first swap was on <b>pangolin</b>. before the joe era.");
+  if (w.era && w.era[1] === "AVALANCHE RUSH")
+    push("rush", 0, "arrived during <b>avalanche rush</b> \u2014 the $180m summer.");
+  if (w.mv && w.mv.key === "FIRST TOKEN" && w.mv.contract) {
+    try {
+      const bj = await fetch(RS + "?module=account&action=tokenbalance&contractaddress=" + w.mv.contract + "&address=" + addr + "&tag=latest").then((r) => r.json());
+      if (bj && bj.result && BigInt(bj.result) > 0n)
+        push("firstlove", 0, "first token <b>$" + mvVal + "</b>, " + w.dateStr.toLowerCase() + " \u2014 balance never reached zero. " + w.days.toLocaleString("en-US") + " days.");
+    } catch {
     }
-  } catch {
   }
+  if (resj && resj.name)
+    push("registry", 0, "reverse record set: <b>" + resj.name + "</b>. the chain knows your name.");
   try {
-    const diag = debug ? [] : null;
-    const [{ rows: raw, capped }, balances] = await Promise.all([fetchAllProfitability(addr, key), fetchBalances(addr, key)]);
-    let rows = parseRows(raw);
-    const suspects = rows.filter((r) => Math.abs(r.profit) > 25e4 && r.tokenAddress);
-    if (suspects.length) {
-      const verified = {};
-      await pool(suspects, 3, async (r) => {
-        verified[r.tokenAddress] = !!await cgToken(r.tokenAddress, store);
-      });
-      rows = rows.filter((r) => Math.abs(r.profit) <= 25e4 || !r.tokenAddress || verified[r.tokenAddress]);
-      if (diag) suspects.forEach((r) => {
-        if (!verified[r.tokenAddress]) diag.push({ sym: r.sym, skip: "big claim, not cg-listed \u2014 dropped", profit: r.profit });
-      });
+    const seen = {};
+    let n = 0;
+    for (const t of tokj && tokj.result || []) {
+      if ((t.to || "").toLowerCase() !== addr) continue;
+      const nm = (t.tokenName || "") + " " + (t.tokenSymbol || "");
+      if (SCAM.test(nm) && !seen[t.contractAddress]) {
+        seen[t.contractAddress] = 1;
+        n++;
+      }
     }
-    if (diag) diag.push({ rowsAfterFilters: rows.length, rows: rows.slice(0, 30).map((r) => ({ sym: r.sym, profit: Math.round(r.profit), invested: Math.round(r.invested), sold: Math.round(r.sold) })) });
-    const stats = summarize(rows, capped);
-    const extra = await enrich(rows, balances, addr, store, diag);
-    stats.flags = Object.assign(rowFlags(rows, balances), extra.flags || {});
-    stats.roundtrip = extra.roundtrip;
-    stats.soldTooEarly = extra.soldTooEarly;
-    stats.roundtrips = extra.roundtrips;
-    stats.soldEarly = extra.soldEarly;
-    if (store && !debug) await store.set(cacheKey, JSON.stringify({ t: Date.now(), stats })).catch(() => {
-    });
-    const out = { available: true, stats };
-    if (debug) out.diag = diag;
-    return new Response(JSON.stringify(out), { headers: HEADERS });
-  } catch (e) {
-    return new Response(JSON.stringify({ available: false }), { headers: HEADERS });
+    if (n >= 25) push("spammagnet", 0, "<b>" + n + "</b> scam airdrops received. you did nothing. the chain chose you.");
+  } catch {
   }
+  const st = pnlj && pnlj.available && pnlj.stats || {};
+  const f = st.flags || {};
+  const era = w.era && w.era[1] || "";
+  if (f.fullCircle) {
+    const rt0 = st.roundtrips && st.roundtrips[0] || null;
+    push("fullcircle", f.fullCircle.tier, rt0 ? "held <b>" + rt0.sub.split("\xB7")[1].trim() + "</b> of <b>$" + (rt0.sym || "") + "</b>. " + (rt0.sub.split("\xB7")[2] || "").trim() + "." : "roundtripped <b>" + usd(f.fullCircle.amt) + "</b>.");
+  }
+  if (f.exitThere) push("exitthere", 0, "exited <b>$" + f.exitThere.sym + "</b> before a <b>" + f.exitThere.x + "x</b>. the exit was right there.");
+  if (f.boughtTop) push("boughttop", 0, "average entry within 20% of <b>$" + f.boughtTop.sym + "</b>'s peak-while-held.");
+  if (f.captain) push("captain", 0, "still holding <b>$" + f.captain.sym + "</b>, down <b>" + f.captain.downPct + "%</b> from its peak. goes down with the ship.");
+  if (f.soldTop) push("soldtop", 0, "exited <b>$" + f.soldTop.sym + "</b> within 7 days of its peak-while-held. verified by transfer replay.");
+  if (f.netUp) push("netup", 0, "total realized: <b>+" + usd(f.netUp.total) + "</b> across " + (st.tokens || "20+") + " tokens.");
+  if (f.sniper) push("sniper", 0, "<b>" + f.sniper.pct + "%</b> winrate on 20+ decided positions.");
+  if (f.exitLiq) push("exitliq", 0, "<b>" + f.exitLiq.pct + "%</b> winrate on 20+ decided positions. worn openly.");
+  if (f.caughtOne) push("caughtone", 0, "realized a <b>" + f.caughtOne.x + "x</b> on <b>$" + f.caughtOne.sym + "</b>. the chain confirms.");
+  if (f.oneTrick) push("onetrick", 0, "<b>$" + f.oneTrick.sym + "</b> is <b>" + f.oneTrick.pct + "%</b> of all realized profit.");
+  if (f.deepBench) push("deepbench", 0, "<b>" + f.deepBench.n + "</b> tokens each realized over $1,000. a rotation, not a lottery.");
+  if (f.zoo) push("zoo", f.zoo.tier, "<b>" + f.zoo.n + "</b> tokens traded through dex swaps.");
+  if (f.stableLoss) push("stableloss", 0, "realized <b>\u2212" + usd(f.stableLoss.amt) + "</b> trading <b>$" + f.stableLoss.sym + "</b>. a stablecoin. it holds still and you still lost.");
+  if (f.graveyard) push("graveyard", 0, "<b>" + f.graveyard.n + "</b> tokens in the wallet each worth under a dollar. a museum of decisions.");
+  if (f.roundVictim) push("roundvictim", 0, "<b>$" + f.roundVictim.sym + "</b> bag peaked at <b>" + usd(f.roundVictim.peak) + "</b> \u2014 " + usd(f.roundVictim.target - f.roundVictim.peak) + " short of " + usd(f.roundVictim.target) + ". never crossed.");
+  if (f.wonderland) push("wonderland", 0, "held or traded <b>$TIME</b>. (9,9). no further questions.");
+  if (f.coqVet) push("coq", 0, "traded <b>$COQ</b>. the memecoin spring left a mark.");
+  if (era === "ARENA SUMMER" && f.arenaTraded) push("arena", 0, "arrived during <b>arena summer</b> with <b>$ARENA</b> in the history.");
+  let counts = { total: 0, byId: {} };
+  if (store) {
+    try {
+      counts = await store.get("counts", { type: "json" }) || counts;
+    } catch {
+    }
+    let seen = null;
+    try {
+      seen = await store.get("seen/" + addr);
+    } catch {
+    }
+    if (!seen) {
+      counts.total++;
+      for (const b of earned) counts.byId[b.id] = (counts.byId[b.id] || 0) + 1;
+      try {
+        await store.set("seen/" + addr, "1");
+        await store.set("counts", JSON.stringify(counts));
+      } catch {
+      }
+    }
+  }
+  for (const b of earned) b.rarity = { count: counts.byId[b.id] || 1, total: Math.max(counts.total, 1) };
+  earned.sort((a, b) => a.rarity.count - b.rarity.count);
+  if (store && !debug) try {
+    await store.set("w2/" + addr, JSON.stringify({ t: Date.now(), b: earned }));
+  } catch {
+  }
+  return new Response(JSON.stringify({ badges: earned }), { headers: HEADERS });
 };
-var config = { path: "/api/pnl" };
+var config = { path: "/api/badges" };
 export {
   config,
-  pnl_default as default
+  badges_default as default
 };

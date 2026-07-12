@@ -116,7 +116,7 @@ function page(w, site) {
   const desc = `first seen ${w.dateStr.toLowerCase()} \xB7 ${w.mv.key.toLowerCase()}: ${w.mv.val.toLowerCase()} \xB7 arrived in the first ${w.earlyStr}`;
   const img = `${site}/card/${w.addr}.png`;
   const pageUrl = `${site}/w/${w.addr}`;
-  const D = JSON.stringify({ addr: w.addr, ts: w.ts, era: w.era[1], rank: w.rank[1], firstContract: w.mv.contract || null, firstToken: w.mv.key === "FIRST TOKEN" ? w.mv.val : null });
+  const D = JSON.stringify({ addr: w.addr, ts: w.ts, era: w.era[1], rank: w.rank[1], firstContract: w.mv.contract || null, firstToken: w.mv.key === "FIRST TOKEN" ? w.mv.val : null, mvKey: w.mv.key, mvVal: w.mv.val, survived: Math.round(w.pct * 10) / 10, days: w.days, txs: w.txc });
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -154,6 +154,24 @@ h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:
 .tagline{color:var(--dim);margin-top:10px}
 .addrline{margin-top:26px;font-size:12px;color:var(--dim);word-break:break-all;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .addrline .a{color:var(--ink)}
+.badges{display:flex;flex-wrap:wrap;gap:10px}
+.bdg{position:relative;border:1px solid var(--faint);padding:8px 13px 7px;display:flex;align-items:center;gap:9px;outline:none;cursor:default}
+.bdg:hover,.bdg:focus-visible{border-color:var(--red)}
+.bdg svg{width:16px;height:16px;flex:none;display:block}
+.bdg .bn{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}
+.bdg .br{display:block;font-size:9px;color:var(--dim);letter-spacing:.08em;font-weight:400}
+.bdg .bt{color:var(--red)}
+.bdg.medal{background:var(--red);border-color:var(--red)}
+.bdg.medal .bn,.bdg.medal .br{color:#0a0a0a}
+.bdg.medal .br{opacity:.75}
+.bdg.medal .g-ink,.bdg.medal .g-red{fill:#0a0a0a}
+.bdg.medal .s-ink,.bdg.medal .s-red{stroke:#0a0a0a}
+.bdg .ev{display:none;position:absolute;left:-1px;top:calc(100% + 4px);min-width:230px;max-width:320px;z-index:5;background:var(--bg);border:1px solid var(--red);padding:8px 11px;font-size:10px;color:var(--dim);letter-spacing:.05em;line-height:1.55;white-space:normal}
+.bdg .ev b{color:var(--ink)}
+.bdg .ev .evl{color:var(--red);letter-spacing:.2em;font-size:9px;display:block;margin-bottom:3px}
+.bdg:hover .ev,.bdg:focus-visible .ev{display:block}
+.g-ink{fill:var(--ink)}.g-red{fill:var(--red)}
+.s-ink{stroke:var(--ink);fill:none;stroke-width:2}.s-red{stroke:var(--red);fill:none;stroke-width:2}.s-thin{stroke-width:1.5}
 .btn{background:transparent;border:1px solid var(--faint);color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:6px 12px;cursor:pointer}
 .btn:hover{border-color:var(--red);color:var(--red)}
 .btn.primary{background:var(--red);border-color:var(--red);color:#000;font-weight:700}
@@ -210,6 +228,10 @@ footer a:hover{color:var(--red);border-color:var(--red)}
   </section>
 
   <section>
+    <div id="badges-sec" style="display:none;margin-bottom:56px">
+      <h2>badges</h2>
+      <div class="badges" id="badges"></div>
+    </div>
     <h2>realized p&amp;l</h2>
     <div class="grid" id="pnl-grid">
       <div class="cell"><div class="k">biggest w</div><div class="v" id="pnl-w">\u2014</div></div>
@@ -340,6 +362,89 @@ function renderPnl(s){
   drawPnlCard(s);
 }
 
+/* badge glyphs \u2014 ops: [0,x,y,w,h,c]=rect [1,..]=stroke rect [2,"pts",c]=poly [3,x1,y1,x2,y2,c,w]=line [4,"pts",c]=polyline [5,cx,cy,r,c,f]=circle */
+var GLYPHS={
+permafrost:[[1,3,3,18,18,"i"],[3,3,9,21,9,"i"],[3,3,15,21,15,"i"],[0,4,16,16,4,"r"]],
+furniture:[[0,6,4,2,10,"i"],[0,6,12,12,2,"r"],[0,6,14,2,6,"i"],[0,16,14,2,6,"i"]],
+firstlove:[[0,6,6,4,4,"r"],[0,14,6,4,4,"r"],[0,6,10,12,4,"r"],[0,8,14,8,2,"r"],[0,10,16,4,2,"r"]],
+allseasons:[[0,4,4,7,7,"i"],[0,13,4,7,7,"i"],[0,4,13,7,7,"i"],[0,13,13,7,7,"r"]],
+thousand:[[0,4,5,2,14,"i"],[0,9,5,2,14,"i"],[0,14,5,2,14,"i"],[0,19,5,2,14,"i"],[3,2,17,22,7,"r"]],
+immigrant:[[0,3,7,18,2,"i"],[0,5,9,3,8,"i"],[0,16,9,3,8,"i"],[3,4,21,15,21,"r"],[2,"15,18 21,21 15,24","r"]],
+registry:[[1,3,7,18,10,"i"],[0,6,10,4,4,"r"],[3,12,10.5,18,10.5,"i",1.5],[3,12,13.5,16,13.5,"i",1.5]],
+longwinter:[[2,"3,7 9,7 6,16","i"],[2,"9,7 15,7 12,18","r"],[2,"15,7 21,7 18,16","i"]],
+netup:[[0,4,15,4,5,"i"],[0,10,11,4,9,"i"],[0,16,7,4,13,"i"],[2,"15,5 21,5 18,0.5","r"]],
+sniper:[[1,6,6,12,12,"i"],[3,12,2,12,6,"i"],[3,12,18,12,22,"i"],[3,2,12,6,12,"i"],[3,18,12,22,12,"i"],[0,10,10,4,4,"r"]],
+caughtone:[[4,"3,19 9,13 13,16 20,5","i"],[0,18,3,4,4,"r"]],
+soldtop:[[2,"12,7 4,20 20,20","i"],[3,12,7,12,1,"i"],[2,"12,1 18,3 12,5","r"]],
+onetrick:[[0,4,17,3,3,"i"],[0,9,5,5,15,"r"],[0,17,15,3,5,"i"]],
+deepbench:[[0,3,10,3,10,"i"],[0,7,10,3,10,"i"],[0,11,10,3,10,"r"],[0,15,10,3,10,"i"],[0,19,10,3,10,"i"]],
+fullcircle:[[3,6,6,18,6,"i"],[3,18,6,18,18,"i"],[3,18,18,10,18,"i"],[2,"10,14.5 10,21.5 3.5,18","r"]],
+exitthere:[[1,4,3,9,16,"i"],[3,11,20.5,18,20.5,"r"],[2,"18,17.5 23,20.5 18,23.5","r"]],
+boughttop:[[2,"12,8 4,21 20,21","i"],[3,12,1,12,4,"r"],[2,"9,4 15,4 12,8","r"]],
+captain:[[2,"7,4 7,13 15,13","i"],[2,"5,13 17,13 15,19 7,19","i"],[3,2,15.5,22,15.5,"r"]],
+graveyard:[[5,12,9,5,"i",1],[0,7,9,10,11,"i"],[0,10,12,4,3,"r"],[3,3,20,21,20,"i"]],
+zoo:[[0,4,4,2,16,"i"],[0,8.5,4,2,16,"i"],[0,13,4,2,7,"r"],[0,17.5,4,2,16,"i"],[3,3,4,21,4,"i",1.5],[3,3,20,21,20,"i",1.5]],
+exitliq:[[0,4,5,12,4,"i"],[0,11,9,4,4,"i"],[0,11.5,15,3,3,"r"],[0,11.5,20,3,3,"r"]],
+stableloss:[[5,12,12,8,"i",0],[0,8,11,8,2,"r"]],
+spammagnet:[[0,5,8,4,12,"i"],[0,15,8,4,12,"i"],[3,5,20,19,20,"i"],[0,10,2,4,4,"r"]],
+roundvictim:[[3,3,6,21,6,"r"],[0,9,9,6,12,"i"]],
+pangolin:[[2,"4,6 4,18 12,12","i"],[2,"10,6 10,18 18,12","r"],[2,"16,6 16,18 22,12","i"]],
+rush:[[2,"14,2 7,13 11,13 9,22 17,10 13,10 16,2","r"]],
+wonderland:[[1,4,4,16,16,"i"],[3,12,11,7,11,"r"],[3,12,14,8,14,"r"]],
+coq:[[2,"7,10 9,5 11,10 13,5 15,10","r"],[0,7,10,10,8,"i"],[2,"17,12 21,14 17,16","i"],[0,13,12,2,2,"b"]],
+presale:[[1,5,3,14,18,"i"],[3,8,8,16,8,"i",1.5],[3,8,11,16,11,"i",1.5],[3,8,15,13,19,"r"],[3,13,15,8,19,"r"]],
+arena:[[1,4,4,16,16,"i"],[1,8,8,8,8,"i"],[0,11,11,2,2,"r"]],
+witness100m:[[4,"2,12 8,6 16,6 22,12 16,18 8,18 2,12","i"],[0,10,10,4,4,"r"]]
+};
+var BNAMES={permafrost:"permafrost",furniture:"mainnet furniture",firstlove:"first love",allseasons:"all seasons",thousand:"thousand club",immigrant:"immigrant",registry:"on the registry",longwinter:"long winter veteran",netup:"net up",sniper:"sniper",caughtone:"caught one",soldtop:"sold the top",onetrick:"one trick pony",deepbench:"deep bench",fullcircle:"full circle",exitthere:"the exit was right there",boughttop:"bought the top",captain:"captain",graveyard:"graveyard keeper",zoo:"zoo keeper",exitliq:"exit liquidity",stableloss:"lost money on a stablecoin",spammagnet:"spam magnet",roundvictim:"round number victim",pangolin:"pangolin patriot",rush:"rush arrival",wonderland:"wonderland witness",coq:"coq era veteran",presale:"presale survivor",arena:"arena native",witness100m:"block 100m witness"};
+var ROMAN=["","i","ii","iii"];
+function svgFor(id){
+  var ops=GLYPHS[id]; if(!ops) return "";
+  var cls={i:"g-ink",r:"g-red",b:""};
+  var scls={i:"s-ink",r:"s-red"};
+  var out='<svg viewBox="0 0 24 24" aria-hidden="true">';
+  ops.forEach(function(o){
+    if(o[0]===0) out+='<rect x="'+o[1]+'" y="'+o[2]+'" width="'+o[3]+'" height="'+o[4]+'"'+(o[5]==="b"?' fill="#0a0a0a"':' class="'+cls[o[5]]+'"')+'/>';
+    else if(o[0]===1) out+='<rect x="'+o[1]+'" y="'+o[2]+'" width="'+o[3]+'" height="'+o[4]+'" class="'+scls[o[5]]+'"/>';
+    else if(o[0]===2) out+='<polygon points="'+o[1]+'" class="'+cls[o[2]]+'"/>';
+    else if(o[0]===3) out+='<line x1="'+o[1]+'" y1="'+o[2]+'" x2="'+o[3]+'" y2="'+o[4]+'" class="'+scls[o[5]]+'"'+(o[6]?' style="stroke-width:'+o[6]+'"':'')+'/>';
+    else if(o[0]===4) out+='<polyline points="'+o[1]+'" class="'+scls[o[2]]+'" fill="none"/>';
+    else if(o[0]===5) out+='<circle cx="'+o[1]+'" cy="'+o[2]+'" r="'+o[3]+'"'+(o[5]?' class="'+cls[o[4]]+'"':' class="'+scls[o[4]]+'"')+'/>';
+  });
+  return out+"</svg>";
+}
+function drawGlyph(x,id,ox,oy,s,inv){
+  var ops=GLYPHS[id]; if(!ops) return;
+  var k=s/24;
+  var C={i:inv?"#0a0a0a":"#f2f2f2",r:inv?"#0a0a0a":"#e84142",b:inv?"#e84142":"#0a0a0a"};
+  ops.forEach(function(o){
+    if(o[0]===0){ x.fillStyle=C[o[5]]; x.fillRect(ox+o[1]*k,oy+o[2]*k,o[3]*k,o[4]*k); }
+    else if(o[0]===1){ x.strokeStyle=C[o[5]]; x.lineWidth=2*k; x.strokeRect(ox+o[1]*k,oy+o[2]*k,o[3]*k,o[4]*k); }
+    else if(o[0]===2){ var p=o[1].split(" ").map(function(q){return q.split(",").map(Number);}); x.fillStyle=C[o[2]]; x.beginPath(); x.moveTo(ox+p[0][0]*k,oy+p[0][1]*k); p.slice(1).forEach(function(q){x.lineTo(ox+q[0]*k,oy+q[1]*k);}); x.closePath(); x.fill(); }
+    else if(o[0]===3){ x.strokeStyle=C[o[5]]; x.lineWidth=(o[6]||2)*k; x.beginPath(); x.moveTo(ox+o[1]*k,oy+o[2]*k); x.lineTo(ox+o[3]*k,oy+o[4]*k); x.stroke(); }
+    else if(o[0]===4){ var p2=o[1].split(" ").map(function(q){return q.split(",").map(Number);}); x.strokeStyle=C[o[2]]; x.lineWidth=2*k; x.beginPath(); x.moveTo(ox+p2[0][0]*k,oy+p2[0][1]*k); p2.slice(1).forEach(function(q){x.lineTo(ox+q[0]*k,oy+q[1]*k);}); x.stroke(); }
+    else if(o[0]===5){ x.beginPath(); x.arc(ox+o[1]*k,oy+o[2]*k,o[3]*k,0,Math.PI*2); if(o[5]){x.fillStyle=C[o[4]];x.fill();}else{x.strokeStyle=C[o[4]];x.lineWidth=2*k;x.stroke();} }
+  });
+}
+var EARNED=null;
+fetch(SITE+"/api/badges?addr="+D.addr).then(function(r){return r.json();}).then(function(p){
+  if(!p||!p.badges||!p.badges.length) return;
+  EARNED=p.badges;
+  var el=document.getElementById("badges");
+  el.innerHTML=p.badges.map(function(b,i){
+    var nm=BNAMES[b.id]||b.id;
+    var tier=b.tier?' <span class="bt">'+ROMAN[b.tier]+'</span>':'';
+    var rar=(b.rarity&&b.rarity.total>=20)
+      ? (Math.round(b.rarity.count/b.rarity.total*1000)/10)+"% of census"
+      : "held by "+((b.rarity&&b.rarity.count)||1)+((b.rarity&&b.rarity.count)===1?" wallet":" wallets")+" so far";
+    return '<span class="bdg'+(i===0?' medal':'')+'" tabindex="0">'+svgFor(b.id)
+      +'<span><span class="bn">'+nm+tier+'</span><span class="br">'+rar+'</span></span>'
+      +'<span class="ev"><span class="evl">EVIDENCE</span>'+b.ev+'</span></span>';
+  }).join("");
+  document.getElementById("badges-sec").style.display="block";
+  if(LAST_PNL) drawPnlCard(LAST_PNL);
+}).catch(function(){});
+
 /* .avax reverse resolution */
 var AVVY_NAME = null;
 fetch(SITE+"/api/resolve?addr="+D.addr).then(function(r){return r.json();}).then(function(j){
@@ -385,8 +490,27 @@ function drawPnlCard(s){
   block("BIGGEST L", s.biggestL, 552);
   block("BIGGEST ROUNDTRIP", s.roundtrip, 752);
   block("SOLD TOO EARLY", s.soldTooEarly, 952);
-  x.fillStyle="#3d3d3d";x.font="400 24px "+mono;
-  x.fillText("realized only \xB7 tracked tokens only",92,1152);
+  if(EARNED && EARNED.length){
+    var bx=92, by=1128, bh=56;
+    EARNED.slice(0,3).forEach(function(b,i){
+      var nm=(BNAMES[b.id]||b.id).toUpperCase()+(b.tier?" "+ROMAN[b.tier].toUpperCase():"");
+      x.font="700 22px "+mono;
+      var tw=x.measureText(nm).width;
+      var cw=16+30+10+tw+16;
+      var medal=(i===0);
+      if(medal){ x.fillStyle="#e84142"; x.fillRect(bx,by,cw,bh); }
+      else { x.strokeStyle="#2a2a2a"; x.lineWidth=2; x.strokeRect(bx,by,cw,bh); }
+      drawGlyph(x,b.id,bx+16,by+(bh-30)/2,30,medal);
+      x.fillStyle=medal?"#0a0a0a":"#f2f2f2";
+      x.textBaseline="middle";
+      x.fillText(nm,bx+16+30+10,by+bh/2+1);
+      x.textBaseline="top";
+      bx+=cw+12;
+    });
+  } else {
+    x.fillStyle="#3d3d3d";x.font="400 24px "+mono;
+    x.fillText("realized only \xB7 tracked tokens only",92,1152);
+  }
   x.fillStyle="#2a2a2a";x.fillRect(92,1200,W-184,2);
   x.fillStyle="#7a7a7a";x.font="600 24px "+mono;
   x.fillText(AVVY_NAME ? AVVY_NAME : (D.addr.slice(0,10)+"\u2026"+D.addr.slice(-8)),92,1228);
