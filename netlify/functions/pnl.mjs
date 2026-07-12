@@ -1202,6 +1202,13 @@ var pnl_default = async (req) => {
   } catch {
   }
   if (deeper) {
+    let claimed = false;
+    try {
+      const cs = getStore("claim");
+      claimed = !!await cs.get("c/" + addr, { type: "json" });
+    } catch {
+    }
+    if (!claimed) return new Response(JSON.stringify({ available: false, needClaim: true }), { status: 403, headers: HEADERS });
     depth = Math.min(depth + 15, 90);
     if (store) try {
       await store.set("depth/" + addr, JSON.stringify({ d: depth }));

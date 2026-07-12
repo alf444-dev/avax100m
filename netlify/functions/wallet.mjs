@@ -380,13 +380,18 @@ if(D.firstContract && D.firstToken){
 
 /* realized p&l via /api/pnl */
 var pnlTries=0;
+var LAST_STATS=null;
 function updDeeper(s){
   var db=document.getElementById("pnl-deeper"); if(!db) return;
+  s=s||LAST_STATS; if(!s) return;
+  LAST_STATS=s;
   var sc=s.scan;
   if(!sc || s.partial){ db.style.display="none"; return; }
   var left=sc.total-sc.depth;
   if(left<=0 || sc.depth>=90){ db.style.display="none"; return; }
+  if(!CLAIMED){ db.textContent="claim this page to dig deeper ("+left+" tokens unscanned)"; db.disabled=true; db.style.opacity="0.55"; db.style.display="inline-block"; return; }
   db.textContent="dig deeper \u2014 scan "+Math.min(15,left)+" more of "+left+" unscanned";
+  db.style.opacity="1";
   db.style.display="inline-block"; db.disabled=false;
 }
 function loadPnl(force){
@@ -408,6 +413,7 @@ loadPnl(false);
 (function(){
   var db=document.getElementById("pnl-deeper"); if(!db) return;
   db.addEventListener("click",function(){
+    if(!CLAIMED) return;
     db.disabled=true; db.textContent="digging\u2026";
     fetch(SITE+"/api/pnl?addr="+D.addr+"&deeper=1").then(function(r){return r.json();}).then(function(p){
       if(!p || !p.available){ db.textContent="dig deeper"; db.disabled=false; return; }
@@ -557,6 +563,7 @@ function applyTheme(t){
 function claimInfo(){
   fetch(SITE+"/api/claim?addr="+D.addr+"&info=1").then(function(r){return r.json();}).then(function(c){
     CLAIMED=!!(c&&c.claimed);
+    updDeeper(null);
     if(CLAIMED){
       CUR.status=c.status||""; CUR.theme=c.theme||"red"; CUR.cardBadges=c.cardBadges||[];
       applyTheme(CUR.theme);
