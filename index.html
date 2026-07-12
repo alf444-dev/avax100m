@@ -166,7 +166,7 @@
 
     <section id="checker">
       <h2>check wallet</h2>
-      <p class="sub">Paste any C-Chain address. Find the block where it first appeared, the era it survived, and get your card. No connect. No signature. Just a lookup.</p>
+      <p class="sub">Paste any C-Chain address. Find the block where it first appeared, the era it survived, and get your card. Every wallet has a page. No connect. No signature. Just a lookup.</p>
       <div class="check-row">
         <input id="addr" type="text" spellcheck="false" autocomplete="off" placeholder="0x… or name.avax" aria-label="C-Chain address or .avax name">
         <button id="checkbtn">Check</button>
@@ -187,8 +187,9 @@
           <div class="r-row"><span class="k">arrived in the first</span><span class="v big" id="r-early">—</span></div>
         </div>
         <div>
-          <canvas id="card" width="1080" height="1350" aria-label="survivor card"></canvas>
+          <canvas id="card" width="1080" height="1350" aria-label="survivor card — click to open your page" role="link" tabindex="0" style="cursor:pointer" title="open your page"></canvas>
           <div class="card-actions">
+            <a id="openpage" href="#" target="_blank" rel="noopener" style="display:none;background:var(--red);border:1px solid var(--red);color:#0a0a0a;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:10px 16px;cursor:pointer;text-decoration:none;text-align:center">Open your page →</a>
             <button id="dl">Download card</button>
             <button id="share">Share on X</button>
           </div>
@@ -678,6 +679,9 @@
     pel.textContent = plink;
     pel.href = SITE+"/w/"+addr;
     document.getElementById("permalink").style.display = "block";
+    var op = document.getElementById("openpage");
+    op.href = SITE+"/w/"+addr;
+    op.style.display = "block";
     submitCensus(era[1], rank[1], mv.val, addr);
     fetch("/api/pnl?addr="+addr).catch(function(){}); // pre-warm the profile's p&l cache
 
@@ -776,13 +780,19 @@
         }).catch(function(){});
       }catch(e){}
     }
-    var shareUrl = SITE;
+    var shareUrl = (lastDraw && lastDraw.addr) ? (SITE+"/w/"+lastDraw.addr) : SITE;
     if(isMobile && lastCard){
       msg.className=""; msg.textContent="tip: download the card, then attach it in your post.";
     }
     window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(t)+"&url="+encodeURIComponent(shareUrl),"_blank");
   });
 
+  (function(){
+    var cv=document.getElementById("card");
+    function go(){ var op=document.getElementById("openpage"); if(op&&op.href&&op.href.indexOf("/w/")>-1) window.open(op.href,"_blank"); }
+    cv.addEventListener("click",go);
+    cv.addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } });
+  })();
   document.getElementById("permalink-copy").addEventListener("click",function(){
     if(!lastCard || !lastCard.addr) return;
     var u=SITE+"/w/"+lastCard.addr;
