@@ -816,41 +816,49 @@ async function cgToken(addr, store) {
     return null;
   }
 }
-async function replayBag(addr, contract, athTs, athTs2) {
+async function fetchTransfers(addr, contract) {
   try {
     const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
     const j = await r.json();
     if (!j.result || !Array.isArray(j.result) || !j.result.length) return null;
-    let bal = 0n, peakBeforeAth = 0n, peakEver = 0n, balAtAth = null, balAtAth2 = null, dec = null, firstTs = null, nearOut = 0n;
-    const W = 7 * 864e5;
-    for (const t of j.result) {
-      if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
-      const ts = parseInt(t.timeStamp, 10) * 1e3;
-      if (firstTs === null) firstTs = ts;
-      if (athTs && balAtAth === null && ts > athTs) balAtAth = bal;
-      if (athTs2 && balAtAth2 === null && ts > athTs2) balAtAth2 = bal;
-      let v;
-      try {
-        v = BigInt(t.value || "0");
-      } catch {
-        continue;
-      }
-      if ((t.to || "").toLowerCase() === addr) bal += v;
-      else if ((t.from || "").toLowerCase() === addr) {
-        bal -= v;
-        if (athTs && Math.abs(ts - athTs) <= W) nearOut += v;
-      }
-      if (bal > peakEver) peakEver = bal;
-      if (athTs && ts <= athTs && bal > peakBeforeAth) peakBeforeAth = bal;
-    }
-    if (athTs && balAtAth === null) balAtAth = bal;
-    if (athTs2 && balAtAth2 === null) balAtAth2 = bal;
-    const d = dec === null || isNaN(dec) ? 18 : dec;
-    const f = (x) => Number(x) / Math.pow(10, d);
-    return { peakEver: f(peakEver), peakBeforeAth: f(peakBeforeAth), balAtAth: balAtAth === null ? null : f(balAtAth), balAtAth2: balAtAth2 === null ? null : f(balAtAth2), firstTs, nearOut: f(nearOut) };
+    return j.result;
   } catch {
     return null;
   }
+}
+function foldBag(rows, addr, athTs, athTs2) {
+  if (!rows || !rows.length) return null;
+  let bal = 0n, peakBeforeAth = 0n, peakEver = 0n, balAtAth = null, balAtAth2 = null, dec = null, firstTs = null, nearOut = 0n;
+  const W = 7 * 864e5;
+  for (const t of rows) {
+    if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
+    const ts = parseInt(t.timeStamp, 10) * 1e3;
+    if (firstTs === null) firstTs = ts;
+    if (athTs && balAtAth === null && ts > athTs) balAtAth = bal;
+    if (athTs2 && balAtAth2 === null && ts > athTs2) balAtAth2 = bal;
+    let v;
+    try {
+      v = BigInt(t.value || "0");
+    } catch {
+      continue;
+    }
+    if ((t.to || "").toLowerCase() === addr) bal += v;
+    else if ((t.from || "").toLowerCase() === addr) {
+      bal -= v;
+      if (athTs && Math.abs(ts - athTs) <= W) nearOut += v;
+    }
+    if (bal > peakEver) peakEver = bal;
+    if (athTs && ts <= athTs && bal > peakBeforeAth) peakBeforeAth = bal;
+  }
+  if (athTs && balAtAth === null) balAtAth = bal;
+  if (athTs2 && balAtAth2 === null) balAtAth2 = bal;
+  const d = dec === null || isNaN(dec) ? 18 : dec;
+  const f = (x) => Number(x) / Math.pow(10, d);
+  return { peakEver: f(peakEver), peakBeforeAth: f(peakBeforeAth), balAtAth: balAtAth === null ? null : f(balAtAth), balAtAth2: balAtAth2 === null ? null : f(balAtAth2), firstTs, nearOut: f(nearOut) };
+}
+async function replayBag(addr, contract, athTs, athTs2) {
+  const rows = await fetchTransfers(addr, contract);
+  return foldBag(rows, addr, athTs, athTs2);
 }
 async function peakSince(contract, fromTs, store) {
   const bucket = Math.floor(fromTs / (30 * 864e5));
@@ -960,6 +968,7 @@ var INFRA_SYM = { "WAVAX": 1 };
 var noStory = (r) => INFRA_ADDR[r.tokenAddress] || INFRA_SYM[r.sym] || STABLES[r.sym];
 async function enrich(rows, balances, ADDR, store, diag, deadline) {
   const flags = {};
+  let complete = true;
   const overBudget = () => deadline && Date.now() > deadline;
   const gone = (r) => r.invested - (balances[r.tokenAddress] && balances[r.tokenAddress].usd || 0);
   const heldByInvested = rows.filter((r) => r.tokenAddress && !noStory(r) && r.invested > 100 && balances[r.tokenAddress] && balances[r.tokenAddress].tk > 0).sort((a, b) => gone(b) - gone(a)).slice(0, 6);
@@ -967,66 +976,106 @@ async function enrich(rows, balances, ADDR, store, diag, deadline) {
   const bySold = rows.filter((r) => r.tokenAddress && !noStory(r) && r.sold > 50).sort((a, b) => b.sold - a.sold).slice(0, 9);
   const seen = {};
   const cands = [];
-  for (const c of heldByInvested.concat(byInvested, bySold)) {
-    if (!seen[c.tokenAddress]) {
-      seen[c.tokenAddress] = 1;
-      cands.push(c);
+  const lanes = [heldByInvested, bySold, byInvested];
+  for (let i = 0; cands.length < 15 && lanes.some((l) => i < l.length); i++) {
+    for (const l of lanes) {
+      const c = l[i];
+      if (c && !seen[c.tokenAddress]) {
+        seen[c.tokenAddress] = 1;
+        cands.push(c);
+      }
     }
   }
   const rts = [], stes = [];
+  const mergeFlags = (f2) => {
+    for (const k in f2) if (!flags[k]) flags[k] = f2[k];
+  };
+  const applyOut = (o) => {
+    mergeFlags(o.flags || {});
+    if (o.rt) rts.push(o.rt);
+    if (o.ste) stes.push(o.ste);
+  };
   await pool(cands.slice(0, 15), 3, async (c) => {
-    if (overBudget()) return;
     const d = { sym: c.sym, sold: Math.round(c.sold) };
     if (diag) diag.push(d);
+    const ck = "cand/v1/" + ADDR + "/" + c.tokenAddress;
+    if (store) try {
+      const hit = await store.get(ck, { type: "json" });
+      if (hit && Date.now() - hit.t < 7 * 24 * 3600 * 1e3) {
+        d.cached = true;
+        applyOut(hit.o);
+        return;
+      }
+    } catch {
+    }
+    if (overBudget()) {
+      d.skip = "time budget";
+      complete = false;
+      return;
+    }
+    const out = { flags: {}, rt: null, ste: null };
+    const done = async () => {
+      applyOut(out);
+      if (store) try {
+        await store.set(ck, JSON.stringify({ t: Date.now(), o: out }));
+      } catch {
+      }
+    };
     const cg = await cgToken(c.tokenAddress, store);
     if (!cg) {
       d.skip = "no coingecko data";
-      return;
+      return done();
     }
     const heldTk = balances[c.tokenAddress] && balances[c.tokenAddress].tk || 0;
     const wantsSte = c.soldTk > 0 && c.sold > 50;
-    if (heldTk <= 0 && !wantsSte) return;
-    const rp = await replayBag(ADDR, c.tokenAddress, null);
+    if (heldTk <= 0 && !wantsSte) return done();
+    const transfers = await fetchTransfers(ADDR, c.tokenAddress);
+    const rp = foldBag(transfers, ADDR, null);
     if (!rp || !rp.firstTs) {
       d.skip = "replay failed";
+      complete = false;
       return;
     }
     d.firstHeld = new Date(rp.firstTs).toISOString().slice(0, 10);
-    if (overBudget()) { d.skip = "time budget"; return; }
+    if (overBudget()) {
+      d.skip = "time budget";
+      complete = false;
+      return;
+    }
     const pk = await peakSince(c.tokenAddress, rp.firstTs, store);
     const peakPrice = pk ? pk.price : cg.ath;
     const peakTs = pk ? Math.max(pk.ts, rp.firstTs) : cg.athDate;
     d.peakSinceHeld = peakPrice;
-    if (!peakTs) return;
-    if (overBudget()) { d.skip = "time budget"; return; }
-    const rp2 = await replayBag(ADDR, c.tokenAddress, peakTs, peakTs - 7 * 864e5);
+    if (!peakTs) return done();
+    const rp2 = foldBag(transfers, ADDR, peakTs, peakTs - 7 * 864e5);
     if (!rp2 || rp2.balAtAth === null) {
       d.skip = "replay failed";
+      complete = false;
       return;
     }
     const balAtPeak = rp2.balAtAth;
     d.balAtPeak = balAtPeak;
     const avgSell = c.soldTk > 0 ? c.sold / c.soldTk : 0;
     if (heldTk > 0 && heldTk * peakPrice > 500 && cg.cur <= peakPrice * 0.1) {
-      if (!flags.captain) flags.captain = { sym: c.sym, downPct: Math.round((1 - cg.cur / peakPrice) * 100) };
+      out.flags.captain = { sym: c.sym, downPct: Math.round((1 - cg.cur / peakPrice) * 100) };
     }
     if (c.invested > 100 && c.boughtTk > 0) {
       const avgBuy = c.invested / c.boughtTk;
       if (avgBuy >= peakPrice * 0.8 && avgBuy <= peakPrice * 1.5) {
-        if (!flags.boughtTop) flags.boughtTop = { sym: c.sym };
+        out.flags.boughtTop = { sym: c.sym };
       }
     }
-    if (balAtPeak > 0 && !flags.roundVictim) {
+    if (balAtPeak > 0) {
       const pv = balAtPeak * peakPrice;
       for (const T of [1e4, 1e5, 1e6]) {
         if (pv >= T * 0.95 && pv < T) {
-          flags.roundVictim = { sym: c.sym, peak: Math.round(pv), target: T };
+          out.flags.roundVictim = { sym: c.sym, peak: Math.round(pv), target: T };
           break;
         }
       }
     }
     if (rp2.balAtAth2 !== null && rp2.balAtAth2 > 0 && rp2.peakBeforeAth > 0 && rp2.balAtAth2 >= rp2.peakBeforeAth * 0.5 && balAtPeak < rp2.peakBeforeAth * 0.1 && rp2.balAtAth2 * peakPrice > 500) {
-      if (!flags.soldTop) flags.soldTop = { sym: c.sym };
+      out.flags.soldTop = { sym: c.sym };
     }
     const exitRatio = rp2.peakBeforeAth > 0 ? balAtPeak / rp2.peakBeforeAth : balAtPeak > 0 ? 1 : 0;
     d.exitRatio = +exitRatio.toFixed(3);
@@ -1036,10 +1085,11 @@ async function enrich(rows, balances, ADDR, store, diag, deadline) {
       const athValue = exitedTk * peakPrice;
       d.proceeds = Math.round(proceeds);
       d.athValue = Math.round(athValue);
-      if (proceeds > 50 && athValue > 500 && athValue > proceeds * 3) {
+      const missed = athValue - proceeds;
+      if (proceeds > 50 && athValue > 500 && (athValue > proceeds * 3 || missed > 25e3 && athValue > proceeds * 1.5)) {
         d.steQualified = true;
-        if (athValue > proceeds * 5 && !flags.exitThere) flags.exitThere = { sym: c.sym, x: Math.round(athValue / Math.max(1, proceeds)) };
-        stes.push({ missed: athValue - proceeds, missedUsd: Math.round(athValue - proceeds), sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at peak" });
+        if (athValue > proceeds * 5) out.flags.exitThere = { sym: c.sym, x: Math.round(athValue / Math.max(1, proceeds)) };
+        out.ste = { missed: athValue - proceeds, missedUsd: Math.round(athValue - proceeds), sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at peak" };
       }
     } else if (balAtPeak > 0) {
       const peakValue = balAtPeak * peakPrice;
@@ -1051,14 +1101,14 @@ async function enrich(rows, balances, ADDR, store, diag, deadline) {
       d.walked = Math.round(walked);
       if (peakValue > 500 && rt > 250 && rt / peakValue > 0.5) {
         d.rtQualified = true;
-        const tail = soldAfter * avgSell > heldPart * cg.cur ? "walked with ~" + usd(walked) : usd(heldPart * cg.cur) + " now";
-        rts.push({ rt, sym: c.sym, line: "-" + usd(rt), sub: "$" + c.sym + " \xB7 " + usd(peakValue) + " at peak \xB7 " + tail });
+        out.rt = { rt, sym: c.sym, line: "-" + usd(rt), sub: "$" + c.sym + " \xB7 " + usd(peakValue) + " at peak \xB7 " + (soldAfter * avgSell > heldPart * cg.cur ? "walked with ~" + usd(walked) : usd(heldPart * cg.cur) + " now") };
       }
     }
+    return done();
   });
   rts.sort((a, b) => b.rt - a.rt);
   stes.sort((a, b) => b.missed - a.missed);
-  const clean = (arr) => arr.slice(0, 5).map((x) => ({ line: x.line, sub: x.sub, missedUsd: x.missedUsd }));
+  const clean = (arr) => arr.slice(0, 5).map((x) => ({ line: x.line, sub: x.sub, missedUsd: x.missedUsd, rtUsd: x.rt ? Math.round(x.rt) : void 0, sym: x.sym }));
   if (rts[0]) {
     const amt = rts[0].rt;
     flags.fullCircle = { amt: Math.round(amt), tier: amt >= 1e6 ? 3 : amt >= 1e5 ? 2 : amt >= 1e4 ? 1 : 0 };
@@ -1066,6 +1116,7 @@ async function enrich(rows, balances, ADDR, store, diag, deadline) {
   }
   return {
     flags,
+    complete,
     roundtrip: rts[0] ? { line: rts[0].line, sub: rts[0].sub } : null,
     soldTooEarly: stes[0] ? { line: stes[0].line, sub: stes[0].sub } : null,
     roundtrips: clean(rts),
@@ -1134,15 +1185,16 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v19/" + addr;
+  const cacheKey = "v20/" + addr;
   const deadline = Date.now() + 6500;
   const debug = url.searchParams.get("debug") === "1";
   const refresh = url.searchParams.get("refresh") === "1";
   if (store && !debug && !refresh) try {
     const cached = await store.get(cacheKey, { type: "json" });
     if (cached) {
-      const fresh = Date.now() - cached.t < CACHE_MS;
-      return new Response(JSON.stringify({ available: true, stats: cached.stats, cached: true, stale: !fresh }), { headers: HEADERS });
+      const ttl = cached.stats && cached.stats.partial ? 3 * 60 * 1e3 : CACHE_MS;
+      const fresh = Date.now() - cached.t < ttl;
+      if (fresh || !cached.stats.partial) return new Response(JSON.stringify({ available: true, stats: cached.stats, cached: true, stale: !fresh }), { headers: HEADERS });
     }
   } catch {
   }
@@ -1165,6 +1217,7 @@ var pnl_default = async (req) => {
     const stats = summarize(rows, capped);
     const extra = await enrich(rows, balances, addr, store, diag, deadline);
     stats.flags = Object.assign(rowFlags(rows, balances), extra.flags || {});
+    if (extra.complete === false) stats.partial = true;
     stats.roundtrip = extra.roundtrip;
     stats.soldTooEarly = extra.soldTooEarly;
     stats.roundtrips = extra.roundtrips;

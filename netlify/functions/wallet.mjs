@@ -378,16 +378,22 @@ if(D.firstContract && D.firstToken){
 }
 
 /* realized p&l via /api/pnl */
-fetch(SITE+"/api/pnl?addr="+D.addr).then(function(r){return r.json();}).then(function(p){
+var pnlTries=0;
+function loadPnl(force){
+ fetch(SITE+"/api/pnl?addr="+D.addr+(force?"&refresh=1":"")).then(function(r){return r.json();}).then(function(p){
   var note=document.getElementById("pnl-note");
   if(!p || !p.available){ note.textContent="trade history sync coming soon."; return; }
   var s=p.stats||{};
   renderPnl(s);
+  if(s.partial && pnlTries<3){ pnlTries++; note.textContent="still digging through your history\u2026"; setTimeout(function(){loadPnl(true);},3000); return; }
+  if(s.partial){ note.textContent="partial scan \u2014 look up a token below to fill the gaps."; return; }
   if(p.stale){
     fetch(SITE+"/api/pnl?addr="+D.addr+"&refresh=1").then(function(r){return r.json();})
       .then(function(p2){ if(p2 && p2.available) renderPnl(p2.stats); }).catch(function(){});
   }
-}).catch(function(){ document.getElementById("pnl-note").textContent="trade history sync coming soon."; });
+ }).catch(function(){ document.getElementById("pnl-note").textContent="trade history sync coming soon."; });
+}
+loadPnl(false);
 
 function renderPnl(s){
   function set(id,o){ var el=document.getElementById(id);
