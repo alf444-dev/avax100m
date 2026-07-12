@@ -988,7 +988,7 @@ async function enrich(rows, balances, ADDR, store, diag) {
     d.firstHeld = new Date(rp.firstTs).toISOString().slice(0, 10);
     const pk = await peakSince(c.tokenAddress, rp.firstTs, store);
     const peakPrice = pk ? pk.price : cg.ath;
-    const peakTs = pk ? pk.ts : cg.athDate;
+    const peakTs = pk ? Math.max(pk.ts, rp.firstTs) : cg.athDate;
     d.peakSinceHeld = peakPrice;
     if (!peakTs) return;
     const rp2 = await replayBag(ADDR, c.tokenAddress, peakTs, peakTs - 7 * 864e5);
@@ -1126,7 +1126,7 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v16/" + addr;
+  const cacheKey = "v17/" + addr;
   const debug = url.searchParams.get("debug") === "1";
   const refresh = url.searchParams.get("refresh") === "1";
   if (store && !debug && !refresh) try {

@@ -916,7 +916,7 @@ var token_default = async (req) => {
   const store = storeOr("pnl");
   let rowsIdx = [];
   if (store) try {
-    const cached = await store.get("v16/" + addr, { type: "json" });
+    const cached = await store.get("v17/" + addr, { type: "json" });
     if (cached && cached.rowsIdx) rowsIdx = cached.rowsIdx;
   } catch {
   }
@@ -927,7 +927,7 @@ var token_default = async (req) => {
     } catch {
     }
     if (store) try {
-      const cached = await store.get("v16/" + addr, { type: "json" });
+      const cached = await store.get("v17/" + addr, { type: "json" });
       if (cached && cached.rowsIdx) rowsIdx = cached.rowsIdx;
     } catch {
     }
@@ -950,7 +950,7 @@ var token_default = async (req) => {
   if (!contract) {
     return new Response(JSON.stringify({ none: true, q }), { headers: HEADERS });
   }
-  const dk = "tok/" + addr + "/" + contract;
+  const dk = "tok2/" + addr + "/" + contract;
   if (store) try {
     const c = await store.get(dk, { type: "json" });
     if (c && Date.now() - c.t < 7 * 24 * 3600 * 1e3) return new Response(JSON.stringify(c.d), { headers: HEADERS });
@@ -961,7 +961,8 @@ var token_default = async (req) => {
   const cg = await cgToken(contract, store);
   const pk = cg ? await peakSince(contract, rp.firstTs, store) : null;
   const peakPrice = pk ? pk.price : cg ? cg.ath : null;
-  const peakTs = pk ? pk.ts : cg ? cg.athDate : null;
+  const peakTs0 = pk ? pk.ts : cg ? cg.athDate : null;
+  const peakTs = peakTs0 ? Math.max(peakTs0, rp.firstTs) : null;
   let verdict = null, balAtPeak = null;
   if (peakTs) {
     const rp2 = await replay(addr, contract, peakTs);
@@ -976,7 +977,7 @@ var token_default = async (req) => {
   let updated = null;
   if (store && peakPrice && peakTs && balAtPeak !== null) {
     try {
-      const cached = await store.get("v16/" + addr, { type: "json" });
+      const cached = await store.get("v17/" + addr, { type: "json" });
       if (cached && cached.stats) {
         const st2 = cached.stats;
         const avgSell = row && row.st > 0 ? row.so / row.st : 0;
@@ -1017,7 +1018,7 @@ var token_default = async (req) => {
           }
         }
         if (updated) {
-          await store.set("v16/" + addr, JSON.stringify(cached)).catch(() => {
+          await store.set("v17/" + addr, JSON.stringify(cached)).catch(() => {
           });
           try {
             const bs = storeOr("badges");
