@@ -598,7 +598,7 @@
       if(lastDraw && avvyName){ lastDraw.name = avvyName; drawCard(lastDraw); }
     }).catch(function(){
       btn.disabled = false;
-      msg.className="err"; msg.textContent="lookup failed. if you're viewing this in a sandboxed preview, deploy the page — the api works from a real domain.";
+      msg.className="err"; msg.textContent="couldn't reach the resolver — try again in a moment, or paste the 0x address.";
     });
   }
   btn.addEventListener("click",check);

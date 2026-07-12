@@ -155,7 +155,7 @@ h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:
 .addrline{margin-top:26px;font-size:12px;color:var(--dim);word-break:break-all;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .addrline .a{color:var(--ink)}
 .badges{display:flex;flex-wrap:wrap;gap:10px}
-.brack{position:absolute;top:4px;right:0;display:grid;grid-template-columns:repeat(5,38px);gap:8px;justify-content:end;max-width:270px}
+.brack{position:absolute;top:50%;transform:translateY(-50%);right:0;display:grid;grid-template-columns:repeat(5,38px);gap:8px;justify-content:end;max-width:270px}
 .btile{position:relative;width:38px;height:38px;border:1px solid var(--faint);display:flex;align-items:center;justify-content:center;cursor:default;outline:none;background:var(--bg)}
 .btile:hover,.btile:focus-visible{border-color:var(--red)}
 .btile svg{width:22px;height:22px;display:block}
@@ -171,7 +171,7 @@ h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:
 .btile .tip .tv{font-size:10px;color:var(--dim);letter-spacing:.05em;line-height:1.55}
 .btile .tip .tv b{color:var(--ink)}
 .btile .tip .tl{color:var(--red);letter-spacing:.2em;font-size:9px;display:block;margin-bottom:3px}
-@media(max-width:760px){.brack{position:static;display:flex;flex-wrap:wrap;justify-content:flex-start;max-width:none;margin:22px 0 4px}.btile .tip{right:auto;left:-1px}}
+@media(max-width:760px){.brack{position:static;transform:none;display:flex;flex-wrap:wrap;justify-content:flex-start;max-width:none;margin:22px 0 4px}.btile .tip{right:auto;left:-1px}}
 .bdg{position:relative;border:1px solid var(--faint);padding:8px 13px 7px;display:flex;align-items:center;gap:9px;outline:none;cursor:default}
 .bdg:hover,.bdg:focus-visible{border-color:var(--red)}
 .bdg svg{width:16px;height:16px;flex:none;display:block}
