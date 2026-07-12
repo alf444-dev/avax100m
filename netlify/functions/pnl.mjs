@@ -949,7 +949,7 @@ async function pool(items, n, fn) {
   await Promise.all(workers);
 }
 async function enrich(rows, balances, ADDR, store, diag) {
-  const byInvested = rows.filter((r) => r.tokenAddress && r.invested > 100 && (balances[r.tokenAddress] || 0) > 0).sort((a, b) => b.invested - a.invested).slice(0, 4);
+  const byInvested = rows.filter((r) => r.tokenAddress && r.invested > 100).sort((a, b) => b.invested - a.invested).slice(0, 4);
   const bySold = rows.filter((r) => r.tokenAddress && r.sold > 50).sort((a, b) => b.sold - a.sold).slice(0, 9);
   const seen = {};
   const cands = [];
@@ -969,9 +969,8 @@ async function enrich(rows, balances, ADDR, store, diag) {
       return;
     }
     const heldTk = balances[c.tokenAddress] || 0;
-    const wantsRt = heldTk > 0;
     const wantsSte = c.soldTk > 0 && c.sold > 50;
-    if (!wantsRt && !wantsSte) return;
+    if (heldTk <= 0 && !wantsSte) return;
     const rp = await replayBag(ADDR, c.tokenAddress, null);
     if (!rp || !rp.firstTs) {
       d.skip = "replay failed";
@@ -982,30 +981,37 @@ async function enrich(rows, balances, ADDR, store, diag) {
     const peakPrice = pk ? pk.price : cg.ath;
     const peakTs = pk ? pk.ts : cg.athDate;
     d.peakSinceHeld = peakPrice;
-    if (wantsRt) {
-      const peak = heldTk * peakPrice;
-      const now = heldTk * cg.cur;
-      const rt = peak - now;
-      if (peak > 500 && rt > 250 && rt / peak > 0.5) {
-        d.rtQualified = true;
-        rts.push({ rt, sym: c.sym, line: "-" + usd(rt), sub: "$" + c.sym + " \xB7 " + usd(peak) + " at peak \xB7 " + usd(now) + " now" });
-      }
+    if (!peakTs) return;
+    const rp2 = await replayBag(ADDR, c.tokenAddress, peakTs);
+    if (!rp2 || rp2.balAtAth === null) {
+      d.skip = "replay failed";
+      return;
     }
-    if (wantsSte && peakTs) {
-      const rp2 = await replayBag(ADDR, c.tokenAddress, peakTs);
-      if (rp2 && rp2.peakBeforeAth > 0 && rp2.balAtAth !== null && rp2.balAtAth < rp2.peakBeforeAth * 0.2) {
-        const exitedTk = rp2.peakBeforeAth - rp2.balAtAth;
-        const avgSell = c.soldTk > 0 ? c.sold / c.soldTk : 0;
-        const proceeds = exitedTk * avgSell;
-        const athValue = exitedTk * peakPrice;
-        d.proceeds = Math.round(proceeds);
-        d.athValue = Math.round(athValue);
-        if (proceeds > 50 && athValue > 500 && athValue > proceeds * 3) {
-          d.steQualified = true;
-          stes.push({ missed: athValue - proceeds, sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at peak" });
-        }
-      } else if (rp2) {
-        d.skip = "held through peak";
+    const balAtPeak = rp2.balAtAth;
+    d.balAtPeak = balAtPeak;
+    const avgSell = c.soldTk > 0 ? c.sold / c.soldTk : 0;
+    if (balAtPeak > 0) {
+      const peakValue = balAtPeak * peakPrice;
+      const heldPart = Math.min(heldTk, balAtPeak);
+      const soldAfter = Math.max(0, balAtPeak - heldPart);
+      const walked = soldAfter * avgSell + heldPart * cg.cur;
+      const rt = peakValue - walked;
+      d.peakValue = Math.round(peakValue);
+      d.walked = Math.round(walked);
+      if (peakValue > 500 && rt > 250 && rt / peakValue > 0.5) {
+        d.rtQualified = true;
+        const tail = soldAfter * avgSell > heldPart * cg.cur ? "walked with ~" + usd(walked) : usd(heldPart * cg.cur) + " now";
+        rts.push({ rt, sym: c.sym, line: "-" + usd(rt), sub: "$" + c.sym + " \xB7 " + usd(peakValue) + " at peak \xB7 " + tail });
+      }
+    } else if (wantsSte && rp2.peakBeforeAth > 0 && balAtPeak < rp2.peakBeforeAth * 0.2) {
+      const exitedTk = rp2.peakBeforeAth - balAtPeak;
+      const proceeds = exitedTk * avgSell;
+      const athValue = exitedTk * peakPrice;
+      d.proceeds = Math.round(proceeds);
+      d.athValue = Math.round(athValue);
+      if (proceeds > 50 && athValue > 500 && athValue > proceeds * 3) {
+        d.steQualified = true;
+        stes.push({ missed: athValue - proceeds, sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at peak" });
       }
     }
   });
@@ -1052,7 +1058,7 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v10/" + addr;
+  const cacheKey = "v11/" + addr;
   const debug = url.searchParams.get("debug") === "1";
   const refresh = url.searchParams.get("refresh") === "1";
   if (store && !debug && !refresh) try {
