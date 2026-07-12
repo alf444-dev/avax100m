@@ -514,7 +514,18 @@ document.getElementById("claim-btn").addEventListener("click",function(){
   withSig(function(nonce){ return "avax100m.xyz\\nclaim page for "+D.addr+"\\nnonce: "+nonce; }, function(sig){
     fetch(SITE+"/api/claim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({addr:D.addr,sig:sig})})
       .then(function(r){return r.json();}).then(function(j){
-        if(j&&j.ok){ cmsg("page claimed. settled at block #"+(j.settledBlock?j.settledBlock.toLocaleString("en-US"):"?")+"."); document.getElementById("claim-btn").style.display="none"; claimInfo(); }
+        if(j&&j.ok){
+          cmsg("page claimed. settled at block #"+(j.settledBlock?j.settledBlock.toLocaleString("en-US"):"?")+".");
+          document.getElementById("claim-btn").style.display="none";
+          // unlock immediately from the response \u2014 don't wait on a re-read
+          CLAIMED=true;
+          var s=document.getElementById("settled");
+          s.textContent="settled "+new Date(j.settledAt||Date.now()).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}).toLowerCase()+(j.settledBlock?" \xB7 block #"+j.settledBlock.toLocaleString("en-US"):"");
+          s.style.display="inline";
+          document.getElementById("status-btn").style.display="inline-block";
+          document.getElementById("oracle-sec").style.display="block";
+          setTimeout(claimInfo, 1500);
+        }
         else cmsg((j&&j.error)||"claim failed.",1);
       });
   });

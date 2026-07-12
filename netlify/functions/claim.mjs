@@ -37658,24 +37658,26 @@ var HEADERS = { "content-type": "application/json", "access-control-allow-origin
 var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
 var NONCE_MS = 10 * 60 * 1e3;
 var mem = /* @__PURE__ */ new Map();
+var memStore = {
+  get: async (k, o) => {
+    const v = mem.get(k);
+    return v === void 0 ? null : o && o.type === "json" ? JSON.parse(v) : v;
+  },
+  set: async (k, v) => {
+    mem.set(k, v);
+  },
+  delete: async (k) => {
+    mem.delete(k);
+  }
+};
 function storeOr() {
   try {
-    const s = getStore("claim");
+    const s = getStore({ name: "claim", consistency: "strong" });
     if (s) return s;
   } catch {
   }
-  return {
-    get: async (k, o) => {
-      const v = mem.get(k);
-      return v === void 0 ? null : o && o.type === "json" ? JSON.parse(v) : v;
-    },
-    set: async (k, v) => {
-      mem.set(k, v);
-    },
-    delete: async (k) => {
-      mem.delete(k);
-    }
-  };
+  if (!process.env.NETLIFY && !process.env.URL) return memStore;
+  return null;
 }
 var clean = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 var BLOCKED = /nigg|fagg|kike|spic\b|chink|retard|rape|hitler/i;
@@ -37699,6 +37701,7 @@ async function currentBlock() {
 var claim_default = async (req) => {
   const url = new URL(req.url);
   const store = storeOr();
+  if (!store) return new Response(JSON.stringify({ error: "storage unavailable \u2014 try again in a minute." }), { status: 503, headers: HEADERS });
   if (req.method === "GET") {
     const addr = clean(url.searchParams.get("addr"));
     if (!/^0x[0-9a-f]{40}$/.test(addr)) return new Response(JSON.stringify({ error: "bad address" }), { status: 400, headers: HEADERS });
