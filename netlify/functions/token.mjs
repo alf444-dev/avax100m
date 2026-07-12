@@ -906,13 +906,6 @@ var token_default = async (req) => {
   if (!/^0x[0-9a-f]{40}$/.test(addr) || !q) {
     return new Response(JSON.stringify({ error: "bad request" }), { status: 400, headers: HEADERS });
   }
-  try {
-    const cs = storeOr("claim", { consistency: "strong" });
-    const c = cs && await cs.get("c/" + addr, { type: "json" });
-    if (!c) return new Response(JSON.stringify({ locked: true }), { headers: HEADERS });
-  } catch {
-    return new Response(JSON.stringify({ locked: true }), { headers: HEADERS });
-  }
   const store = storeOr("pnl");
   let rowsIdx = [];
   if (store) try {

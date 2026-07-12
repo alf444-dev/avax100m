@@ -264,7 +264,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     <div class="note">the chain has read your history. click the square. it is not your friend.</div>
   </section>
 
-  <section id="lookup-sec" style="display:none">
+  <section id="lookup-sec">
     <h2>token lookup</h2>
     <div style="display:flex;gap:10px;max-width:560px">
       <input id="tok-q" spellcheck="false" placeholder="$COQ or 0x contract" style="flex:1;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px;outline:none">
@@ -573,7 +573,6 @@ function claimInfo(){
       s.style.display="inline";
       document.getElementById("status-btn").style.display="inline-block";
       document.getElementById("oracle-sec").style.display="block";
-      document.getElementById("lookup-sec").style.display="block";
       CUR.top8=c.top8||[];
       renderTop8(CUR.top8, c.in8Count||0);
     } else {
@@ -621,16 +620,9 @@ document.getElementById("claim-btn").addEventListener("click",function(){
     fetch(SITE+"/api/claim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({addr:D.addr,sig:sig})})
       .then(function(r){return r.json();}).then(function(j){
         if(j&&j.ok){
-          cmsg("page claimed. settled at block #"+(j.settledBlock?j.settledBlock.toLocaleString("en-US"):"?")+".");
-          document.getElementById("claim-btn").style.display="none";
-          // unlock immediately from the response \u2014 don't wait on a re-read
+          cmsg("page claimed. settled at block #"+(j.settledBlock?j.settledBlock.toLocaleString("en-US"):"?")+". reloading\u2026");
           CLAIMED=true;
-          var s=document.getElementById("settled");
-          s.textContent="settled "+new Date(j.settledAt||Date.now()).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}).toLowerCase()+(j.settledBlock?" \xB7 block #"+j.settledBlock.toLocaleString("en-US"):"");
-          s.style.display="inline";
-          document.getElementById("status-btn").style.display="inline-block";
-          document.getElementById("oracle-sec").style.display="block";
-          setTimeout(claimInfo, 1500);
+          setTimeout(function(){ location.reload(); }, 1600);
         }
         else cmsg((j&&j.error)||"claim failed.",1);
       });
@@ -747,40 +739,7 @@ function renderTop8(list,in8){
   document.getElementById("top8-note").textContent=(in8?("this wallet appears in "+in8+" top 8"+(in8>1?"s":"")+". "):"")+(list&&list.length?"chosen by the owner. unilateral, like the old days.":"");
 }
 
-/* ---- the oracle ---- *//* ---- token lookup ---- */
-function tokRow(k,v){ return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--faint);padding:7px 0;font-size:12px"><span style="color:var(--dim);letter-spacing:.08em;text-transform:uppercase;font-size:10px">'+k+'</span><span style="color:var(--ink)">'+v+'</span></div>'; }
-function tokLookup(){
-  var q=(document.getElementById("tok-q").value||"").trim();
-  if(!q) return;
-  var out=document.getElementById("tok-out");
-  out.innerHTML='<span style="font-size:11px;color:var(--dim)">interrogating the chain\u2026</span>';
-  fetch(SITE+"/api/token?addr="+D.addr+"&q="+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(t){
-    if(t.locked){ out.innerHTML='<span style="font-size:11px;color:var(--dim)">claim the page to use the lookup.</span>'; return; }
-    if(t.ambiguous){
-      out.innerHTML='<div style="font-size:11px;color:var(--dim);margin-bottom:8px">several tokens wear that symbol \u2014 pick the contract:</div>'
-        +t.ambiguous.map(function(m){return '<button class="btn" style="margin:0 6px 6px 0" onclick="document.getElementById(&quot;tok-q&quot;).value=&quot;'+m.contract+'&quot;;tokLookup()">$'+m.sym+' \xB7 '+m.contract.slice(0,10)+'\u2026</button>';}).join("");
-      return;
-    }
-    if(t.none){
-      out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:14px;color:var(--ink)">no history with '+(q.startsWith("0x")?q.slice(0,10)+"\u2026":q.toLowerCase())+'.</div><div style="font-size:11px;color:var(--dim);margin-top:6px">clean hands. the chain confirms you dodged this one.</div></div>';
-      return;
-    }
-    var rows="";
-    if(t.realized!==null) rows+=tokRow("realized p&l",(t.realized<0?"\u2212":"+")+"$"+Math.abs(t.realized).toLocaleString("en-US"));
-    if(t.invested!==null) rows+=tokRow("invested","$"+t.invested.toLocaleString("en-US"));
-    if(t.soldUsd!==null) rows+=tokRow("sold for","$"+t.soldUsd.toLocaleString("en-US"));
-    if(t.peakBagUsd!==null) rows+=tokRow("peak bag","$"+t.peakBagUsd.toLocaleString("en-US")+(t.peakDate?" \xB7 "+t.peakDate:""));
-    rows+=tokRow("first held",t.firstHeld);
-    rows+=tokRow("transfers",t.transfers);
-    rows+=tokRow("holding now",t.holdingNow?("yes"+(t.holdingUsd!==null?" \xB7 $"+t.holdingUsd.toLocaleString("en-US"):"")):"no");
-    if(t.verdict) rows+=tokRow("verdict",'<b style="color:var(--red)">'+t.verdict+'</b>');
-    if(t.updated) rows+=tokRow("discovery",'<b style="color:var(--red)">this beat your tracked '+t.updated+' \u2014 your p&l has been updated</b>');
-    out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:16px;font-weight:700;letter-spacing:.06em;margin-bottom:10px">$'+t.sym+'</div>'+rows+'</div>';
-    if(t.updated){ fetch(SITE+"/api/pnl?addr="+D.addr).then(function(r){return r.json();}).then(function(p){ if(p&&p.available) renderPnl(p.stats); }).catch(function(){}); }
-  }).catch(function(){ out.innerHTML='<span style="font-size:11px;color:var(--red)">lookup failed. try again.</span>'; });
-}
-document.getElementById("tok-go").addEventListener("click",tokLookup);
-document.getElementById("tok-q").addEventListener("keydown",function(e){ if(e.key==="Enter") tokLookup(); });
+/* ---- the oracle ---- */
 
 /* ---- top 8 render ---- */
 function renderTop8(list,in8){
