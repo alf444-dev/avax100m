@@ -1031,7 +1031,7 @@ async function enrich(rows, balances, ADDR, store, diag) {
       if (proceeds > 50 && athValue > 500 && athValue > proceeds * 3) {
         d.steQualified = true;
         if (athValue > proceeds * 5 && !flags.exitThere) flags.exitThere = { sym: c.sym, x: Math.round(athValue / Math.max(1, proceeds)) };
-        stes.push({ missed: athValue - proceeds, sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at peak" });
+        stes.push({ missed: athValue - proceeds, missedUsd: Math.round(athValue - proceeds), sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at peak" });
       }
     } else if (balAtPeak > 0) {
       const peakValue = balAtPeak * peakPrice;
@@ -1050,7 +1050,7 @@ async function enrich(rows, balances, ADDR, store, diag) {
   });
   rts.sort((a, b) => b.rt - a.rt);
   stes.sort((a, b) => b.missed - a.missed);
-  const clean = (arr) => arr.slice(0, 5).map((x) => ({ line: x.line, sub: x.sub }));
+  const clean = (arr) => arr.slice(0, 5).map((x) => ({ line: x.line, sub: x.sub, missedUsd: x.missedUsd }));
   if (rts[0]) {
     const amt = rts[0].rt;
     flags.fullCircle = { amt: Math.round(amt), tier: amt >= 1e6 ? 3 : amt >= 1e5 ? 2 : amt >= 1e4 ? 1 : 0 };
@@ -1126,7 +1126,7 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v15/" + addr;
+  const cacheKey = "v16/" + addr;
   const debug = url.searchParams.get("debug") === "1";
   const refresh = url.searchParams.get("refresh") === "1";
   if (store && !debug && !refresh) try {

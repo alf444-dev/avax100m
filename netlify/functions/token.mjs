@@ -776,6 +776,30 @@ var getStore = (input, options) => {
 };
 
 // src/token.js
+var mems = {};
+var _mem = mems;
+function storeOr(name, opts) {
+  try {
+    const s = getStore(opts ? Object.assign({ name }, opts) : name);
+    if (s) return s;
+  } catch {
+  }
+  if (process.env.NETLIFY || process.env.URL) return null;
+  if (!mems[name]) mems[name] = /* @__PURE__ */ new Map();
+  const m = mems[name];
+  return {
+    get: async (k, o) => {
+      const v = m.get(k);
+      return v === void 0 ? null : o && o.type === "json" ? JSON.parse(v) : v;
+    },
+    set: async (k, v) => {
+      m.set(k, v);
+    },
+    delete: async (k) => {
+      m.delete(k);
+    }
+  };
+}
 var HEADERS = { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" };
 var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
 async function cgToken(addr, store) {
@@ -848,7 +872,7 @@ async function replay(addr, contract, refTs) {
     const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
     const j = await r.json();
     if (!j.result || !Array.isArray(j.result) || !j.result.length) return null;
-    let bal = 0n, peakBag = 0n, balAtRef = null, dec = null, firstTs = null, lastTs = null, transfers = 0;
+    let bal = 0n, peakBag = 0n, peakBeforeRef = 0n, balAtRef = null, dec = null, firstTs = null, lastTs = null, transfers = 0;
     for (const t of j.result) {
       if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
       const ts = parseInt(t.timeStamp, 10) * 1e3;
@@ -864,12 +888,13 @@ async function replay(addr, contract, refTs) {
       if ((t.to || "").toLowerCase() === addr) bal += v;
       else if ((t.from || "").toLowerCase() === addr) bal -= v;
       if (bal > peakBag) peakBag = bal;
+      if (refTs && ts <= refTs && bal > peakBeforeRef) peakBeforeRef = bal;
       transfers++;
     }
     if (refTs && balAtRef === null) balAtRef = bal;
     const d = dec === null || isNaN(dec) ? 18 : dec;
     const f = (x) => Number(x) / Math.pow(10, d);
-    return { firstTs, lastTs, transfers, peakBag: f(peakBag), balNow: f(bal), balAtRef: balAtRef === null ? null : f(balAtRef) };
+    return { firstTs, lastTs, transfers, peakBag: f(peakBag), peakBeforeRef: f(peakBeforeRef), balNow: f(bal), balAtRef: balAtRef === null ? null : f(balAtRef) };
   } catch {
     return null;
   }
@@ -882,20 +907,16 @@ var token_default = async (req) => {
     return new Response(JSON.stringify({ error: "bad request" }), { status: 400, headers: HEADERS });
   }
   try {
-    const cs = getStore({ name: "claim", consistency: "strong" });
-    const c = await cs.get("c/" + addr, { type: "json" });
+    const cs = storeOr("claim", { consistency: "strong" });
+    const c = cs && await cs.get("c/" + addr, { type: "json" });
     if (!c) return new Response(JSON.stringify({ locked: true }), { headers: HEADERS });
   } catch {
     return new Response(JSON.stringify({ locked: true }), { headers: HEADERS });
   }
-  let store = null;
-  try {
-    store = getStore("pnl");
-  } catch {
-  }
+  const store = storeOr("pnl");
   let rowsIdx = [];
   if (store) try {
-    const cached = await store.get("v15/" + addr, { type: "json" });
+    const cached = await store.get("v16/" + addr, { type: "json" });
     if (cached && cached.rowsIdx) rowsIdx = cached.rowsIdx;
   } catch {
   }
@@ -906,7 +927,7 @@ var token_default = async (req) => {
     } catch {
     }
     if (store) try {
-      const cached = await store.get("v15/" + addr, { type: "json" });
+      const cached = await store.get("v16/" + addr, { type: "json" });
       if (cached && cached.rowsIdx) rowsIdx = cached.rowsIdx;
     } catch {
     }
@@ -952,6 +973,62 @@ var token_default = async (req) => {
       else verdict = "sold before the top";
     }
   }
+  let updated = null;
+  if (store && peakPrice && peakTs && balAtPeak !== null) {
+    try {
+      const cached = await store.get("v16/" + addr, { type: "json" });
+      if (cached && cached.stats) {
+        const st2 = cached.stats;
+        const avgSell = row && row.st > 0 ? row.so / row.st : 0;
+        const cur = cg ? cg.cur : 0;
+        const usd2 = (n) => "$" + Math.round(Math.abs(n)).toLocaleString("en-US");
+        const symU = row ? row.s : "?";
+        const rp0 = rp;
+        const exitRatio = rp0.peakBag > 0 ? balAtPeak / rp0.peakBag : 1;
+        if (exitRatio >= 0.2 && balAtPeak > 0) {
+          const peakValue = balAtPeak * peakPrice;
+          const heldPart = Math.min(rp0.balNow, balAtPeak);
+          const soldAfter = Math.max(0, balAtPeak - heldPart);
+          const walked = soldAfter * avgSell + heldPart * cur;
+          const rt = peakValue - walked;
+          if (peakValue > 500 && rt > 250 && rt / peakValue > 0.5) {
+            const best = st2.roundtrips && st2.roundtrips[0] && st2.roundtrips[0].rtUsd || 0;
+            if (rt > best && !(st2.roundtrips || []).some((x) => x.sym === symU)) {
+              const tail = soldAfter * avgSell > heldPart * cur ? "walked with ~" + usd2(walked) : usd2(heldPart * cur) + " now";
+              const entry = { line: "-" + usd2(rt), sub: "$" + symU + " \xB7 " + usd2(peakValue) + " at peak \xB7 " + tail, sym: symU, rtUsd: Math.round(rt), peakUsd: Math.round(peakValue) };
+              st2.roundtrips = [entry].concat(st2.roundtrips || []).slice(0, 5);
+              st2.roundtrip = { line: entry.line, sub: entry.sub };
+              updated = "roundtrip";
+            }
+          }
+        } else if (row && row.so > 50) {
+          const exitedTk = rp0.peakBeforeRef - balAtPeak;
+          const proceeds = exitedTk * avgSell;
+          const athValue = exitedTk * peakPrice;
+          if (proceeds > 50 && athValue > 500 && athValue > proceeds * 3) {
+            const missed = athValue - proceeds;
+            const best = st2.soldEarly && st2.soldEarly[0] && st2.soldEarly[0].missedUsd || 0;
+            if (missed > best && !(st2.soldEarly || []).some((x) => x.sym === symU)) {
+              const entry = { line: "$" + symU, sub: "sold for ~" + usd2(proceeds) + " \xB7 " + usd2(athValue) + " at peak", sym: symU, missedUsd: Math.round(missed), missedX: proceeds > 0 ? +(athValue / proceeds).toFixed(1) : 0 };
+              st2.soldEarly = [entry].concat(st2.soldEarly || []).slice(0, 5);
+              st2.soldTooEarly = { line: entry.line, sub: entry.sub };
+              updated = "sold too early";
+            }
+          }
+        }
+        if (updated) {
+          await store.set("v16/" + addr, JSON.stringify(cached)).catch(() => {
+          });
+          try {
+            const bs = storeOr("badges");
+            if (bs) await bs.delete("w2/" + addr);
+          } catch {
+          }
+        }
+      }
+    } catch {
+    }
+  }
   const sym = row ? row.s : q.startsWith("0x") ? contract.slice(0, 8) : q.toUpperCase().replace(/^\$/, "");
   const d = {
     sym,
@@ -967,7 +1044,8 @@ var token_default = async (req) => {
     peakDate: peakTs ? new Date(peakTs).toISOString().slice(0, 10) : null,
     holdingNow: rp.balNow > 0,
     holdingUsd: rp.balNow > 0 && cg && cg.cur ? Math.round(rp.balNow * cg.cur) : null,
-    verdict
+    verdict,
+    updated
   };
   if (store) try {
     await store.set(dk, JSON.stringify({ t: Date.now(), d }));
@@ -977,6 +1055,7 @@ var token_default = async (req) => {
 };
 var config = { path: "/api/token" };
 export {
+  _mem,
   config,
   token_default as default
 };

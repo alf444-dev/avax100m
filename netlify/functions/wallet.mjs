@@ -682,7 +682,9 @@ function tokLookup(){
     rows+=tokRow("transfers",t.transfers);
     rows+=tokRow("holding now",t.holdingNow?("yes"+(t.holdingUsd!==null?" \xB7 $"+t.holdingUsd.toLocaleString("en-US"):"")):"no");
     if(t.verdict) rows+=tokRow("verdict",'<b style="color:var(--red)">'+t.verdict+'</b>');
+    if(t.updated) rows+=tokRow("discovery",'<b style="color:var(--red)">this beat your tracked '+t.updated+' \u2014 your p&l has been updated</b>');
     out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:16px;font-weight:700;letter-spacing:.06em;margin-bottom:10px">$'+t.sym+'</div>'+rows+'</div>';
+    if(t.updated){ fetch(SITE+"/api/pnl?addr="+D.addr).then(function(r){return r.json();}).then(function(p){ if(p&&p.available) renderPnl(p.stats); }).catch(function(){}); }
   }).catch(function(){ out.innerHTML='<span style="font-size:11px;color:var(--red)">lookup failed. try again.</span>'; });
 }
 document.getElementById("tok-go").addEventListener("click",tokLookup);
@@ -736,7 +738,9 @@ function tokLookup(){
     rows+=tokRow("transfers",t.transfers);
     rows+=tokRow("holding now",t.holdingNow?("yes"+(t.holdingUsd!==null?" \xB7 $"+t.holdingUsd.toLocaleString("en-US"):"")):"no");
     if(t.verdict) rows+=tokRow("verdict",'<b style="color:var(--red)">'+t.verdict+'</b>');
+    if(t.updated) rows+=tokRow("discovery",'<b style="color:var(--red)">this beat your tracked '+t.updated+' \u2014 your p&l has been updated</b>');
     out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:16px;font-weight:700;letter-spacing:.06em;margin-bottom:10px">$'+t.sym+'</div>'+rows+'</div>';
+    if(t.updated){ fetch(SITE+"/api/pnl?addr="+D.addr).then(function(r){return r.json();}).then(function(p){ if(p&&p.available) renderPnl(p.stats); }).catch(function(){}); }
   }).catch(function(){ out.innerHTML='<span style="font-size:11px;color:var(--red)">lookup failed. try again.</span>'; });
 }
 document.getElementById("tok-go").addEventListener("click",tokLookup);
