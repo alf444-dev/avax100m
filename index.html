@@ -9,6 +9,12 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+{"@type":"WebSite","name":"AVAX/100M","url":"https://avax100m.xyz/","description":"Live countdown to Avalanche C-Chain block 100,000,000 and a read-only wallet history checker."},
+{"@type":"WebApplication","name":"avax100m wallet checker","url":"https://avax100m.xyz/","applicationCategory":"FinanceApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"description":"Check any Avalanche wallet: first transaction, era, badges, and realized DEX P&L. No connect, no signature required."}
+]}
+</script>
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://avax100m.xyz/">
 <meta property="og:title" content="ROAD TO BLOCK 100,000,000 — Avalanche C-Chain">
@@ -275,6 +281,27 @@
   </div>
 </main>
 
+  <section id="faq">
+    <h2>faq</h2>
+    <div class="wrap" style="max-width:720px">
+      <details style="border-bottom:1px solid var(--faint);padding:14px 0">
+        <summary style="cursor:pointer;font-weight:700">what is block 100,000,000?</summary>
+        <p style="color:var(--dim);margin:10px 0 0">the avalanche c-chain's hundred-millionth block. this page counts down to it live, estimating arrival from the current block rate. when it lands, this page becomes the record that it did.</p>
+      </details>
+      <details style="border-bottom:1px solid var(--faint);padding:14px 0">
+        <summary style="cursor:pointer;font-weight:700">what does the wallet checker do?</summary>
+        <p style="color:var(--dim);margin:10px 0 0">paste any avalanche address or .avax name and get its history: first transaction, era, how early it arrived, badges, and realized dex p&amp;l &mdash; biggest win, biggest loss, roundtrips, and what it sold too early. read-only. no connect, no signature.</p>
+      </details>
+      <details style="border-bottom:1px solid var(--faint);padding:14px 0">
+        <summary style="cursor:pointer;font-weight:700">is the page-claim signature safe?</summary>
+        <p style="color:var(--dim);margin:10px 0 0">claiming signs one plain-text message to prove you own the address. it is not a transaction: nothing moves, nothing is approved, it costs nothing. this site never asks for token approvals or transfers, ever. the code is <a href="https://github.com/alf444-dev/avax100m" target="_blank" rel="noopener">open source</a>.</p>
+      </details>
+      <details style="padding:14px 0">
+        <summary style="cursor:pointer;font-weight:700">how accurate is the p&amp;l?</summary>
+        <p style="color:var(--dim);margin:10px 0 0">realized dex trades from on-chain data, prices from market history. wrapped gas and stablecoins are excluded from the stories. the numbers are careful estimates. the regret is real.</p>
+      </details>
+    </div>
+  </section>
 <footer>
   <div class="wrap" style="display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;width:100%">
     <span class="tag">no connect · no signature · just a lookup</span>

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://avax100m.xyz/sitemap.xml

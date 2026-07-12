@@ -81,6 +81,7 @@ function firstInteresting(txs, toks, addr) {
 var API = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
 async function fetchWallet(addr) {
   const base = API + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=25&sort=asc";
+  const claimedP = fetch("https://avax100m.xyz/api/claim?addr=" + addr + "&info=1").then((r) => r.json()).then((c) => !!(c && c.claimed)).catch(() => false);
   const [txj, tokj, intj, cntj, blkj] = await Promise.all([
     fetch(base + "&action=txlist").then((r) => r.json()),
     fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => ({ result: [] })),
@@ -105,7 +106,7 @@ async function fetchWallet(addr) {
   const txc = cntj && cntj.result ? parseInt(cntj.result, 16) : null;
   const mv = firstInteresting(txj && txj.result || [], tokj && tokj.result || [], addr);
   const dateStr = new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).toUpperCase();
-  return { addr, ts, blk, days, pct, era: eraFor(ts), rank: rankFor(days), mv, txc, earlyStr, dateStr };
+  return { addr, ts, blk, days, pct, era: eraFor(ts), rank: rankFor(days), mv, txc, earlyStr, dateStr, claimed: await claimedP };
 }
 
 // src/wallet.js
@@ -127,6 +128,7 @@ function page(w, site) {
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="description" content="${esc(desc)}">
+${w.claimed ? "" : '<meta name="robots" content="noindex,follow">'}
 <link rel="canonical" href="${pageUrl}">
 <meta property="og:type" content="profile">
 <meta property="og:url" content="${pageUrl}">
