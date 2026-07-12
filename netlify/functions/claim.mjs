@@ -37680,7 +37680,7 @@ function storeOr() {
   return null;
 }
 var clean = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
-var THEMES = { red: "#e84142", snow: "#f2f2f2", gold: "#d4a017", teal: "#2aa198", violet: "#7c5cff" };
+var THEMES = { red: "#e84142", snow: "#f2f2f2", gold: "#d4a017", teal: "#2aa198", violet: "#7c5cff", pink: "#ff5ea8", term: "#00ff66" };
 var cleanBadges = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9,]/g, "").split(",").filter(Boolean).slice(0, 3);
 var cleanTop8 = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9.,_-]/g, "").split(",").filter((x) => /^0x[0-9a-f]{40}$/.test(x) || /^[a-z0-9-_]+(\.[a-z0-9-_]+)*\.avax$/.test(x)).slice(0, 8);
 var BLOCKED = /nigg|fagg|kike|spic\b|chink|retard|rape|hitler/i;

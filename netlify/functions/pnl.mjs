@@ -966,21 +966,25 @@ async function pool(items, n, fn) {
 var INFRA_ADDR = { "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7": 1 };
 var INFRA_SYM = { "WAVAX": 1 };
 var noStory = (r) => INFRA_ADDR[r.tokenAddress] || INFRA_SYM[r.sym] || STABLES[r.sym];
-async function enrich(rows, balances, ADDR, store, diag, deadline) {
+async function enrich(rows, balances, ADDR, store, diag, deadline, depth) {
   const flags = {};
   let complete = true;
+  depth = depth || 15;
+  const m = depth / 15;
   const overBudget = () => deadline && Date.now() > deadline;
   const gone = (r) => r.invested - (balances[r.tokenAddress] && balances[r.tokenAddress].usd || 0);
-  const heldByInvested = rows.filter((r) => r.tokenAddress && !noStory(r) && r.invested > 100 && balances[r.tokenAddress] && balances[r.tokenAddress].tk > 0).sort((a, b) => gone(b) - gone(a)).slice(0, 6);
-  const byInvested = rows.filter((r) => r.tokenAddress && !noStory(r) && r.invested > 100).sort((a, b) => b.invested - a.invested).slice(0, 4);
-  const bySold = rows.filter((r) => r.tokenAddress && !noStory(r) && r.sold > 50).sort((a, b) => b.sold - a.sold).slice(0, 9);
+  const eligible = (r) => r.tokenAddress && !noStory(r) && (r.invested > 100 || r.sold > 50);
+  const scanTotal = new Set(rows.filter(eligible).map((r) => r.tokenAddress)).size;
+  const heldByInvested = rows.filter((r) => r.tokenAddress && !noStory(r) && r.invested > 100 && balances[r.tokenAddress] && balances[r.tokenAddress].tk > 0).sort((a, b) => gone(b) - gone(a)).slice(0, Math.ceil(6 * m));
+  const byInvested = rows.filter((r) => r.tokenAddress && !noStory(r) && r.invested > 100).sort((a, b) => b.invested - a.invested).slice(0, Math.ceil(4 * m));
+  const bySold = rows.filter((r) => r.tokenAddress && !noStory(r) && r.sold > 50).sort((a, b) => b.sold - a.sold).slice(0, Math.ceil(9 * m));
   const seen = {};
   const cands = [];
   const lanes = [heldByInvested, bySold, byInvested];
-  for (let i = 0; cands.length < 15 && lanes.some((l) => i < l.length); i++) {
+  for (let i = 0; cands.length < depth && lanes.some((l) => i < l.length); i++) {
     for (const l of lanes) {
       const c = l[i];
-      if (c && !seen[c.tokenAddress]) {
+      if (c && !seen[c.tokenAddress] && cands.length < depth) {
         seen[c.tokenAddress] = 1;
         cands.push(c);
       }
@@ -995,7 +999,7 @@ async function enrich(rows, balances, ADDR, store, diag, deadline) {
     if (o.rt) rts.push(o.rt);
     if (o.ste) stes.push(o.ste);
   };
-  await pool(cands.slice(0, 15), 3, async (c) => {
+  await pool(cands, 3, async (c) => {
     const d = { sym: c.sym, sold: Math.round(c.sold) };
     if (diag) diag.push(d);
     const ck = "cand/v1/" + ADDR + "/" + c.tokenAddress;
@@ -1117,6 +1121,7 @@ async function enrich(rows, balances, ADDR, store, diag, deadline) {
   return {
     flags,
     complete,
+    scan: { depth: cands.length, total: scanTotal },
     roundtrip: rts[0] ? { line: rts[0].line, sub: rts[0].sub } : null,
     soldTooEarly: stes[0] ? { line: stes[0].line, sub: stes[0].sub } : null,
     roundtrips: clean(rts),
@@ -1185,10 +1190,24 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v20/" + addr;
+  const cacheKey = "v21/" + addr;
   const deadline = Date.now() + 6500;
   const debug = url.searchParams.get("debug") === "1";
-  const refresh = url.searchParams.get("refresh") === "1";
+  const deeper = url.searchParams.get("deeper") === "1";
+  const refresh = url.searchParams.get("refresh") === "1" || deeper;
+  let depth = 15;
+  if (store) try {
+    const dj = await store.get("depth/" + addr, { type: "json" });
+    if (dj && dj.d) depth = dj.d;
+  } catch {
+  }
+  if (deeper) {
+    depth = Math.min(depth + 15, 90);
+    if (store) try {
+      await store.set("depth/" + addr, JSON.stringify({ d: depth }));
+    } catch {
+    }
+  }
   if (store && !debug && !refresh) try {
     const cached = await store.get(cacheKey, { type: "json" });
     if (cached) {
@@ -1215,9 +1234,10 @@ var pnl_default = async (req) => {
     }
     if (diag) diag.push({ rowsAfterFilters: rows.length, rows: rows.slice(0, 30).map((r) => ({ sym: r.sym, profit: Math.round(r.profit), invested: Math.round(r.invested), sold: Math.round(r.sold) })) });
     const stats = summarize(rows, capped);
-    const extra = await enrich(rows, balances, addr, store, diag, deadline);
+    const extra = await enrich(rows, balances, addr, store, diag, deadline, depth);
     stats.flags = Object.assign(rowFlags(rows, balances), extra.flags || {});
     if (extra.complete === false) stats.partial = true;
+    if (extra.scan) stats.scan = extra.scan;
     stats.roundtrip = extra.roundtrip;
     stats.soldTooEarly = extra.soldTooEarly;
     stats.roundtrips = extra.roundtrips;

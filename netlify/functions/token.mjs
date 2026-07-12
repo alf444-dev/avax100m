@@ -916,7 +916,7 @@ var token_default = async (req) => {
   const store = storeOr("pnl");
   let rowsIdx = [];
   if (store) try {
-    const cached = await store.get("v20/" + addr, { type: "json" });
+    const cached = await store.get("v21/" + addr, { type: "json" });
     if (cached && cached.rowsIdx) rowsIdx = cached.rowsIdx;
   } catch {
   }
@@ -927,7 +927,7 @@ var token_default = async (req) => {
     } catch {
     }
     if (store) try {
-      const cached = await store.get("v20/" + addr, { type: "json" });
+      const cached = await store.get("v21/" + addr, { type: "json" });
       if (cached && cached.rowsIdx) rowsIdx = cached.rowsIdx;
     } catch {
     }
@@ -980,7 +980,7 @@ var token_default = async (req) => {
   const infraTok = NO_STORY[contract] || (row && NO_STORY_SYM[(row.s || "").toUpperCase()]);
   if (!infraTok && store && peakPrice && peakTs && balAtPeak !== null) {
     try {
-      const cached = await store.get("v20/" + addr, { type: "json" });
+      const cached = await store.get("v21/" + addr, { type: "json" });
       if (cached && cached.stats) {
         const st2 = cached.stats;
         const avgSell = row && row.st > 0 ? row.so / row.st : 0;
@@ -1021,7 +1021,7 @@ var token_default = async (req) => {
           }
         }
         if (updated) {
-          await store.set("v20/" + addr, JSON.stringify(cached)).catch(() => {
+          await store.set("v21/" + addr, JSON.stringify(cached)).catch(() => {
           });
           try {
             const bs = storeOr("badges");

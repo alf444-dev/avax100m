@@ -306,6 +306,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     <div class="note" id="pnl-summary" style="display:none;font-size:13px;color:var(--ink)"></div>
     <div class="note" id="pnl-note">syncing trade history\u2026</div>
     <button class="btn" id="ledger-toggle" style="display:none;margin-top:16px">full ledger \u2192</button>
+    <button class="btn" id="pnl-deeper" style="display:none;margin-top:16px;margin-left:8px">dig deeper</button>
     <div id="ledger" style="display:none;margin-top:22px">
       <div class="grid" style="grid-template-columns:repeat(4,1fr)">
         <div class="cell"><div class="k">top wins</div><div id="lg-w" style="font-size:12px;margin-top:8px"></div></div>
@@ -379,6 +380,15 @@ if(D.firstContract && D.firstToken){
 
 /* realized p&l via /api/pnl */
 var pnlTries=0;
+function updDeeper(s){
+  var db=document.getElementById("pnl-deeper"); if(!db) return;
+  var sc=s.scan;
+  if(!sc || s.partial){ db.style.display="none"; return; }
+  var left=sc.total-sc.depth;
+  if(left<=0 || sc.depth>=90){ db.style.display="none"; return; }
+  db.textContent="dig deeper \u2014 scan "+Math.min(15,left)+" more of "+left+" unscanned";
+  db.style.display="inline-block"; db.disabled=false;
+}
 function loadPnl(force){
  fetch(SITE+"/api/pnl?addr="+D.addr+(force?"&refresh=1":"")).then(function(r){return r.json();}).then(function(p){
   var note=document.getElementById("pnl-note");
@@ -387,13 +397,26 @@ function loadPnl(force){
   renderPnl(s);
   if(s.partial && pnlTries<3){ pnlTries++; note.textContent="still digging through your history\u2026"; setTimeout(function(){loadPnl(true);},3000); return; }
   if(s.partial){ note.textContent="partial scan \u2014 look up a token below to fill the gaps."; return; }
+  updDeeper(s);
   if(p.stale){
     fetch(SITE+"/api/pnl?addr="+D.addr+"&refresh=1").then(function(r){return r.json();})
-      .then(function(p2){ if(p2 && p2.available) renderPnl(p2.stats); }).catch(function(){});
+      .then(function(p2){ if(p2 && p2.available){ renderPnl(p2.stats); updDeeper(p2.stats); } }).catch(function(){});
   }
  }).catch(function(){ document.getElementById("pnl-note").textContent="trade history sync coming soon."; });
 }
 loadPnl(false);
+(function(){
+  var db=document.getElementById("pnl-deeper"); if(!db) return;
+  db.addEventListener("click",function(){
+    db.disabled=true; db.textContent="digging\u2026";
+    fetch(SITE+"/api/pnl?addr="+D.addr+"&deeper=1").then(function(r){return r.json();}).then(function(p){
+      if(!p || !p.available){ db.textContent="dig deeper"; db.disabled=false; return; }
+      renderPnl(p.stats);
+      if(p.stats.partial){ pnlTries=0; loadPnl(true); db.style.display="none"; return; }
+      updDeeper(p.stats);
+    }).catch(function(){ db.textContent="dig deeper"; db.disabled=false; });
+  });
+})();
 
 function renderPnl(s){
   function set(id,o){ var el=document.getElementById(id);
@@ -523,7 +546,7 @@ fetch(SITE+"/api/badges?addr="+D.addr).then(function(r){return r.json();}).then(
 
 /* ---- claim / status / oracle ---- */
 var CLAIMED=false;
-var THEMES={red:"#e84142",snow:"#f2f2f2",gold:"#d4a017",teal:"#2aa198",violet:"#7c5cff"};
+var THEMES={red:"#e84142",snow:"#f2f2f2",gold:"#d4a017",teal:"#2aa198",violet:"#7c5cff",pink:"#ff5ea8",term:"#00ff66"};
 var CUR={status:"",theme:"red",cardBadges:[],top8:[]};
 function applyTheme(t){
   var c=THEMES[t]||THEMES.red;
