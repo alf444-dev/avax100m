@@ -37680,6 +37680,8 @@ function storeOr() {
   return null;
 }
 var clean = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+var THEMES = { red: "#e84142", snow: "#f2f2f2", gold: "#d4a017", teal: "#2aa198", violet: "#7c5cff" };
+var cleanBadges = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9,]/g, "").split(",").filter(Boolean).slice(0, 3);
 var BLOCKED = /nigg|fagg|kike|spic\b|chink|retard|rape|hitler/i;
 var URLISH = /(https?:|www\.|\.com|\.io|\.xyz|\.net|\.org|\.gg|\.fi|t\.me|discord)/i;
 function statusProblem(st) {
@@ -37707,7 +37709,7 @@ var claim_default = async (req) => {
     if (!/^0x[0-9a-f]{40}$/.test(addr)) return new Response(JSON.stringify({ error: "bad address" }), { status: 400, headers: HEADERS });
     if (url.searchParams.get("info") === "1") {
       const c = await store.get("c/" + addr, { type: "json" }).catch(() => null);
-      return new Response(JSON.stringify(c ? { claimed: true, settledAt: c.t, settledBlock: c.blk || null, status: c.status || null } : { claimed: false }), { headers: HEADERS });
+      return new Response(JSON.stringify(c ? { claimed: true, settledAt: c.t, settledBlock: c.blk || null, status: c.status || null, theme: c.theme || "red", cardBadges: c.cardBadges || [] } : { claimed: false }), { headers: HEADERS });
     }
     const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16))).map((b) => b.toString(16).padStart(2, "0")).join("");
     await store.set("n/" + addr, JSON.stringify({ nonce, t: Date.now() })).catch(() => {
@@ -37724,7 +37726,7 @@ var claim_default = async (req) => {
     if (!/^0x[0-9a-f]{40}$/.test(addr)) return new Response(JSON.stringify({ error: "bad address" }), { status: 400, headers: HEADERS });
     const nrec = await store.get("n/" + addr, { type: "json" }).catch(() => null);
     if (!nrec || Date.now() - nrec.t > NONCE_MS) return new Response(JSON.stringify({ error: "nonce expired \u2014 try again." }), { status: 400, headers: HEADERS });
-    const action = body.action === "status" ? "status" : "claim";
+    const action = body.action === "profile" ? "profile" : body.action === "status" ? "status" : "claim";
     if (body.method === "tx") {
       try {
         const j = await fetch(RS + "?module=account&action=txlist&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=10&sort=desc").then((r) => r.json());
@@ -37737,7 +37739,7 @@ var claim_default = async (req) => {
     } else {
       const sig = body.sig;
       if (!sig) return new Response(JSON.stringify({ error: "missing signature" }), { status: 400, headers: HEADERS });
-      const msg = action === "status" ? "avax100m.xyz\nset status for " + addr + "\nstatus: " + clean(body.status) + "\nnonce: " + nrec.nonce : "avax100m.xyz\nclaim page for " + addr + "\nnonce: " + nrec.nonce;
+      const msg = action === "profile" ? "avax100m.xyz\nupdate profile for " + addr + "\nstatus: " + clean(body.status) + "\ntheme: " + (THEMES[clean(body.theme)] ? clean(body.theme) : "red") + "\nbadges: " + cleanBadges(body.cardBadges).join(",") + "\nnonce: " + nrec.nonce : action === "status" ? "avax100m.xyz\nset status for " + addr + "\nstatus: " + clean(body.status) + "\nnonce: " + nrec.nonce : "avax100m.xyz\nclaim page for " + addr + "\nnonce: " + nrec.nonce;
       let rec = null;
       try {
         rec = import_ethers.ethers.utils.verifyMessage(msg, sig).toLowerCase();
@@ -37747,6 +37749,21 @@ var claim_default = async (req) => {
     }
     await store.delete("n/" + addr).catch(() => {
     });
+    if (action === "profile") {
+      const existing = await store.get("c/" + addr, { type: "json" }).catch(() => null);
+      if (!existing) return new Response(JSON.stringify({ error: "claim the page first." }), { status: 400, headers: HEADERS });
+      const st = clean(body.status);
+      if (st) {
+        const prob = statusProblem(st);
+        if (prob) return new Response(JSON.stringify({ error: prob }), { status: 400, headers: HEADERS });
+      }
+      existing.status = st || null;
+      existing.theme = THEMES[clean(body.theme)] ? clean(body.theme) : "red";
+      existing.cardBadges = cleanBadges(body.cardBadges);
+      existing.profileT = Date.now();
+      await store.set("c/" + addr, JSON.stringify(existing));
+      return new Response(JSON.stringify({ ok: true, status: existing.status, theme: existing.theme, cardBadges: existing.cardBadges }), { headers: HEADERS });
+    }
     if (action === "status") {
       const existing = await store.get("c/" + addr, { type: "json" }).catch(() => null);
       if (!existing) return new Response(JSON.stringify({ error: "claim the page first." }), { status: 400, headers: HEADERS });

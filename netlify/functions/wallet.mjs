@@ -229,17 +229,30 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       <button class="btn" id="copy-link">copy page link</button>
       <button class="btn primary" id="share-x">share on x</button>
       <button class="btn" id="claim-btn" style="display:none">claim this page</button>
-      <button class="btn" id="status-btn" style="display:none">set status</button>
+      <button class="btn" id="status-btn" style="display:none">customize</button>
       <span id="settled" style="display:none;font-size:10px;color:var(--dim);letter-spacing:.08em"></span>
     </div>
     <div id="claim-msg" style="display:none;font-size:11px;color:var(--dim);margin-top:10px;letter-spacing:.05em"></div>
+    <div id="cust" style="display:none;margin-top:18px;border:1px solid var(--faint);padding:16px 18px;max-width:560px">
+      <div style="font-size:10px;color:var(--red);letter-spacing:.25em;text-transform:uppercase;margin-bottom:12px">customize \xB7 one signature saves everything</div>
+      <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">status \xB7 100 chars \xB7 no links</div>
+      <input id="cust-status" maxlength="100" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px;letter-spacing:.02em;outline:none" placeholder="never selling. ask my roundtrip.">
+      <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">accent</div>
+      <div id="cust-themes" style="display:flex;gap:8px"></div>
+      <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">badges on your card \xB7 pick up to 3</div>
+      <div id="cust-badges" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="btn primary" id="cust-save">sign &amp; save</button>
+        <button class="btn" id="cust-cancel">cancel</button>
+      </div>
+    </div>
   </div>
 
   <section id="oracle-sec" style="display:none">
     <h2>ask the chain</h2>
     <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
       <button id="oracle" aria-label="ask the chain" style="width:72px;height:72px;background:var(--bg);border:1px solid var(--faint);cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none">
-        <span style="width:26px;height:26px;background:var(--red);display:block"></span>
+        <span style="width:26px;height:26px;background:var(--red);display:flex;align-items:center;justify-content:center;color:#0a0a0a;font-weight:800;font-size:17px;font-family:var(--mono)">8</span>
       </button>
       <div style="flex:1;min-width:240px">
         <div id="oracle-out" style="font-size:14px;color:var(--ink);letter-spacing:.02em;line-height:1.7;min-height:48px"></div>
@@ -450,7 +463,8 @@ function svgFor(id){
 function drawGlyph(x,id,ox,oy,s,inv){
   var ops=GLYPHS[id]; if(!ops) return;
   var k=s/24;
-  var C={i:inv?"#0a0a0a":"#f2f2f2",r:inv?"#0a0a0a":"#e84142",b:inv?"#e84142":"#0a0a0a"};
+  var R=window.THEME_HEX||"#e84142";
+  var C={i:inv?"#0a0a0a":"#f2f2f2",r:inv?"#0a0a0a":R,b:inv?R:"#0a0a0a"};
   ops.forEach(function(o){
     if(o[0]===0){ x.fillStyle=C[o[5]]; x.fillRect(ox+o[1]*k,oy+o[2]*k,o[3]*k,o[4]*k); }
     else if(o[0]===1){ x.strokeStyle=C[o[5]]; x.lineWidth=2*k; x.strokeRect(ox+o[1]*k,oy+o[2]*k,o[3]*k,o[4]*k); }
@@ -464,6 +478,12 @@ var EARNED=null;
 fetch(SITE+"/api/badges?addr="+D.addr).then(function(r){return r.json();}).then(function(p){
   if(!p||!p.badges||!p.badges.length) return;
   EARNED=p.badges;
+  if(CUR.cardBadges&&CUR.cardBadges.length){
+    EARNED.sort(function(a,b){
+      var ai=CUR.cardBadges.indexOf(a.id), bi=CUR.cardBadges.indexOf(b.id);
+      return (ai<0?9:ai)-(bi<0?9:bi);
+    });
+  }
   var el=document.getElementById("brack");
   el.innerHTML=p.badges.map(function(b,i){
     var nm=BNAMES[b.id]||b.id;
@@ -479,10 +499,20 @@ fetch(SITE+"/api/badges?addr="+D.addr).then(function(r){return r.json();}).then(
 
 /* ---- claim / status / oracle ---- */
 var CLAIMED=false;
+var THEMES={red:"#e84142",snow:"#f2f2f2",gold:"#d4a017",teal:"#2aa198",violet:"#7c5cff"};
+var CUR={status:"",theme:"red",cardBadges:[]};
+function applyTheme(t){
+  var c=THEMES[t]||THEMES.red;
+  document.documentElement.style.setProperty("--red",c);
+  window.THEME_HEX=c;
+  if(LAST_PNL) drawPnlCard(LAST_PNL);
+}
 function claimInfo(){
   fetch(SITE+"/api/claim?addr="+D.addr+"&info=1").then(function(r){return r.json();}).then(function(c){
     CLAIMED=!!(c&&c.claimed);
     if(CLAIMED){
+      CUR.status=c.status||""; CUR.theme=c.theme||"red"; CUR.cardBadges=c.cardBadges||[];
+      applyTheme(CUR.theme);
       if(c.status){ document.getElementById("status-text").textContent=c.status; document.getElementById("status-line").style.display="block"; }
       var s=document.getElementById("settled");
       s.textContent="settled "+new Date(c.settledAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}).toLowerCase()+(c.settledBlock?" \xB7 block #"+c.settledBlock.toLocaleString("en-US"):"");
@@ -531,19 +561,58 @@ document.getElementById("claim-btn").addEventListener("click",function(){
   });
 });
 document.getElementById("status-btn").addEventListener("click",function(){
-  var st=prompt("status (100 chars, lowercase, no links):");
-  if(!st) return;
-  st=st.toLowerCase().slice(0,100);
-  withSig(function(nonce){ return "avax100m.xyz\\nset status for "+D.addr+"\\nstatus: "+st.replace(/s+/g," ").trim()+"\\nnonce: "+nonce; }, function(sig){
-    fetch(SITE+"/api/claim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({addr:D.addr,sig:sig,action:"status",status:st})})
+  var p=document.getElementById("cust");
+  if(p.style.display==="block"){ p.style.display="none"; return; }
+  document.getElementById("cust-status").value=CUR.status||"";
+  var th=document.getElementById("cust-themes");
+  th.innerHTML=Object.keys(THEMES).map(function(k){
+    return '<button data-t="'+k+'" title="'+k+'" style="width:30px;height:30px;background:'+THEMES[k]+';border:2px solid '+(k===CUR.theme?"var(--ink)":"transparent")+';cursor:pointer"></button>';
+  }).join("");
+  th.querySelectorAll("button").forEach(function(b){ b.addEventListener("click",function(){
+    CUR.theme=b.getAttribute("data-t"); applyTheme(CUR.theme);
+    th.querySelectorAll("button").forEach(function(x){ x.style.borderColor=x===b?"var(--ink)":"transparent"; });
+  });});
+  var bd=document.getElementById("cust-badges");
+  if(EARNED&&EARNED.length){
+    bd.innerHTML=EARNED.map(function(b){
+      var on=CUR.cardBadges.indexOf(b.id)>-1;
+      return '<button data-b="'+b.id+'" class="btn" style="'+(on?"border-color:var(--red);color:var(--red);":"")+'">'+(BNAMES[b.id]||b.id)+'</button>';
+    }).join("");
+    bd.querySelectorAll("button").forEach(function(b){ b.addEventListener("click",function(){
+      var id=b.getAttribute("data-b"); var i=CUR.cardBadges.indexOf(id);
+      if(i>-1){ CUR.cardBadges.splice(i,1); b.style.borderColor=""; b.style.color=""; }
+      else if(CUR.cardBadges.length<3){ CUR.cardBadges.push(id); b.style.borderColor="var(--red)"; b.style.color="var(--red)"; }
+    });});
+  } else { bd.innerHTML='<span style="font-size:10px;color:var(--dim)">badges are still computing \u2014 come back in a minute.</span>'; }
+  p.style.display="block";
+});
+document.getElementById("cust-cancel").addEventListener("click",function(){ document.getElementById("cust").style.display="none"; });
+document.getElementById("cust-save").addEventListener("click",function(){
+  var st=(document.getElementById("cust-status").value||"").toLowerCase().replace(/s+/g," ").trim().slice(0,100);
+  var theme=CUR.theme, badges=CUR.cardBadges.join(",");
+  withSig(function(nonce){ return "avax100m.xyz\\nupdate profile for "+D.addr+"\\nstatus: "+st+"\\ntheme: "+theme+"\\nbadges: "+badges+"\\nnonce: "+nonce; }, function(sig){
+    fetch(SITE+"/api/claim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({addr:D.addr,sig:sig,action:"profile",status:st,theme:theme,cardBadges:badges})})
       .then(function(r){return r.json();}).then(function(j){
-        if(j&&j.ok){ document.getElementById("status-text").textContent=j.status; document.getElementById("status-line").style.display="block"; cmsg("status set."); }
-        else cmsg((j&&j.error)||"rejected.",1);
+        if(j&&j.ok){
+          CUR.status=j.status||""; CUR.theme=j.theme||"red"; CUR.cardBadges=j.cardBadges||[];
+          if(j.status){ document.getElementById("status-text").textContent=j.status; document.getElementById("status-line").style.display="block"; }
+          else document.getElementById("status-line").style.display="none";
+          applyTheme(CUR.theme);
+          if(EARNED&&CUR.cardBadges.length){
+            EARNED.sort(function(a,b){
+              var ai=CUR.cardBadges.indexOf(a.id), bi=CUR.cardBadges.indexOf(b.id);
+              return (ai<0?9:ai)-(bi<0?9:bi);
+            });
+            if(LAST_PNL) drawPnlCard(LAST_PNL);
+          }
+          document.getElementById("cust").style.display="none";
+          cmsg("saved. signed. permanent-ish.");
+        } else cmsg((j&&j.error)||"rejected.",1);
       });
   });
 });
 
-/* ---- the oracle ---- */
+/* ---- the oracle ---- *//* ---- the oracle ---- */
 function oracleLines(){
   var L=[];
   var ids={}; (EARNED||[]).forEach(function(b){ids[b.id]=b;});
@@ -634,12 +703,12 @@ function drawPnlCard(s){
   var c=document.getElementById("pnl-card"),x=c.getContext("2d");
   var W=1080,H=1350,mono="monospace";
   x.fillStyle="#0a0a0a";x.fillRect(0,0,W,H);
-  x.strokeStyle="#e84142";x.lineWidth=6;x.strokeRect(28,28,W-56,H-56);
+  x.strokeStyle=(window.THEME_HEX||"#e84142");x.lineWidth=6;x.strokeRect(28,28,W-56,H-56);
   x.strokeStyle="#2a2a2a";x.lineWidth=2;x.strokeRect(48,48,W-96,H-96);
   x.textBaseline="top";
   x.fillStyle="#7a7a7a";x.font="600 30px "+mono;
   x.fillText("AVALANCHE C-CHAIN",92,104);
-  x.fillStyle="#e84142";x.font="800 84px "+mono;
+  x.fillStyle=(window.THEME_HEX||"#e84142");x.font="800 84px "+mono;
   x.fillText("REALIZED P&L",92,150);
   x.fillStyle="#7a7a7a";x.font="400 27px "+mono;
   var subline = RANK.toLowerCase()+" \xB7 since "+ERA.toLowerCase();
@@ -649,7 +718,7 @@ function drawPnlCard(s){
   function block(k,o,y){
     x.fillStyle="#7a7a7a";x.font="600 26px "+mono;x.fillText(k,92,y);
     if(!o){ x.fillStyle="#3d3d3d";x.font="700 54px "+mono;x.fillText("\u2014",92,y+38); return; }
-    x.fillStyle="#e84142";x.font="800 60px "+mono;
+    x.fillStyle=(window.THEME_HEX||"#e84142");x.font="800 60px "+mono;
     x.fillText(o.line.replace(/<[^>]*>/g,""),92,y+38);
     if(o.sub){ x.fillStyle="#f2f2f2";x.font="400 28px "+mono;
       var t=o.sub.replace(/<[^>]*>/g,"");
@@ -667,7 +736,7 @@ function drawPnlCard(s){
       var tw=x.measureText(nm).width;
       var cw=16+30+10+tw+16;
       var medal=(i===0);
-      if(medal){ x.fillStyle="#e84142"; x.fillRect(bx,by,cw,bh); }
+      if(medal){ x.fillStyle=(window.THEME_HEX||"#e84142"); x.fillRect(bx,by,cw,bh); }
       else { x.strokeStyle="#2a2a2a"; x.lineWidth=2; x.strokeRect(bx,by,cw,bh); }
       drawGlyph(x,b.id,bx+16,by+(bh-30)/2,30,medal);
       x.fillStyle=medal?"#0a0a0a":"#f2f2f2";
@@ -683,7 +752,7 @@ function drawPnlCard(s){
   x.fillStyle="#2a2a2a";x.fillRect(92,1200,W-184,2);
   x.fillStyle="#7a7a7a";x.font="600 24px "+mono;
   x.fillText(AVVY_NAME ? AVVY_NAME : (D.addr.slice(0,10)+"\u2026"+D.addr.slice(-8)),92,1228);
-  x.fillStyle="#e84142";x.textAlign="right";
+  x.fillStyle=(window.THEME_HEX||"#e84142");x.textAlign="right";
   x.fillText("AVAX100M.XYZ",W-92,1228);
   x.textAlign="left";
   document.getElementById("pnl-card-wrap").style.display="block";
