@@ -957,18 +957,19 @@ async function pool(items, n, fn) {
 }
 async function enrich(rows, balances, ADDR, store, diag) {
   const flags = {};
+  const heldByInvested = rows.filter((r) => r.tokenAddress && r.invested > 100 && balances[r.tokenAddress] && balances[r.tokenAddress].tk > 0).sort((a, b) => b.invested - a.invested).slice(0, 4);
   const byInvested = rows.filter((r) => r.tokenAddress && r.invested > 100).sort((a, b) => b.invested - a.invested).slice(0, 4);
   const bySold = rows.filter((r) => r.tokenAddress && r.sold > 50).sort((a, b) => b.sold - a.sold).slice(0, 9);
   const seen = {};
   const cands = [];
-  for (const c of byInvested.concat(bySold)) {
+  for (const c of heldByInvested.concat(byInvested, bySold)) {
     if (!seen[c.tokenAddress]) {
       seen[c.tokenAddress] = 1;
       cands.push(c);
     }
   }
   const rts = [], stes = [];
-  await pool(cands.slice(0, 11), 3, async (c) => {
+  await pool(cands.slice(0, 13), 3, async (c) => {
     const d = { sym: c.sym, sold: Math.round(c.sold) };
     if (diag) diag.push(d);
     const cg = await cgToken(c.tokenAddress, store);
@@ -1125,7 +1126,7 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v13/" + addr;
+  const cacheKey = "v14/" + addr;
   const debug = url.searchParams.get("debug") === "1";
   const refresh = url.searchParams.get("refresh") === "1";
   if (store && !debug && !refresh) try {

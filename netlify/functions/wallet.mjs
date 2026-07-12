@@ -155,6 +155,23 @@ h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:
 .addrline{margin-top:26px;font-size:12px;color:var(--dim);word-break:break-all;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .addrline .a{color:var(--ink)}
 .badges{display:flex;flex-wrap:wrap;gap:10px}
+.brack{position:absolute;top:4px;right:0;display:grid;grid-template-columns:repeat(5,38px);gap:8px;justify-content:end;max-width:270px}
+.btile{position:relative;width:38px;height:38px;border:1px solid var(--faint);display:flex;align-items:center;justify-content:center;cursor:default;outline:none;background:var(--bg)}
+.btile:hover,.btile:focus-visible{border-color:var(--red)}
+.btile svg{width:22px;height:22px;display:block}
+.btile.medal{background:var(--red);border-color:var(--red)}
+.btile.medal .g-ink,.btile.medal .g-red{fill:#0a0a0a}
+.btile.medal .s-ink,.btile.medal .s-red{stroke:#0a0a0a}
+.btile .tip{display:none;position:absolute;top:calc(100% + 8px);right:-1px;width:264px;z-index:9;background:var(--bg);border:1px solid var(--red);padding:10px 12px;text-align:left;cursor:default}
+.btile:hover .tip,.btile:focus-visible .tip{display:block}
+.btile .tip .tn{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+.btile .tip .tn .bt{color:var(--red)}
+.btile.medal .tip .tn,.btile.medal .tip .tr,.btile.medal .tip .tv{color:var(--ink)}
+.btile .tip .tr{display:block;font-size:9px;color:var(--dim);letter-spacing:.1em;margin:3px 0 7px}
+.btile .tip .tv{font-size:10px;color:var(--dim);letter-spacing:.05em;line-height:1.55}
+.btile .tip .tv b{color:var(--ink)}
+.btile .tip .tl{color:var(--red);letter-spacing:.2em;font-size:9px;display:block;margin-bottom:3px}
+@media(max-width:760px){.brack{position:static;display:flex;flex-wrap:wrap;justify-content:flex-start;max-width:none;margin:22px 0 4px}.btile .tip{right:auto;left:-1px}}
 .bdg{position:relative;border:1px solid var(--faint);padding:8px 13px 7px;display:flex;align-items:center;gap:9px;outline:none;cursor:default}
 .bdg:hover,.bdg:focus-visible{border-color:var(--red)}
 .bdg svg{width:16px;height:16px;flex:none;display:block}
@@ -199,7 +216,8 @@ footer a:hover{color:var(--red);border-color:var(--red)}
 </div></header>
 
 <main class="wrap">
-  <div class="hero">
+  <div class="hero" style="position:relative">
+    <div id="brack" class="brack" aria-label="badges"></div>
     <div class="eyebrow">avalanche c-chain \xB7 wallet profile</div>
     <h1>${esc(w.rank[1])}</h1>
     <div class="tagline">${esc(w.rank[2])}</div>
@@ -228,10 +246,6 @@ footer a:hover{color:var(--red);border-color:var(--red)}
   </section>
 
   <section>
-    <div id="badges-sec" style="display:none;margin-bottom:56px">
-      <h2>badges</h2>
-      <div class="badges" id="badges"></div>
-    </div>
     <h2>realized p&amp;l</h2>
     <div class="grid" id="pnl-grid">
       <div class="cell"><div class="k">biggest w</div><div class="v" id="pnl-w">\u2014</div></div>
@@ -430,18 +444,16 @@ var EARNED=null;
 fetch(SITE+"/api/badges?addr="+D.addr).then(function(r){return r.json();}).then(function(p){
   if(!p||!p.badges||!p.badges.length) return;
   EARNED=p.badges;
-  var el=document.getElementById("badges");
+  var el=document.getElementById("brack");
   el.innerHTML=p.badges.map(function(b,i){
     var nm=BNAMES[b.id]||b.id;
     var tier=b.tier?' <span class="bt">'+ROMAN[b.tier]+'</span>':'';
     var rar=(b.rarity&&b.rarity.total>=20)
       ? (Math.round(b.rarity.count/b.rarity.total*1000)/10)+"% of census"
       : "held by "+((b.rarity&&b.rarity.count)||1)+((b.rarity&&b.rarity.count)===1?" wallet":" wallets")+" so far";
-    return '<span class="bdg'+(i===0?' medal':'')+'" tabindex="0">'+svgFor(b.id)
-      +'<span><span class="bn">'+nm+tier+'</span><span class="br">'+rar+'</span></span>'
-      +'<span class="ev"><span class="evl">EVIDENCE</span>'+b.ev+'</span></span>';
+    return '<span class="btile'+(i===0?' medal':'')+'" tabindex="0" aria-label="'+nm+'">'+svgFor(b.id)
+      +'<span class="tip"><span class="tl">EVIDENCE</span><span class="tn">'+nm+tier+'</span><span class="tr">'+rar+'</span><span class="tv">'+b.ev+'</span></span></span>';
   }).join("");
-  document.getElementById("badges-sec").style.display="block";
   if(LAST_PNL) drawPnlCard(LAST_PNL);
 }).catch(function(){});
 
