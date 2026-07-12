@@ -916,7 +916,7 @@ var token_default = async (req) => {
   const store = storeOr("pnl");
   let rowsIdx = [];
   if (store) try {
-    const cached = await store.get("v17/" + addr, { type: "json" });
+    const cached = await store.get("v19/" + addr, { type: "json" });
     if (cached && cached.rowsIdx) rowsIdx = cached.rowsIdx;
   } catch {
   }
@@ -927,7 +927,7 @@ var token_default = async (req) => {
     } catch {
     }
     if (store) try {
-      const cached = await store.get("v17/" + addr, { type: "json" });
+      const cached = await store.get("v19/" + addr, { type: "json" });
       if (cached && cached.rowsIdx) rowsIdx = cached.rowsIdx;
     } catch {
     }
@@ -975,9 +975,12 @@ var token_default = async (req) => {
     }
   }
   let updated = null;
-  if (store && peakPrice && peakTs && balAtPeak !== null) {
+  const NO_STORY = { "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7": 1 };
+  const NO_STORY_SYM = { "WAVAX": 1, "USDT": 1, "USDC": 1, "DAI": 1, "MIM": 1, "FRAX": 1, "USDT.E": 1, "USDC.E": 1, "DAI.E": 1, "BUSD": 1, "TUSD": 1, "UST": 1, "USDD": 1, "EURC": 1, "AUSD": 1, "USD1": 1, "USDP": 1 };
+  const infraTok = NO_STORY[contract] || (row && NO_STORY_SYM[(row.s || "").toUpperCase()]);
+  if (!infraTok && store && peakPrice && peakTs && balAtPeak !== null) {
     try {
-      const cached = await store.get("v17/" + addr, { type: "json" });
+      const cached = await store.get("v19/" + addr, { type: "json" });
       if (cached && cached.stats) {
         const st2 = cached.stats;
         const avgSell = row && row.st > 0 ? row.so / row.st : 0;
@@ -1018,7 +1021,7 @@ var token_default = async (req) => {
           }
         }
         if (updated) {
-          await store.set("v17/" + addr, JSON.stringify(cached)).catch(() => {
+          await store.set("v19/" + addr, JSON.stringify(cached)).catch(() => {
           });
           try {
             const bs = storeOr("badges");

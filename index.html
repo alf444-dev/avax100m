@@ -275,7 +275,7 @@
 <footer>
   <div class="wrap" style="display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;width:100%">
     <span class="tag">no connect · no signature · just a lookup</span>
-    <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> · data: avalanche public rpc + routescan. unofficial community page.</span>
+    <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> · <a href="https://github.com/alf444-dev/avax100m" target="_blank" rel="noopener">source on github</a> · data: avalanche public rpc + routescan. unofficial community page.</span>
   </div>
 </footer>
 
@@ -598,7 +598,7 @@
       if(lastDraw && avvyName){ lastDraw.name = avvyName; drawCard(lastDraw); }
     }).catch(function(){
       btn.disabled = false;
-      msg.className="err"; msg.textContent="couldn't reach the resolver — try again in a moment, or paste the 0x address.";
+      msg.className="err"; msg.textContent="couldn't reach the chain explorer — try again in a moment.";
     });
   }
   btn.addEventListener("click",check);
@@ -630,7 +630,7 @@
   }
   function binancePrices(ts){
     var day = ts - (ts % 86400000); // UTC midnight of the arrival day
-    var pThen=fetch("https://api.binance.com/api/v3/klines?symbol=AVAXUSDT&interval=1h&startTime="+hour+"&limit=1")
+    var pThen=fetch("https://api.binance.com/api/v3/klines?symbol=AVAXUSDT&interval=1h&startTime="+day+"&limit=1")
       .then(function(r){return r.json();})
       .then(function(k){return (k && k[0] && k[0][4]) ? parseFloat(k[0][4]) : null;});
     var pNow=fetch("https://api.binance.com/api/v3/ticker/price?symbol=AVAXUSDT")

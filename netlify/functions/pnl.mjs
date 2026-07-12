@@ -955,12 +955,16 @@ async function pool(items, n, fn) {
   });
   await Promise.all(workers);
 }
-async function enrich(rows, balances, ADDR, store, diag) {
+var INFRA_ADDR = { "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7": 1 };
+var INFRA_SYM = { "WAVAX": 1 };
+var noStory = (r) => INFRA_ADDR[r.tokenAddress] || INFRA_SYM[r.sym] || STABLES[r.sym];
+async function enrich(rows, balances, ADDR, store, diag, deadline) {
   const flags = {};
+  const overBudget = () => deadline && Date.now() > deadline;
   const gone = (r) => r.invested - (balances[r.tokenAddress] && balances[r.tokenAddress].usd || 0);
-  const heldByInvested = rows.filter((r) => r.tokenAddress && r.invested > 100 && balances[r.tokenAddress] && balances[r.tokenAddress].tk > 0).sort((a, b) => gone(b) - gone(a)).slice(0, 6);
-  const byInvested = rows.filter((r) => r.tokenAddress && r.invested > 100).sort((a, b) => b.invested - a.invested).slice(0, 4);
-  const bySold = rows.filter((r) => r.tokenAddress && r.sold > 50).sort((a, b) => b.sold - a.sold).slice(0, 9);
+  const heldByInvested = rows.filter((r) => r.tokenAddress && !noStory(r) && r.invested > 100 && balances[r.tokenAddress] && balances[r.tokenAddress].tk > 0).sort((a, b) => gone(b) - gone(a)).slice(0, 6);
+  const byInvested = rows.filter((r) => r.tokenAddress && !noStory(r) && r.invested > 100).sort((a, b) => b.invested - a.invested).slice(0, 4);
+  const bySold = rows.filter((r) => r.tokenAddress && !noStory(r) && r.sold > 50).sort((a, b) => b.sold - a.sold).slice(0, 9);
   const seen = {};
   const cands = [];
   for (const c of heldByInvested.concat(byInvested, bySold)) {
@@ -971,6 +975,7 @@ async function enrich(rows, balances, ADDR, store, diag) {
   }
   const rts = [], stes = [];
   await pool(cands.slice(0, 15), 3, async (c) => {
+    if (overBudget()) return;
     const d = { sym: c.sym, sold: Math.round(c.sold) };
     if (diag) diag.push(d);
     const cg = await cgToken(c.tokenAddress, store);
@@ -987,11 +992,13 @@ async function enrich(rows, balances, ADDR, store, diag) {
       return;
     }
     d.firstHeld = new Date(rp.firstTs).toISOString().slice(0, 10);
+    if (overBudget()) { d.skip = "time budget"; return; }
     const pk = await peakSince(c.tokenAddress, rp.firstTs, store);
     const peakPrice = pk ? pk.price : cg.ath;
     const peakTs = pk ? Math.max(pk.ts, rp.firstTs) : cg.athDate;
     d.peakSinceHeld = peakPrice;
     if (!peakTs) return;
+    if (overBudget()) { d.skip = "time budget"; return; }
     const rp2 = await replayBag(ADDR, c.tokenAddress, peakTs, peakTs - 7 * 864e5);
     if (!rp2 || rp2.balAtAth === null) {
       d.skip = "replay failed";
@@ -1127,7 +1134,8 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v18/" + addr;
+  const cacheKey = "v19/" + addr;
+  const deadline = Date.now() + 6500;
   const debug = url.searchParams.get("debug") === "1";
   const refresh = url.searchParams.get("refresh") === "1";
   if (store && !debug && !refresh) try {
@@ -1141,7 +1149,7 @@ var pnl_default = async (req) => {
   try {
     const diag = debug ? [] : null;
     const [{ rows: raw, capped }, balances] = await Promise.all([fetchAllProfitability(addr, key), fetchBalances(addr, key)]);
-    let rows = parseRows(raw);
+    let rows = parseRows(raw).filter((r) => !INFRA_ADDR[r.tokenAddress] && !INFRA_SYM[r.sym]);
     const suspects = rows.filter((r) => Math.abs(r.profit) > 25e4 && r.tokenAddress);
     if (suspects.length) {
       const verified = {};
@@ -1155,7 +1163,7 @@ var pnl_default = async (req) => {
     }
     if (diag) diag.push({ rowsAfterFilters: rows.length, rows: rows.slice(0, 30).map((r) => ({ sym: r.sym, profit: Math.round(r.profit), invested: Math.round(r.invested), sold: Math.round(r.sold) })) });
     const stats = summarize(rows, capped);
-    const extra = await enrich(rows, balances, addr, store, diag);
+    const extra = await enrich(rows, balances, addr, store, diag, deadline);
     stats.flags = Object.assign(rowFlags(rows, balances), extra.flags || {});
     stats.roundtrip = extra.roundtrip;
     stats.soldTooEarly = extra.soldTooEarly;
