@@ -775,18 +775,9 @@ var getStore = (input, options) => {
   );
 };
 
-// src/pnl.js
+// src/token.js
 var HEADERS = { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" };
-var CACHE_MS = 7 * 24 * 3600 * 1e3;
-var MORALIS = "https://deep-index.moralis.io/api/v2.2";
 var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
-var usd = (n) => "$" + Math.round(Math.abs(n)).toLocaleString("en-US");
-var signedUsd = (n) => (n < 0 ? "-" : "+") + usd(n);
-async function mfetch(path, key) {
-  const r = await fetch(MORALIS + path, { headers: { "X-API-Key": key, accept: "application/json" } });
-  if (!r.ok) throw new Error("moralis " + r.status);
-  return r.json();
-}
 async function cgToken(addr, store) {
   if (store) try {
     const c = await store.get("cg/" + addr, { type: "json" });
@@ -812,42 +803,6 @@ async function cgToken(addr, store) {
     } catch {
     }
     return v;
-  } catch {
-    return null;
-  }
-}
-async function replayBag(addr, contract, athTs, athTs2) {
-  try {
-    const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
-    const j = await r.json();
-    if (!j.result || !Array.isArray(j.result) || !j.result.length) return null;
-    let bal = 0n, peakBeforeAth = 0n, peakEver = 0n, balAtAth = null, balAtAth2 = null, dec = null, firstTs = null, nearOut = 0n;
-    const W = 7 * 864e5;
-    for (const t of j.result) {
-      if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
-      const ts = parseInt(t.timeStamp, 10) * 1e3;
-      if (firstTs === null) firstTs = ts;
-      if (athTs && balAtAth === null && ts > athTs) balAtAth = bal;
-      if (athTs2 && balAtAth2 === null && ts > athTs2) balAtAth2 = bal;
-      let v;
-      try {
-        v = BigInt(t.value || "0");
-      } catch {
-        continue;
-      }
-      if ((t.to || "").toLowerCase() === addr) bal += v;
-      else if ((t.from || "").toLowerCase() === addr) {
-        bal -= v;
-        if (athTs && Math.abs(ts - athTs) <= W) nearOut += v;
-      }
-      if (bal > peakEver) peakEver = bal;
-      if (athTs && ts <= athTs && bal > peakBeforeAth) peakBeforeAth = bal;
-    }
-    if (athTs && balAtAth === null) balAtAth = bal;
-    if (athTs2 && balAtAth2 === null) balAtAth2 = bal;
-    const d = dec === null || isNaN(dec) ? 18 : dec;
-    const f = (x) => Number(x) / Math.pow(10, d);
-    return { peakEver: f(peakEver), peakBeforeAth: f(peakBeforeAth), balAtAth: balAtAth === null ? null : f(balAtAth), balAtAth2: balAtAth2 === null ? null : f(balAtAth2), firstTs, nearOut: f(nearOut) };
   } catch {
     return null;
   }
@@ -888,290 +843,140 @@ async function peakSince(contract, fromTs, store) {
     return null;
   }
 }
-async function fetchAllProfitability(addr, key) {
-  let rows = [], cursor = null, pages = 0, capped = false;
-  do {
-    const q = "/wallets/" + addr + "/profitability?chain=avalanche" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : "");
-    const data = await mfetch(q, key);
-    const batch = data && (data.result || data.data) || [];
-    rows = rows.concat(batch);
-    cursor = data && data.cursor;
-    pages++;
-    if (pages >= 3 && cursor) {
-      capped = true;
-      break;
-    }
-  } while (cursor);
-  return { rows, capped };
-}
-async function fetchBalances(addr, key) {
+async function replay(addr, contract, refTs) {
   try {
-    const data = await mfetch("/wallets/" + addr + "/tokens?chain=avalanche", key);
-    const map = {};
-    for (const t of data && data.result || []) {
-      const a = (t.token_address || "").toLowerCase();
-      const tk = parseFloat(t.balance_formatted) || 0;
-      const usd2 = parseFloat(t.usd_value) || 0;
-      if (a && tk > 0) map[a] = { tk, usd: usd2 };
+    const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
+    const j = await r.json();
+    if (!j.result || !Array.isArray(j.result) || !j.result.length) return null;
+    let bal = 0n, peakBag = 0n, balAtRef = null, dec = null, firstTs = null, lastTs = null, transfers = 0;
+    for (const t of j.result) {
+      if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
+      const ts = parseInt(t.timeStamp, 10) * 1e3;
+      if (firstTs === null) firstTs = ts;
+      lastTs = ts;
+      if (refTs && balAtRef === null && ts > refTs) balAtRef = bal;
+      let v;
+      try {
+        v = BigInt(t.value || "0");
+      } catch {
+        continue;
+      }
+      if ((t.to || "").toLowerCase() === addr) bal += v;
+      else if ((t.from || "").toLowerCase() === addr) bal -= v;
+      if (bal > peakBag) peakBag = bal;
+      transfers++;
     }
-    return map;
+    if (refTs && balAtRef === null) balAtRef = bal;
+    const d = dec === null || isNaN(dec) ? 18 : dec;
+    const f = (x) => Number(x) / Math.pow(10, d);
+    return { firstTs, lastTs, transfers, peakBag: f(peakBag), balNow: f(bal), balAtRef: balAtRef === null ? null : f(balAtRef) };
   } catch {
-    return {};
+    return null;
   }
 }
-function parseRows(tokens) {
-  return (tokens || []).filter((t) => t && typeof t.realized_profit_usd !== "undefined").map((t) => {
-    const invested = parseFloat(t.total_usd_invested) || 0;
-    const sold = parseFloat(t.total_sold_usd) || 0;
-    const avgBuy = parseFloat(t.avg_buy_price_usd) || 0;
-    const avgSell = parseFloat(t.avg_sell_price_usd) || 0;
-    let boughtTk = parseFloat(t.total_tokens_bought) || 0;
-    let soldTk = parseFloat(t.total_tokens_sold) || 0;
-    if (!boughtTk && avgBuy > 0) boughtTk = invested / avgBuy;
-    if (!soldTk && avgSell > 0) soldTk = sold / avgSell;
-    return {
-      sym: (t.symbol || t.token_symbol || "").toUpperCase() || (t.token_address || "").slice(0, 8),
-      profit: parseFloat(t.realized_profit_usd) || 0,
-      invested,
-      sold,
-      boughtTk,
-      soldTk,
-      tokenAddress: (t.token_address || "").toLowerCase() || null
-    };
-  }).filter((r) => {
-    if (!isFinite(r.profit) || !isFinite(r.sold) || !isFinite(r.invested)) return false;
-    if (Math.abs(r.profit) > 1e9 || r.sold > 1e12 || r.invested > 1e12) return false;
-    if (r.profit > 0 && r.profit > r.sold * 1.05 + 100) return false;
-    return true;
-  });
-}
-async function pool(items, n, fn) {
-  let i = 0;
-  const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
-    while (i < items.length) {
-      const k = i++;
-      await fn(items[k]);
-    }
-  });
-  await Promise.all(workers);
-}
-async function enrich(rows, balances, ADDR, store, diag) {
-  const flags = {};
-  const heldByInvested = rows.filter((r) => r.tokenAddress && r.invested > 100 && balances[r.tokenAddress] && balances[r.tokenAddress].tk > 0).sort((a, b) => b.invested - a.invested).slice(0, 4);
-  const byInvested = rows.filter((r) => r.tokenAddress && r.invested > 100).sort((a, b) => b.invested - a.invested).slice(0, 4);
-  const bySold = rows.filter((r) => r.tokenAddress && r.sold > 50).sort((a, b) => b.sold - a.sold).slice(0, 9);
-  const seen = {};
-  const cands = [];
-  for (const c of heldByInvested.concat(byInvested, bySold)) {
-    if (!seen[c.tokenAddress]) {
-      seen[c.tokenAddress] = 1;
-      cands.push(c);
-    }
-  }
-  const rts = [], stes = [];
-  await pool(cands.slice(0, 13), 3, async (c) => {
-    const d = { sym: c.sym, sold: Math.round(c.sold) };
-    if (diag) diag.push(d);
-    const cg = await cgToken(c.tokenAddress, store);
-    if (!cg) {
-      d.skip = "no coingecko data";
-      return;
-    }
-    const heldTk = balances[c.tokenAddress] && balances[c.tokenAddress].tk || 0;
-    const wantsSte = c.soldTk > 0 && c.sold > 50;
-    if (heldTk <= 0 && !wantsSte) return;
-    const rp = await replayBag(ADDR, c.tokenAddress, null);
-    if (!rp || !rp.firstTs) {
-      d.skip = "replay failed";
-      return;
-    }
-    d.firstHeld = new Date(rp.firstTs).toISOString().slice(0, 10);
-    const pk = await peakSince(c.tokenAddress, rp.firstTs, store);
-    const peakPrice = pk ? pk.price : cg.ath;
-    const peakTs = pk ? pk.ts : cg.athDate;
-    d.peakSinceHeld = peakPrice;
-    if (!peakTs) return;
-    const rp2 = await replayBag(ADDR, c.tokenAddress, peakTs, peakTs - 7 * 864e5);
-    if (!rp2 || rp2.balAtAth === null) {
-      d.skip = "replay failed";
-      return;
-    }
-    const balAtPeak = rp2.balAtAth;
-    d.balAtPeak = balAtPeak;
-    const avgSell = c.soldTk > 0 ? c.sold / c.soldTk : 0;
-    if (heldTk > 0 && heldTk * peakPrice > 500 && cg.cur <= peakPrice * 0.1) {
-      if (!flags.captain) flags.captain = { sym: c.sym, downPct: Math.round((1 - cg.cur / peakPrice) * 100) };
-    }
-    if (c.invested > 100 && c.boughtTk > 0) {
-      const avgBuy = c.invested / c.boughtTk;
-      if (avgBuy >= peakPrice * 0.8 && avgBuy <= peakPrice * 1.5) {
-        if (!flags.boughtTop) flags.boughtTop = { sym: c.sym };
-      }
-    }
-    if (balAtPeak > 0 && !flags.roundVictim) {
-      const pv = balAtPeak * peakPrice;
-      for (const T of [1e4, 1e5, 1e6]) {
-        if (pv >= T * 0.95 && pv < T) {
-          flags.roundVictim = { sym: c.sym, peak: Math.round(pv), target: T };
-          break;
-        }
-      }
-    }
-    if (rp2.balAtAth2 !== null && rp2.balAtAth2 > 0 && rp2.peakBeforeAth > 0 && rp2.balAtAth2 >= rp2.peakBeforeAth * 0.5 && balAtPeak < rp2.peakBeforeAth * 0.1 && rp2.balAtAth2 * peakPrice > 500) {
-      if (!flags.soldTop) flags.soldTop = { sym: c.sym };
-    }
-    const exitRatio = rp2.peakBeforeAth > 0 ? balAtPeak / rp2.peakBeforeAth : balAtPeak > 0 ? 1 : 0;
-    d.exitRatio = +exitRatio.toFixed(3);
-    if (wantsSte && rp2.peakBeforeAth > 0 && exitRatio < 0.2) {
-      const exitedTk = rp2.peakBeforeAth - balAtPeak;
-      const proceeds = exitedTk * avgSell;
-      const athValue = exitedTk * peakPrice;
-      d.proceeds = Math.round(proceeds);
-      d.athValue = Math.round(athValue);
-      if (proceeds > 50 && athValue > 500 && athValue > proceeds * 3) {
-        d.steQualified = true;
-        if (athValue > proceeds * 5 && !flags.exitThere) flags.exitThere = { sym: c.sym, x: Math.round(athValue / Math.max(1, proceeds)) };
-        stes.push({ missed: athValue - proceeds, sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at peak" });
-      }
-    } else if (balAtPeak > 0) {
-      const peakValue = balAtPeak * peakPrice;
-      const heldPart = Math.min(heldTk, balAtPeak);
-      const soldAfter = Math.max(0, balAtPeak - heldPart);
-      const walked = soldAfter * avgSell + heldPart * cg.cur;
-      const rt = peakValue - walked;
-      d.peakValue = Math.round(peakValue);
-      d.walked = Math.round(walked);
-      if (peakValue > 500 && rt > 250 && rt / peakValue > 0.5) {
-        d.rtQualified = true;
-        const tail = soldAfter * avgSell > heldPart * cg.cur ? "walked with ~" + usd(walked) : usd(heldPart * cg.cur) + " now";
-        rts.push({ rt, sym: c.sym, line: "-" + usd(rt), sub: "$" + c.sym + " \xB7 " + usd(peakValue) + " at peak \xB7 " + tail });
-      }
-    }
-  });
-  rts.sort((a, b) => b.rt - a.rt);
-  stes.sort((a, b) => b.missed - a.missed);
-  const clean = (arr) => arr.slice(0, 5).map((x) => ({ line: x.line, sub: x.sub }));
-  if (rts[0]) {
-    const amt = rts[0].rt;
-    flags.fullCircle = { amt: Math.round(amt), tier: amt >= 1e6 ? 3 : amt >= 1e5 ? 2 : amt >= 1e4 ? 1 : 0 };
-    if (!flags.fullCircle.tier) delete flags.fullCircle;
-  }
-  return {
-    flags,
-    roundtrip: rts[0] ? { line: rts[0].line, sub: rts[0].sub } : null,
-    soldTooEarly: stes[0] ? { line: stes[0].line, sub: stes[0].sub } : null,
-    roundtrips: clean(rts),
-    soldEarly: clean(stes)
-  };
-}
-var STABLES = { "USDT": 1, "USDC": 1, "DAI": 1, "BUSD": 1, "FRAX": 1, "MIM": 1, "TUSD": 1, "USDP": 1, "UST": 1, "USDD": 1, "EURC": 1, "AUSD": 1, "USD1": 1, "USDT.E": 1, "USDC.E": 1, "DAI.E": 1 };
-function rowFlags(rows, balances) {
-  const f = {};
-  const n = rows.length;
-  const wins = rows.filter((r) => r.profit > 0), losses = rows.filter((r) => r.profit < 0);
-  const decided = wins.length + losses.length;
-  const total = rows.reduce((s, r) => s + r.profit, 0);
-  if (n >= 100) f.zoo = { n, tier: n >= 300 ? 2 : 1 };
-  const sl = rows.filter((r) => STABLES[r.sym] && r.profit < 0).sort((a, b) => a.profit - b.profit)[0];
-  if (sl) f.stableLoss = { sym: sl.sym, amt: Math.round(sl.profit) };
-  if (total > 0 && n >= 20) f.netUp = { total: Math.round(total) };
-  if (decided >= 20 && wins.length / decided > 0.6) f.sniper = { pct: Math.round(wins.length / decided * 100) };
-  if (decided >= 20 && wins.length / decided < 0.3) f.exitLiq = { pct: Math.round(wins.length / decided * 100) };
-  const c1 = rows.filter((r) => r.invested > 50 && r.profit / r.invested >= 10).sort((a, b) => b.profit / b.invested - a.profit / a.invested)[0];
-  if (c1) f.caughtOne = { sym: c1.sym, x: Math.round(c1.profit / c1.invested) + 1 };
-  const posSum = wins.reduce((s, r) => s + r.profit, 0);
-  if (wins.length >= 3 && posSum > 1e3 && wins[0] && rows.filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit)[0].profit / posSum > 0.9) {
-    const top = rows.filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit)[0];
-    f.oneTrick = { sym: top.sym, pct: Math.round(top.profit / posSum * 100) };
-  }
-  const bench = rows.filter((r) => r.profit > 1e3);
-  if (bench.length >= 5) f.deepBench = { n: bench.length };
-  if (rows.some((r) => r.sym === "TIME")) f.wonderland = true;
-  if (rows.some((r) => r.sym === "COQ")) f.coqVet = true;
-  if (rows.some((r) => r.sym === "ARENA")) f.arenaTraded = true;
-  const grave = Object.values(balances).filter((b) => b.usd > 0 && b.usd < 1).length;
-  if (grave >= 10) f.graveyard = { n: grave };
-  return f;
-}
-function summarize(rows, capped) {
-  const base = { tokens: capped ? rows.length + "+" : rows.length, biggestW: null, biggestL: null, topW: [], topL: [], summary: null };
-  if (!rows.length) return base;
-  const wins = rows.filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit);
-  const losses = rows.filter((r) => r.profit < 0).sort((a, b) => a.profit - b.profit);
-  const total = rows.reduce((s, r) => s + r.profit, 0);
-  const decided = wins.length + losses.length;
-  base.biggestW = wins[0] ? { line: signedUsd(wins[0].profit), sub: "$" + wins[0].sym } : null;
-  base.biggestL = losses[0] ? { line: signedUsd(losses[0].profit), sub: "$" + losses[0].sym } : null;
-  base.topW = wins.slice(0, 5).map((r) => ({ line: signedUsd(r.profit), sub: "$" + r.sym }));
-  base.topL = losses.slice(0, 5).map((r) => ({ line: signedUsd(r.profit), sub: "$" + r.sym }));
-  base.summary = {
-    total: signedUsd(total),
-    winrate: decided >= 3 ? Math.round(wins.length / decided * 100) + "%" : null,
-    wins: wins.length,
-    losses: losses.length
-  };
-  base.thin = decided < 3;
-  return base;
-}
-var pnl_default = async (req) => {
-  const key = process.env.MORALIS_KEY;
+var token_default = async (req) => {
   const url = new URL(req.url);
   const addr = (url.searchParams.get("addr") || "").toLowerCase();
-  if (!/^0x[0-9a-f]{40}$/.test(addr)) {
-    return new Response(JSON.stringify({ available: false, error: "bad address" }), { status: 400, headers: HEADERS });
+  const q = (url.searchParams.get("q") || "").trim();
+  if (!/^0x[0-9a-f]{40}$/.test(addr) || !q) {
+    return new Response(JSON.stringify({ error: "bad request" }), { status: 400, headers: HEADERS });
   }
-  if (!key) return new Response(JSON.stringify({ available: false }), { headers: HEADERS });
+  try {
+    const cs = getStore({ name: "claim", consistency: "strong" });
+    const c = await cs.get("c/" + addr, { type: "json" });
+    if (!c) return new Response(JSON.stringify({ locked: true }), { headers: HEADERS });
+  } catch {
+    return new Response(JSON.stringify({ locked: true }), { headers: HEADERS });
+  }
   let store = null;
   try {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v15/" + addr;
-  const debug = url.searchParams.get("debug") === "1";
-  const refresh = url.searchParams.get("refresh") === "1";
-  if (store && !debug && !refresh) try {
-    const cached = await store.get(cacheKey, { type: "json" });
-    if (cached) {
-      const fresh = Date.now() - cached.t < CACHE_MS;
-      return new Response(JSON.stringify({ available: true, stats: cached.stats, cached: true, stale: !fresh }), { headers: HEADERS });
-    }
+  let rowsIdx = [];
+  if (store) try {
+    const cached = await store.get("v15/" + addr, { type: "json" });
+    if (cached && cached.rowsIdx) rowsIdx = cached.rowsIdx;
   } catch {
   }
-  try {
-    const diag = debug ? [] : null;
-    const [{ rows: raw, capped }, balances] = await Promise.all([fetchAllProfitability(addr, key), fetchBalances(addr, key)]);
-    let rows = parseRows(raw);
-    const suspects = rows.filter((r) => Math.abs(r.profit) > 25e4 && r.tokenAddress);
-    if (suspects.length) {
-      const verified = {};
-      await pool(suspects, 3, async (r) => {
-        verified[r.tokenAddress] = !!await cgToken(r.tokenAddress, store);
-      });
-      rows = rows.filter((r) => Math.abs(r.profit) <= 25e4 || !r.tokenAddress || verified[r.tokenAddress]);
-      if (diag) suspects.forEach((r) => {
-        if (!verified[r.tokenAddress]) diag.push({ sym: r.sym, skip: "big claim, not cg-listed \u2014 dropped", profit: r.profit });
-      });
+  if (!rowsIdx.length) {
+    const site = (process.env.URL || "https://avax100m.xyz").replace(/\/$/, "");
+    try {
+      await fetch(site + "/api/pnl?addr=" + addr);
+    } catch {
     }
-    if (diag) diag.push({ rowsAfterFilters: rows.length, rows: rows.slice(0, 30).map((r) => ({ sym: r.sym, profit: Math.round(r.profit), invested: Math.round(r.invested), sold: Math.round(r.sold) })) });
-    const stats = summarize(rows, capped);
-    const extra = await enrich(rows, balances, addr, store, diag);
-    stats.flags = Object.assign(rowFlags(rows, balances), extra.flags || {});
-    stats.roundtrip = extra.roundtrip;
-    stats.soldTooEarly = extra.soldTooEarly;
-    stats.roundtrips = extra.roundtrips;
-    stats.soldEarly = extra.soldEarly;
-    const rowsIdx = rows.slice(0, 300).map((r) => ({ s: r.sym, a: r.tokenAddress, p: Math.round(r.profit), i: Math.round(r.invested), so: Math.round(r.sold), bt: r.boughtTk, st: r.soldTk }));
-    if (store && !debug) await store.set(cacheKey, JSON.stringify({ t: Date.now(), stats, rowsIdx })).catch(() => {
-    });
-    const out = { available: true, stats };
-    if (debug) out.diag = diag;
-    return new Response(JSON.stringify(out), { headers: HEADERS });
-  } catch (e) {
-    return new Response(JSON.stringify({ available: false }), { headers: HEADERS });
+    if (store) try {
+      const cached = await store.get("v15/" + addr, { type: "json" });
+      if (cached && cached.rowsIdx) rowsIdx = cached.rowsIdx;
+    } catch {
+    }
   }
+  let contract = null, row = null;
+  if (/^0x[0-9a-f]{40}$/i.test(q)) {
+    contract = q.toLowerCase();
+    row = rowsIdx.find((r) => r.a === contract) || null;
+  } else {
+    const qq = q.toUpperCase().replace(/^\$/, "");
+    const matches = rowsIdx.filter((r) => r.s === qq);
+    if (matches.length > 1) {
+      return new Response(JSON.stringify({ ambiguous: matches.map((m) => ({ sym: m.s, contract: m.a })) }), { headers: HEADERS });
+    }
+    if (matches.length === 1) {
+      row = matches[0];
+      contract = row.a;
+    }
+  }
+  if (!contract) {
+    return new Response(JSON.stringify({ none: true, q }), { headers: HEADERS });
+  }
+  const dk = "tok/" + addr + "/" + contract;
+  if (store) try {
+    const c = await store.get(dk, { type: "json" });
+    if (c && Date.now() - c.t < 7 * 24 * 3600 * 1e3) return new Response(JSON.stringify(c.d), { headers: HEADERS });
+  } catch {
+  }
+  const rp = await replay(addr, contract, null);
+  if (!rp) return new Response(JSON.stringify({ none: true, q }), { headers: HEADERS });
+  const cg = await cgToken(contract, store);
+  const pk = cg ? await peakSince(contract, rp.firstTs, store) : null;
+  const peakPrice = pk ? pk.price : cg ? cg.ath : null;
+  const peakTs = pk ? pk.ts : cg ? cg.athDate : null;
+  let verdict = null, balAtPeak = null;
+  if (peakTs) {
+    const rp2 = await replay(addr, contract, peakTs);
+    balAtPeak = rp2 ? rp2.balAtRef : null;
+    if (balAtPeak !== null && rp.peakBag > 0) {
+      const ratio = balAtPeak / rp.peakBag;
+      if (rp.balNow > 0 && ratio >= 0.5) verdict = "still aboard";
+      else if (ratio >= 0.5) verdict = "rode it down, then sold";
+      else verdict = "sold before the top";
+    }
+  }
+  const sym = row ? row.s : q.startsWith("0x") ? contract.slice(0, 8) : q.toUpperCase().replace(/^\$/, "");
+  const d = {
+    sym,
+    contract,
+    realized: row ? row.p : null,
+    invested: row ? row.i : null,
+    soldUsd: row ? row.so : null,
+    firstHeld: new Date(rp.firstTs).toISOString().slice(0, 10),
+    lastActivity: new Date(rp.lastTs).toISOString().slice(0, 10),
+    transfers: rp.transfers,
+    peakBagTk: rp.peakBag,
+    peakBagUsd: peakPrice ? Math.round(rp.peakBag * peakPrice) : null,
+    peakDate: peakTs ? new Date(peakTs).toISOString().slice(0, 10) : null,
+    holdingNow: rp.balNow > 0,
+    holdingUsd: rp.balNow > 0 && cg && cg.cur ? Math.round(rp.balNow * cg.cur) : null,
+    verdict
+  };
+  if (store) try {
+    await store.set(dk, JSON.stringify({ t: Date.now(), d }));
+  } catch {
+  }
+  return new Response(JSON.stringify(d), { headers: HEADERS });
 };
-var config = { path: "/api/pnl" };
+var config = { path: "/api/token" };
 export {
   config,
-  pnl_default as default
+  token_default as default
 };

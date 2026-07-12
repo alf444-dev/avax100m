@@ -228,7 +228,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       <button class="btn" id="copy-addr">copy address</button>
       <button class="btn" id="copy-link">copy page link</button>
       <button class="btn primary" id="share-x">share on x</button>
-      <button class="btn" id="claim-btn" style="display:none">claim this page</button>
+      <button class="btn" id="claim-btn" style="display:none" title="right-click for the hardware-wallet route">claim this page</button>
       <button class="btn" id="status-btn" style="display:none">customize</button>
       <span id="settled" style="display:none;font-size:10px;color:var(--dim);letter-spacing:.08em"></span>
     </div>
@@ -239,6 +239,8 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       <input id="cust-status" maxlength="100" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px;letter-spacing:.02em;outline:none" placeholder="never selling. ask my roundtrip.">
       <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">accent</div>
       <div id="cust-themes" style="display:flex;gap:8px"></div>
+      <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">top 8 \xB7 one address or name.avax per line</div>
+      <textarea id="cust-top8" rows="4" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:12px;padding:9px 11px;outline:none;resize:vertical" placeholder="gribbly.avax&#10;0x1234\u2026"></textarea>
       <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">badges on your card \xB7 pick up to 3</div>
       <div id="cust-badges" style="display:flex;flex-wrap:wrap;gap:6px"></div>
       <div style="display:flex;gap:10px;margin-top:16px">
@@ -260,6 +262,22 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       </div>
     </div>
     <div class="note">the chain has read your history. click the square. it is not your friend.</div>
+  </section>
+
+  <section id="lookup-sec" style="display:none">
+    <h2>token lookup</h2>
+    <div style="display:flex;gap:10px;max-width:560px">
+      <input id="tok-q" spellcheck="false" placeholder="$COQ or 0x contract" style="flex:1;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px;outline:none">
+      <button class="btn primary" id="tok-go">look up</button>
+    </div>
+    <div id="tok-out" style="margin-top:18px"></div>
+    <div class="note">your complete history with any token you've touched. or proof you never touched it.</div>
+  </section>
+
+  <section id="top8-sec" style="display:none">
+    <h2>top 8</h2>
+    <div id="top8-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px"></div>
+    <div class="note" id="top8-note"></div>
   </section>
 
   <section>
@@ -500,7 +518,7 @@ fetch(SITE+"/api/badges?addr="+D.addr).then(function(r){return r.json();}).then(
 /* ---- claim / status / oracle ---- */
 var CLAIMED=false;
 var THEMES={red:"#e84142",snow:"#f2f2f2",gold:"#d4a017",teal:"#2aa198",violet:"#7c5cff"};
-var CUR={status:"",theme:"red",cardBadges:[]};
+var CUR={status:"",theme:"red",cardBadges:[],top8:[]};
 function applyTheme(t){
   var c=THEMES[t]||THEMES.red;
   document.documentElement.style.setProperty("--red",c);
@@ -519,7 +537,11 @@ function claimInfo(){
       s.style.display="inline";
       document.getElementById("status-btn").style.display="inline-block";
       document.getElementById("oracle-sec").style.display="block";
+      document.getElementById("lookup-sec").style.display="block";
+      CUR.top8=c.top8||[];
+      renderTop8(CUR.top8, c.in8Count||0);
     } else {
+      if(c&&c.in8Count) renderTop8([], c.in8Count);
       document.getElementById("claim-btn").style.display="inline-block";
     }
   }).catch(function(){});
@@ -539,7 +561,25 @@ function withSig(buildMsg, done){
     });
   }).catch(function(){ cmsg("wallet connection declined.",1); });
 }
+var HWMODE=false;
+document.getElementById("claim-btn").addEventListener("contextmenu",function(e){ e.preventDefault(); hwClaim(); });
+function hwClaim(){
+  HWMODE=true;
+  fetch(SITE+"/api/claim?addr="+D.addr).then(function(r){return r.json();}).then(function(n){
+    if(!n||!n.nonce){ cmsg("couldn't get a code. try again.",1); return; }
+    cmsg("hardware route: send a 0 avax transaction from this wallet TO ITSELF with this code in the data field: 0x"+n.nonce+" \u2014 then click the claim button again to verify.");
+    document.getElementById("claim-btn").textContent="verify transaction";
+    document.getElementById("claim-btn").onclick=function(){
+      fetch(SITE+"/api/claim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({addr:D.addr,method:"tx"})})
+        .then(function(r){return r.json();}).then(function(j){
+          if(j&&j.ok){ cmsg("verified on-chain. page claimed."); location.reload(); }
+          else cmsg((j&&j.error)||"not found yet \u2014 give it a minute.",1);
+        });
+    };
+  });
+}
 document.getElementById("claim-btn").addEventListener("click",function(){
+  if(HWMODE) return;
   cmsg("one signature. costs nothing, moves nothing, proves everything.");
   withSig(function(nonce){ return "avax100m.xyz\\nclaim page for "+D.addr+"\\nnonce: "+nonce; }, function(sig){
     fetch(SITE+"/api/claim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({addr:D.addr,sig:sig})})
@@ -564,6 +604,7 @@ document.getElementById("status-btn").addEventListener("click",function(){
   var p=document.getElementById("cust");
   if(p.style.display==="block"){ p.style.display="none"; return; }
   document.getElementById("cust-status").value=CUR.status||"";
+  document.getElementById("cust-top8").value=(CUR.top8||[]).join("\\n");
   var th=document.getElementById("cust-themes");
   th.innerHTML=Object.keys(THEMES).map(function(k){
     return '<button data-t="'+k+'" title="'+k+'" style="width:30px;height:30px;background:'+THEMES[k]+';border:2px solid '+(k===CUR.theme?"var(--ink)":"transparent")+';cursor:pointer"></button>';
@@ -590,11 +631,13 @@ document.getElementById("cust-cancel").addEventListener("click",function(){ docu
 document.getElementById("cust-save").addEventListener("click",function(){
   var st=(document.getElementById("cust-status").value||"").toLowerCase().replace(/s+/g," ").trim().slice(0,100);
   var theme=CUR.theme, badges=CUR.cardBadges.join(",");
-  withSig(function(nonce){ return "avax100m.xyz\\nupdate profile for "+D.addr+"\\nstatus: "+st+"\\ntheme: "+theme+"\\nbadges: "+badges+"\\nnonce: "+nonce; }, function(sig){
-    fetch(SITE+"/api/claim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({addr:D.addr,sig:sig,action:"profile",status:st,theme:theme,cardBadges:badges})})
+  var top8=(document.getElementById("cust-top8").value||"").toLowerCase().split(/[\\n,]+/).map(function(x){return x.trim();}).filter(Boolean).slice(0,8).join(",");
+  withSig(function(nonce){ return "avax100m.xyz\\nupdate profile for "+D.addr+"\\nstatus: "+st+"\\ntheme: "+theme+"\\nbadges: "+badges+"\\ntop8: "+top8+"\\nnonce: "+nonce; }, function(sig){
+    fetch(SITE+"/api/claim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({addr:D.addr,sig:sig,action:"profile",status:st,theme:theme,cardBadges:badges,top8:top8})})
       .then(function(r){return r.json();}).then(function(j){
         if(j&&j.ok){
-          CUR.status=j.status||""; CUR.theme=j.theme||"red"; CUR.cardBadges=j.cardBadges||[];
+          CUR.status=j.status||""; CUR.theme=j.theme||"red"; CUR.cardBadges=j.cardBadges||[]; CUR.top8=j.top8||[];
+          renderTop8(CUR.top8, null);
           if(j.status){ document.getElementById("status-text").textContent=j.status; document.getElementById("status-line").style.display="block"; }
           else document.getElementById("status-line").style.display="none";
           applyTheme(CUR.theme);
@@ -612,7 +655,115 @@ document.getElementById("cust-save").addEventListener("click",function(){
   });
 });
 
-/* ---- the oracle ---- *//* ---- the oracle ---- */
+/* ---- token lookup ---- */
+function tokRow(k,v){ return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--faint);padding:7px 0;font-size:12px"><span style="color:var(--dim);letter-spacing:.08em;text-transform:uppercase;font-size:10px">'+k+'</span><span style="color:var(--ink)">'+v+'</span></div>'; }
+function tokLookup(){
+  var q=(document.getElementById("tok-q").value||"").trim();
+  if(!q) return;
+  var out=document.getElementById("tok-out");
+  out.innerHTML='<span style="font-size:11px;color:var(--dim)">interrogating the chain\u2026</span>';
+  fetch(SITE+"/api/token?addr="+D.addr+"&q="+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(t){
+    if(t.locked){ out.innerHTML='<span style="font-size:11px;color:var(--dim)">claim the page to use the lookup.</span>'; return; }
+    if(t.ambiguous){
+      out.innerHTML='<div style="font-size:11px;color:var(--dim);margin-bottom:8px">several tokens wear that symbol \u2014 pick the contract:</div>'
+        +t.ambiguous.map(function(m){return '<button class="btn" style="margin:0 6px 6px 0" onclick="document.getElementById(&quot;tok-q&quot;).value=&quot;'+m.contract+'&quot;;tokLookup()">$'+m.sym+' \xB7 '+m.contract.slice(0,10)+'\u2026</button>';}).join("");
+      return;
+    }
+    if(t.none){
+      out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:14px;color:var(--ink)">no history with '+(q.startsWith("0x")?q.slice(0,10)+"\u2026":q.toLowerCase())+'.</div><div style="font-size:11px;color:var(--dim);margin-top:6px">clean hands. the chain confirms you dodged this one.</div></div>';
+      return;
+    }
+    var rows="";
+    if(t.realized!==null) rows+=tokRow("realized p&l",(t.realized<0?"\u2212":"+")+"$"+Math.abs(t.realized).toLocaleString("en-US"));
+    if(t.invested!==null) rows+=tokRow("invested","$"+t.invested.toLocaleString("en-US"));
+    if(t.soldUsd!==null) rows+=tokRow("sold for","$"+t.soldUsd.toLocaleString("en-US"));
+    if(t.peakBagUsd!==null) rows+=tokRow("peak bag","$"+t.peakBagUsd.toLocaleString("en-US")+(t.peakDate?" \xB7 "+t.peakDate:""));
+    rows+=tokRow("first held",t.firstHeld);
+    rows+=tokRow("transfers",t.transfers);
+    rows+=tokRow("holding now",t.holdingNow?("yes"+(t.holdingUsd!==null?" \xB7 $"+t.holdingUsd.toLocaleString("en-US"):"")):"no");
+    if(t.verdict) rows+=tokRow("verdict",'<b style="color:var(--red)">'+t.verdict+'</b>');
+    out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:16px;font-weight:700;letter-spacing:.06em;margin-bottom:10px">$'+t.sym+'</div>'+rows+'</div>';
+  }).catch(function(){ out.innerHTML='<span style="font-size:11px;color:var(--red)">lookup failed. try again.</span>'; });
+}
+document.getElementById("tok-go").addEventListener("click",tokLookup);
+document.getElementById("tok-q").addEventListener("keydown",function(e){ if(e.key==="Enter") tokLookup(); });
+
+/* ---- top 8 render ---- */
+function renderTop8(list,in8){
+  var sec=document.getElementById("top8-sec");
+  if((!list||!list.length)&&!in8){ sec.style.display="none"; return; }
+  sec.style.display="block";
+  var g=document.getElementById("top8-grid");
+  g.innerHTML=(list||[]).map(function(e,i){
+    var label=e.indexOf(".avax")>-1?e:(e.slice(0,8)+"\u2026"+e.slice(-6));
+    var href=e.indexOf(".avax")>-1?"#":(SITE+"/w/"+e);
+    return '<a data-e="'+e+'" href="'+href+'" '+(href==="#"?'':'target="_blank" rel="noopener" ')+'style="border:1px solid var(--faint);padding:12px 14px;text-decoration:none;color:var(--ink);display:block"><span style="color:var(--red);font-size:10px;letter-spacing:.15em">#'+(i+1)+'</span><div style="font-size:12px;margin-top:5px;word-break:break-all">'+label+'</div></a>';
+  }).join("");
+  // resolve .avax entries to live links
+  g.querySelectorAll("a[href='#']").forEach(function(a){
+    var nm=a.getAttribute("data-e");
+    fetch(SITE+"/api/resolve?name="+encodeURIComponent(nm)).then(function(r){return r.json();}).then(function(j){
+      if(j&&j.addr){ a.href=SITE+"/w/"+j.addr; a.target="_blank"; a.rel="noopener"; }
+    }).catch(function(){});
+  });
+  document.getElementById("top8-note").textContent=(in8?("this wallet appears in "+in8+" top 8"+(in8>1?"s":"")+". "):"")+(list&&list.length?"chosen by the owner. unilateral, like the old days.":"");
+}
+
+/* ---- the oracle ---- *//* ---- token lookup ---- */
+function tokRow(k,v){ return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--faint);padding:7px 0;font-size:12px"><span style="color:var(--dim);letter-spacing:.08em;text-transform:uppercase;font-size:10px">'+k+'</span><span style="color:var(--ink)">'+v+'</span></div>'; }
+function tokLookup(){
+  var q=(document.getElementById("tok-q").value||"").trim();
+  if(!q) return;
+  var out=document.getElementById("tok-out");
+  out.innerHTML='<span style="font-size:11px;color:var(--dim)">interrogating the chain\u2026</span>';
+  fetch(SITE+"/api/token?addr="+D.addr+"&q="+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(t){
+    if(t.locked){ out.innerHTML='<span style="font-size:11px;color:var(--dim)">claim the page to use the lookup.</span>'; return; }
+    if(t.ambiguous){
+      out.innerHTML='<div style="font-size:11px;color:var(--dim);margin-bottom:8px">several tokens wear that symbol \u2014 pick the contract:</div>'
+        +t.ambiguous.map(function(m){return '<button class="btn" style="margin:0 6px 6px 0" onclick="document.getElementById(&quot;tok-q&quot;).value=&quot;'+m.contract+'&quot;;tokLookup()">$'+m.sym+' \xB7 '+m.contract.slice(0,10)+'\u2026</button>';}).join("");
+      return;
+    }
+    if(t.none){
+      out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:14px;color:var(--ink)">no history with '+(q.startsWith("0x")?q.slice(0,10)+"\u2026":q.toLowerCase())+'.</div><div style="font-size:11px;color:var(--dim);margin-top:6px">clean hands. the chain confirms you dodged this one.</div></div>';
+      return;
+    }
+    var rows="";
+    if(t.realized!==null) rows+=tokRow("realized p&l",(t.realized<0?"\u2212":"+")+"$"+Math.abs(t.realized).toLocaleString("en-US"));
+    if(t.invested!==null) rows+=tokRow("invested","$"+t.invested.toLocaleString("en-US"));
+    if(t.soldUsd!==null) rows+=tokRow("sold for","$"+t.soldUsd.toLocaleString("en-US"));
+    if(t.peakBagUsd!==null) rows+=tokRow("peak bag","$"+t.peakBagUsd.toLocaleString("en-US")+(t.peakDate?" \xB7 "+t.peakDate:""));
+    rows+=tokRow("first held",t.firstHeld);
+    rows+=tokRow("transfers",t.transfers);
+    rows+=tokRow("holding now",t.holdingNow?("yes"+(t.holdingUsd!==null?" \xB7 $"+t.holdingUsd.toLocaleString("en-US"):"")):"no");
+    if(t.verdict) rows+=tokRow("verdict",'<b style="color:var(--red)">'+t.verdict+'</b>');
+    out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:16px;font-weight:700;letter-spacing:.06em;margin-bottom:10px">$'+t.sym+'</div>'+rows+'</div>';
+  }).catch(function(){ out.innerHTML='<span style="font-size:11px;color:var(--red)">lookup failed. try again.</span>'; });
+}
+document.getElementById("tok-go").addEventListener("click",tokLookup);
+document.getElementById("tok-q").addEventListener("keydown",function(e){ if(e.key==="Enter") tokLookup(); });
+
+/* ---- top 8 render ---- */
+function renderTop8(list,in8){
+  var sec=document.getElementById("top8-sec");
+  if((!list||!list.length)&&!in8){ sec.style.display="none"; return; }
+  sec.style.display="block";
+  var g=document.getElementById("top8-grid");
+  g.innerHTML=(list||[]).map(function(e,i){
+    var label=e.indexOf(".avax")>-1?e:(e.slice(0,8)+"\u2026"+e.slice(-6));
+    var href=e.indexOf(".avax")>-1?"#":(SITE+"/w/"+e);
+    return '<a data-e="'+e+'" href="'+href+'" '+(href==="#"?'':'target="_blank" rel="noopener" ')+'style="border:1px solid var(--faint);padding:12px 14px;text-decoration:none;color:var(--ink);display:block"><span style="color:var(--red);font-size:10px;letter-spacing:.15em">#'+(i+1)+'</span><div style="font-size:12px;margin-top:5px;word-break:break-all">'+label+'</div></a>';
+  }).join("");
+  // resolve .avax entries to live links
+  g.querySelectorAll("a[href='#']").forEach(function(a){
+    var nm=a.getAttribute("data-e");
+    fetch(SITE+"/api/resolve?name="+encodeURIComponent(nm)).then(function(r){return r.json();}).then(function(j){
+      if(j&&j.addr){ a.href=SITE+"/w/"+j.addr; a.target="_blank"; a.rel="noopener"; }
+    }).catch(function(){});
+  });
+  document.getElementById("top8-note").textContent=(in8?("this wallet appears in "+in8+" top 8"+(in8>1?"s":"")+". "):"")+(list&&list.length?"chosen by the owner. unilateral, like the old days.":"");
+}
+
+/* ---- the oracle ---- */
 function oracleLines(){
   var L=[];
   var ids={}; (EARNED||[]).forEach(function(b){ids[b.id]=b;});

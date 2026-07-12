@@ -37682,6 +37682,7 @@ function storeOr() {
 var clean = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 var THEMES = { red: "#e84142", snow: "#f2f2f2", gold: "#d4a017", teal: "#2aa198", violet: "#7c5cff" };
 var cleanBadges = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9,]/g, "").split(",").filter(Boolean).slice(0, 3);
+var cleanTop8 = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9.,_-]/g, "").split(",").filter((x) => /^0x[0-9a-f]{40}$/.test(x) || /^[a-z0-9-_]+(\.[a-z0-9-_]+)*\.avax$/.test(x)).slice(0, 8);
 var BLOCKED = /nigg|fagg|kike|spic\b|chink|retard|rape|hitler/i;
 var URLISH = /(https?:|www\.|\.com|\.io|\.xyz|\.net|\.org|\.gg|\.fi|t\.me|discord)/i;
 function statusProblem(st) {
@@ -37709,7 +37710,12 @@ var claim_default = async (req) => {
     if (!/^0x[0-9a-f]{40}$/.test(addr)) return new Response(JSON.stringify({ error: "bad address" }), { status: 400, headers: HEADERS });
     if (url.searchParams.get("info") === "1") {
       const c = await store.get("c/" + addr, { type: "json" }).catch(() => null);
-      return new Response(JSON.stringify(c ? { claimed: true, settledAt: c.t, settledBlock: c.blk || null, status: c.status || null, theme: c.theme || "red", cardBadges: c.cardBadges || [] } : { claimed: false }), { headers: HEADERS });
+      let in8 = [];
+      try {
+        in8 = await store.get("in8/" + addr, { type: "json" }) || [];
+      } catch {
+      }
+      return new Response(JSON.stringify(c ? { claimed: true, settledAt: c.t, settledBlock: c.blk || null, status: c.status || null, theme: c.theme || "red", cardBadges: c.cardBadges || [], top8: c.top8 || [], in8Count: in8.length } : { claimed: false, in8Count: in8.length }), { headers: HEADERS });
     }
     const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16))).map((b) => b.toString(16).padStart(2, "0")).join("");
     await store.set("n/" + addr, JSON.stringify({ nonce, t: Date.now() })).catch(() => {
@@ -37739,7 +37745,7 @@ var claim_default = async (req) => {
     } else {
       const sig = body.sig;
       if (!sig) return new Response(JSON.stringify({ error: "missing signature" }), { status: 400, headers: HEADERS });
-      const msg = action === "profile" ? "avax100m.xyz\nupdate profile for " + addr + "\nstatus: " + clean(body.status) + "\ntheme: " + (THEMES[clean(body.theme)] ? clean(body.theme) : "red") + "\nbadges: " + cleanBadges(body.cardBadges).join(",") + "\nnonce: " + nrec.nonce : action === "status" ? "avax100m.xyz\nset status for " + addr + "\nstatus: " + clean(body.status) + "\nnonce: " + nrec.nonce : "avax100m.xyz\nclaim page for " + addr + "\nnonce: " + nrec.nonce;
+      const msg = action === "profile" ? "avax100m.xyz\nupdate profile for " + addr + "\nstatus: " + clean(body.status) + "\ntheme: " + (THEMES[clean(body.theme)] ? clean(body.theme) : "red") + "\nbadges: " + cleanBadges(body.cardBadges).join(",") + "\ntop8: " + cleanTop8(body.top8).join(",") + "\nnonce: " + nrec.nonce : action === "status" ? "avax100m.xyz\nset status for " + addr + "\nstatus: " + clean(body.status) + "\nnonce: " + nrec.nonce : "avax100m.xyz\nclaim page for " + addr + "\nnonce: " + nrec.nonce;
       let rec = null;
       try {
         rec = import_ethers.ethers.utils.verifyMessage(msg, sig).toLowerCase();
@@ -37760,9 +37766,24 @@ var claim_default = async (req) => {
       existing.status = st || null;
       existing.theme = THEMES[clean(body.theme)] ? clean(body.theme) : "red";
       existing.cardBadges = cleanBadges(body.cardBadges);
+      const newTop8 = cleanTop8(body.top8);
+      const oldTop8 = existing.top8 || [];
+      existing.top8 = newTop8;
       existing.profileT = Date.now();
       await store.set("c/" + addr, JSON.stringify(existing));
-      return new Response(JSON.stringify({ ok: true, status: existing.status, theme: existing.theme, cardBadges: existing.cardBadges }), { headers: HEADERS });
+      const removed = oldTop8.filter((x) => newTop8.indexOf(x) < 0 && x.startsWith("0x"));
+      const added = newTop8.filter((x) => oldTop8.indexOf(x) < 0 && x.startsWith("0x"));
+      for (const target of removed.concat(added)) {
+        try {
+          const key = "in8/" + target;
+          let list = await store.get(key, { type: "json" }) || [];
+          if (added.indexOf(target) > -1 && list.indexOf(addr) < 0) list.push(addr);
+          if (removed.indexOf(target) > -1) list = list.filter((x) => x !== addr);
+          await store.set(key, JSON.stringify(list.slice(0, 500)));
+        } catch {
+        }
+      }
+      return new Response(JSON.stringify({ ok: true, status: existing.status, theme: existing.theme, cardBadges: existing.cardBadges, top8: existing.top8 }), { headers: HEADERS });
     }
     if (action === "status") {
       const existing = await store.get("c/" + addr, { type: "json" }).catch(() => null);
