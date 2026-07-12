@@ -778,6 +778,8 @@ function oracleLines(){
   var rtSym=rt&&rt.sub?("$"+(rt.sub.split("\xB7")[0]||"").replace("$","").trim()):null;
   var steSym=ste?ste.line:null;
   var wSym=W?W.sub:null; var wUsd=W?W.line:null;
+  var bL=s.biggestL; var lSym=bL?bL.sub:null; var lUsd=bL?bL.line:null;
+  var sc=s.scan; var unscanned=sc?Math.max(0,sc.total-sc.depth):0;
   var toks=s.tokens||null;
   var year=new Date(D.ts||Date.now()).getUTCFullYear();
   function add(c,t){ if(c) L.push(t); }
@@ -814,6 +816,23 @@ function oracleLines(){
   add(ids.exitliq&&ids.zoo&&toks&&wr!==null, toks+" tokens, "+wr+"% winrate. quantity was never going to fix this.");
   add(ids.captain&&ids.netup&&rtSym, "net positive AND riding "+rtSym+" to zero. you contain multitudes. all of them bagholders.");
   add(ids.onetrick&&ids.stableloss&&wUsd, "you made "+wUsd+" on one coin and lost money on a dollar. the range is incredible.");
+  add(lSym&&lUsd, lUsd+" on "+lSym+". you memorized the entry. the chain memorized everything else.");
+  add(lSym&&wSym, "your biggest win and your biggest loss used the same strategy. sit with that.");
+  add(unscanned>0, unscanned+" tokens still unscanned. even the oracle hasn't seen the worst of it yet.");
+  add(sc&&unscanned===0&&sc.total>20, "fully scanned. "+sc.total+" tokens. no stone unturned. no dignity intact.");
+  add(wr!==null&&wr>=45&&wr<70, "winrate "+wr+"%. a coin flip with extra steps and worse fees.");
+  add(wr!==null&&wr<45&&!ids.exitliq, wr+"% winrate. slot machines pay better and at least they have lights.");
+  add(rtSym, "you rebuy "+rtSym+" every morning by choosing not to sell it. dollar cost denying.");
+  add(steSym, "you and "+steSym+" wanted different things. it wanted to pump. you wanted out at break-even.");
+  add(D.txs>5e3, (D.txs||0).toLocaleString("en-US")+" transactions. at this point the chain files you under infrastructure.");
+  add(ids.graveyard, "some wallets have bags. yours has headstones.");
+  add(ids.netup&&wr!==null, "up overall. the wins were skill, the losses were market conditions. of course they were.");
+  add(ids.firstlove, "your first token is still in there like a tattoo of an ex.");
+  add(ids.immigrant, "ethereum raised you. avalanche is just where you act out.");
+  add(ids.coq, "the chicken coin. your finest financial reasoning involved a bird.");
+  add(ids.boughttop, "the top is a lonely place. you keep it company.");
+  add(D.days&&D.days<365, "less than a year here and already this much history. pace yourself.");
+  add(year<=2021, "class of "+year+". tuition still being collected.");
   // always eligible
   L.push("the chain has seen everything you've done. it's not mad. it's disappointed.");
   L.push("you call it a strategy. the mempool calls it content.");
@@ -823,6 +842,16 @@ function oracleLines(){
   L.push("you don't have a portfolio. you have evidence.");
   L.push("day "+((D.days||0).toLocaleString("en-US"))+" on mainnet. the blocks kept coming. so did you. neither of you knows why.");
   L.push("you check this page more often than your positions. correct priorities, honestly.");
+  L.push("your best trade was closing the app. you never made it.");
+  L.push("conviction is holding. denial is also holding. the chart can't tell the difference and neither can you.");
+  L.push("your watchlist outperforms your wallet. it always will. it doesn't have you in it.");
+  L.push("one more trade and you're even. the oldest sentence on the blockchain.");
+  L.push("the dip you bought had a dip. that one also had a dip. it's dips the whole way down.");
+  L.push("you're not down bad. you're down consistently. there's craftsmanship in that.");
+  L.push("you sold the bottom with the same certainty you bought the top. at least you're consistent.");
+  L.push("somewhere a market maker knows your habits by heart. you fund their consistency.");
+  L.push("every wallet tells a story. yours is a cautionary one, told with total confidence.");
+  L.push("screenshot this page. one day you'll want proof you survived yourself.");
   return L;
 }
 var lastOracle=-1, lastLine="";
