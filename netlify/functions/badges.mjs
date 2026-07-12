@@ -979,6 +979,12 @@ var badges_default = async (req) => {
   if (f.wonderland) push("wonderland", 0, "held or traded <b>$TIME</b>. (9,9). no further questions.");
   if (f.coqVet) push("coq", 0, "traded <b>$COQ</b>. the memecoin spring left a mark.");
   if (era === "ARENA SUMMER" && f.arenaTraded) push("arena", 0, "arrived during <b>arena summer</b> with <b>$ARENA</b> in the history.");
+  try {
+    const cs = getStore("claim");
+    const c = cs ? await cs.get("c/" + addr, { type: "json" }) : null;
+    if (c) push("homesteader", 0, "claimed at block <b>#" + (c.blk ? c.blk.toLocaleString("en-US") : "?") + "</b> \u2014 before the milestone. settled ground.");
+  } catch {
+  }
   let counts = { total: 0, byId: {} };
   if (store) {
     try {

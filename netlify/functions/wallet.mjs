@@ -221,14 +221,33 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     <div class="eyebrow">avalanche c-chain \xB7 wallet profile</div>
     <h1>${esc(w.rank[1])}</h1>
     <div class="tagline">${esc(w.rank[2])}</div>
+    <div id="status-line" style="display:none;margin-top:20px;font-size:15px;color:var(--ink);letter-spacing:.02em">\u201C<span id="status-text"></span>\u201D</div>
     <div id="avvy" style="display:none;margin-top:24px;font-size:20px;font-weight:700;color:var(--ink);letter-spacing:.02em"></div>
     <div class="addrline">
       <span class="a">${esc(short)}</span>
       <button class="btn" id="copy-addr">copy address</button>
       <button class="btn" id="copy-link">copy page link</button>
       <button class="btn primary" id="share-x">share on x</button>
+      <button class="btn" id="claim-btn" style="display:none">claim this page</button>
+      <button class="btn" id="status-btn" style="display:none">set status</button>
+      <span id="settled" style="display:none;font-size:10px;color:var(--dim);letter-spacing:.08em"></span>
     </div>
+    <div id="claim-msg" style="display:none;font-size:11px;color:var(--dim);margin-top:10px;letter-spacing:.05em"></div>
   </div>
+
+  <section id="oracle-sec" style="display:none">
+    <h2>ask the chain</h2>
+    <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+      <button id="oracle" aria-label="ask the chain" style="width:72px;height:72px;background:var(--bg);border:1px solid var(--faint);cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none">
+        <span style="width:26px;height:26px;background:var(--red);display:block"></span>
+      </button>
+      <div style="flex:1;min-width:240px">
+        <div id="oracle-out" style="font-size:14px;color:var(--ink);letter-spacing:.02em;line-height:1.7;min-height:48px"></div>
+        <button class="btn" id="oracle-share" style="display:none;margin-top:10px">share the verdict</button>
+      </div>
+    </div>
+    <div class="note">the chain has read your history. click the square. it is not your friend.</div>
+  </section>
 
   <section>
     <h2>origin</h2>
@@ -408,9 +427,10 @@ wonderland:[[1,4,4,16,16,"i"],[3,12,11,7,11,"r"],[3,12,14,8,14,"r"]],
 coq:[[2,"7,10 9,5 11,10 13,5 15,10","r"],[0,7,10,10,8,"i"],[2,"17,12 21,14 17,16","i"],[0,13,12,2,2,"b"]],
 presale:[[1,5,3,14,18,"i"],[3,8,8,16,8,"i",1.5],[3,8,11,16,11,"i",1.5],[3,8,15,13,19,"r"],[3,13,15,8,19,"r"]],
 arena:[[1,4,4,16,16,"i"],[1,8,8,8,8,"i"],[0,11,11,2,2,"r"]],
-witness100m:[[4,"2,12 8,6 16,6 22,12 16,18 8,18 2,12","i"],[0,10,10,4,4,"r"]]
+witness100m:[[4,"2,12 8,6 16,6 22,12 16,18 8,18 2,12","i"],[0,10,10,4,4,"r"]],
+homesteader:[[1,4,10,16,10,"i"],[3,12,10,12,2,"i"],[2,"12,2 19,4 12,6","r"]]
 };
-var BNAMES={permafrost:"permafrost",furniture:"mainnet furniture",firstlove:"first love",allseasons:"all seasons",thousand:"thousand club",immigrant:"immigrant",registry:"on the registry",longwinter:"long winter veteran",netup:"net up",sniper:"sniper",caughtone:"caught one",soldtop:"sold the top",onetrick:"one trick pony",deepbench:"deep bench",fullcircle:"full circle",exitthere:"the exit was right there",boughttop:"bought the top",captain:"captain",graveyard:"graveyard keeper",zoo:"zoo keeper",exitliq:"exit liquidity",stableloss:"lost money on a stablecoin",spammagnet:"spam magnet",roundvictim:"round number victim",pangolin:"pangolin patriot",rush:"rush arrival",wonderland:"wonderland witness",coq:"coq era veteran",presale:"presale survivor",arena:"arena native",witness100m:"block 100m witness"};
+var BNAMES={permafrost:"permafrost",furniture:"mainnet furniture",firstlove:"first love",allseasons:"all seasons",thousand:"thousand club",immigrant:"immigrant",registry:"on the registry",longwinter:"long winter veteran",netup:"net up",sniper:"sniper",caughtone:"caught one",soldtop:"sold the top",onetrick:"one trick pony",deepbench:"deep bench",fullcircle:"full circle",exitthere:"the exit was right there",boughttop:"bought the top",captain:"captain",graveyard:"graveyard keeper",zoo:"zoo keeper",exitliq:"exit liquidity",stableloss:"lost money on a stablecoin",spammagnet:"spam magnet",roundvictim:"round number victim",pangolin:"pangolin patriot",rush:"rush arrival",wonderland:"wonderland witness",coq:"coq era veteran",presale:"presale survivor",arena:"arena native",witness100m:"block 100m witness",homesteader:"homesteader"};
 var ROMAN=["","i","ii","iii"];
 function svgFor(id){
   var ops=GLYPHS[id]; if(!ops) return "";
@@ -456,6 +476,132 @@ fetch(SITE+"/api/badges?addr="+D.addr).then(function(r){return r.json();}).then(
   }).join("");
   if(LAST_PNL) drawPnlCard(LAST_PNL);
 }).catch(function(){});
+
+/* ---- claim / status / oracle ---- */
+var CLAIMED=false;
+function claimInfo(){
+  fetch(SITE+"/api/claim?addr="+D.addr+"&info=1").then(function(r){return r.json();}).then(function(c){
+    CLAIMED=!!(c&&c.claimed);
+    if(CLAIMED){
+      if(c.status){ document.getElementById("status-text").textContent=c.status; document.getElementById("status-line").style.display="block"; }
+      var s=document.getElementById("settled");
+      s.textContent="settled "+new Date(c.settledAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}).toLowerCase()+(c.settledBlock?" \xB7 block #"+c.settledBlock.toLocaleString("en-US"):"");
+      s.style.display="inline";
+      document.getElementById("status-btn").style.display="inline-block";
+      document.getElementById("oracle-sec").style.display="block";
+    } else {
+      document.getElementById("claim-btn").style.display="inline-block";
+    }
+  }).catch(function(){});
+}
+claimInfo();
+function cmsg(t,err){ var m=document.getElementById("claim-msg"); m.textContent=t; m.style.color=err?"var(--red)":"var(--dim)"; m.style.display="block"; }
+function withSig(buildMsg, done){
+  if(!window.ethereum){ cmsg("no wallet detected. hardware-wallet route: ask on x @Alf444_ for the self-send flow.",1); return; }
+  window.ethereum.request({method:"eth_requestAccounts"}).then(function(accs){
+    var acc=(accs&&accs[0]||"").toLowerCase();
+    if(acc!==D.addr){ cmsg("connected wallet is "+acc.slice(0,8)+"\u2026 \u2014 this page belongs to "+D.addr.slice(0,8)+"\u2026. switch accounts.",1); return; }
+    fetch(SITE+"/api/claim?addr="+D.addr).then(function(r){return r.json();}).then(function(n){
+      if(!n||!n.nonce){ cmsg("couldn't get a nonce. try again.",1); return; }
+      var msg=buildMsg(n.nonce);
+      window.ethereum.request({method:"personal_sign",params:[msg,acc]}).then(function(sig){ done(sig); })
+        .catch(function(){ cmsg("signature declined. no signature, no ownership \u2014 that's the whole system.",1); });
+    });
+  }).catch(function(){ cmsg("wallet connection declined.",1); });
+}
+document.getElementById("claim-btn").addEventListener("click",function(){
+  cmsg("one signature. costs nothing, moves nothing, proves everything.");
+  withSig(function(nonce){ return "avax100m.xyz\\nclaim page for "+D.addr+"\\nnonce: "+nonce; }, function(sig){
+    fetch(SITE+"/api/claim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({addr:D.addr,sig:sig})})
+      .then(function(r){return r.json();}).then(function(j){
+        if(j&&j.ok){ cmsg("page claimed. settled at block #"+(j.settledBlock?j.settledBlock.toLocaleString("en-US"):"?")+"."); document.getElementById("claim-btn").style.display="none"; claimInfo(); }
+        else cmsg((j&&j.error)||"claim failed.",1);
+      });
+  });
+});
+document.getElementById("status-btn").addEventListener("click",function(){
+  var st=prompt("status (100 chars, lowercase, no links):");
+  if(!st) return;
+  st=st.toLowerCase().slice(0,100);
+  withSig(function(nonce){ return "avax100m.xyz\\nset status for "+D.addr+"\\nstatus: "+st.replace(/s+/g," ").trim()+"\\nnonce: "+nonce; }, function(sig){
+    fetch(SITE+"/api/claim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({addr:D.addr,sig:sig,action:"status",status:st})})
+      .then(function(r){return r.json();}).then(function(j){
+        if(j&&j.ok){ document.getElementById("status-text").textContent=j.status; document.getElementById("status-line").style.display="block"; cmsg("status set."); }
+        else cmsg((j&&j.error)||"rejected.",1);
+      });
+  });
+});
+
+/* ---- the oracle ---- */
+function oracleLines(){
+  var L=[];
+  var ids={}; (EARNED||[]).forEach(function(b){ids[b.id]=b;});
+  var s=LAST_PNL||{};
+  var sm=s.summary||{}; var fb=null;
+  var rt=s.roundtrip, ste=s.soldTooEarly, W=s.biggestW;
+  var wr=sm.winrate?parseInt(sm.winrate):null;
+  var rtSym=rt&&rt.sub?("$"+(rt.sub.split("\xB7")[0]||"").replace("$","").trim()):null;
+  var steSym=ste?ste.line:null;
+  var wSym=W?W.sub:null; var wUsd=W?W.line:null;
+  var toks=s.tokens||null;
+  var year=new Date(D.ts||Date.now()).getUTCFullYear();
+  function add(c,t){ if(c) L.push(t); }
+  add(ids.captain&&rt, "you watched "+(rt?rt.sub.split("\xB7")[1].trim():"the peak")+" become dust in real time and chose violence against yourself.");
+  add(ids.captain&&rtSym, "you didn't sell "+rtSym+" at the top. you won't sell it at the bottom. this is a hostage situation and you're both parties.");
+  add(ids.fullcircle, "diamond hands is a personality when you're up. you're not up.");
+  add(ste&&steSym, "you sold "+steSym+" early enough to watch the whole pump from outside. front row. no ticket.");
+  add(ste, "your patience lasted exactly until it mattered.");
+  add(ids.exitliq&&wr!==null, "winrate "+wr+"%. the market doesn't thank its liquidity providers, but it should.");
+  add(ids.exitliq, "you are the counterparty everyone prays for.");
+  add(ids.sniper&&wr!==null, wr+"% winrate. insufferable at dinner parties, probably.");
+  add(ids.onetrick&&wSym, wSym+" carried you like luggage.");
+  add(ids.onetrick, "one token made you. every trade since has been you trying to prove it wasn't luck. the ledger disagrees.");
+  add(ids.stableloss, "you lost money on a stablecoin. it has one job. you gave it a second one: humbling you.");
+  add(ids.zoo&&toks, toks+" tokens traded. at some point this stopped being investing and became collecting.");
+  add(ids.netup, "net positive. congratulations on beating an opponent that was yourself the whole time.");
+  add(ids.graveyard, "your wallet is a cemetery with a block explorer.");
+  add(ids.thousand&&D.txs, D.txs.toLocaleString("en-US")+" transactions. the gas alone could have been a position.");
+  add(ids.caughtone, "you caught a big one once. you'll be paying for that high for the rest of your life.");
+  add(ids.firstlove, "still holding your first token. that's not loyalty, that's a shrine.");
+  add(D.days>1400, "here since "+year+". survived everything except your own entries.");
+  add(ids.permafrost||D.days>1800, "og status: confirmed. og returns: pending.");
+  add(ids.wonderland, "(9,9). you trusted a man named daniele with your money and you would absolutely do it again.");
+  add(ids.coq, "you traded the chicken coin and you're still here explaining it to people.");
+  add(ids.boughttop, "your average entry is within 20% of the top. you don't buy dips. you provide them.");
+  add(ids.soldtop, "you actually sold a top once. statistically, that was someone else using your wallet.");
+  add(ids.spammagnet, "scammers airdrop you more consistently than your investments pay out.");
+  add(ids.roundvictim, "your bag died just short of the round number. the universe is not subtle with you.");
+  add(ids.immigrant, "you bridged from ethereum for the cheap gas and stayed for the emotional damage.");
+  add(ids.pangolin, "first swap on pangolin. early to everything except profit.");
+  add(ids.rush, "you arrived when they were paying people to be here. you stayed after they stopped. interesting choice.");
+  add(ids.arena, "arena summer. 1,800 tokens a day and you still picked wrong.");
+  add(ids.deepbench, "five tokens over a grand each. genuinely competent. this square is as confused as you are.");
+  add(ids.exitliq&&ids.zoo&&toks&&wr!==null, toks+" tokens, "+wr+"% winrate. quantity was never going to fix this.");
+  add(ids.captain&&ids.netup&&rtSym, "net positive AND riding "+rtSym+" to zero. you contain multitudes. all of them bagholders.");
+  add(ids.onetrick&&ids.stableloss&&wUsd, "you made "+wUsd+" on one coin and lost money on a dollar. the range is incredible.");
+  // always eligible
+  L.push("the chain has seen everything you've done. it's not mad. it's disappointed.");
+  L.push("you call it a strategy. the mempool calls it content.");
+  L.push("somewhere out there is the person who sold you every bag you hold. they think about you fondly.");
+  L.push("you've never been early. you've been first to be late.");
+  L.push("the blockchain is permanent. unfortunately, so is your entry price.");
+  L.push("you don't have a portfolio. you have evidence.");
+  L.push("day "+((D.days||0).toLocaleString("en-US"))+" on mainnet. the blocks kept coming. so did you. neither of you knows why.");
+  L.push("you check this page more often than your positions. correct priorities, honestly.");
+  return L;
+}
+var lastOracle=-1, lastLine="";
+document.getElementById("oracle").addEventListener("click",function(){
+  var L=oracleLines(); if(!L.length) return;
+  var i; do { i=Math.floor(Math.random()*L.length); } while(L.length>1 && i===lastOracle);
+  lastOracle=i; lastLine=L[i];
+  var out=document.getElementById("oracle-out"); out.textContent="";
+  var k=0; var t=setInterval(function(){ out.textContent=lastLine.slice(0,++k); if(k>=lastLine.length){ clearInterval(t); document.getElementById("oracle-share").style.display="inline-block"; } },14);
+});
+document.getElementById("oracle-share").addEventListener("click",function(){
+  var t='the chain read my wallet: "'+lastLine+'"';
+  window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(t)+"&url="+encodeURIComponent(PAGE),"_blank");
+});
 
 /* .avax reverse resolution */
 var AVVY_NAME = null;
