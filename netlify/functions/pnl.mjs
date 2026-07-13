@@ -530,6 +530,60 @@ function summarize(rows, capped) {
 var pnl_default = async (req) => {
   const key = process.env.MORALIS_KEY;
   const url = new URL(req.url);
+  if (url.searchParams.get("backfill") === "records") {
+    const pstore = getStore("pnl");
+    const rstore = getStore("records");
+    const state = await rstore.get("bf-cursor", { type: "json" }).catch(() => null);
+    if (state === "done") return new Response(JSON.stringify({ done: true, note: "backfill already complete" }), { headers: HEADERS });
+    const t0 = Date.now();
+    let scanned = 0, hits = 0, cur = state && state.c || void 0, timedOut = false;
+    const cands = /* @__PURE__ */ new Map();
+    const keep = { w: [], l: [], rt: [] };
+    const consider = (cat, v, a2) => {
+      keep[cat].push({ v, a2 });
+      keep[cat].sort((x, y) => cat === "l" ? x.v - y.v : y.v - x.v);
+      if (keep[cat].length > 6) keep[cat].pop();
+    };
+    outer: do {
+      const page = await pstore.list({ prefix: "v24/", cursor: cur });
+      for (const b of page.blobs || []) {
+        if (Date.now() - t0 > 3e3) {
+          timedOut = true;
+          break outer;
+        }
+        const a2 = b.key.slice(4);
+        if (!/^0x[0-9a-f]{40}$/.test(a2)) continue;
+        const cached = await pstore.get(b.key, { type: "json" }).catch(() => null);
+        if (!cached || !cached.stats) continue;
+        scanned++;
+        const rws = (cached.rowsIdx || []).map((r) => ({ profit: r.p, sym: r.s }));
+        const rts = cached.stats.roundtrips || [];
+        let isCand = false;
+        for (const r of rws) {
+          if (r.profit >= 1e3) { consider("w", r.profit, a2); isCand = true; break; }
+        }
+        for (const r of rws) {
+          if (r.profit <= -1e3) { consider("l", r.profit, a2); isCand = true; break; }
+        }
+        if (rts[0] && rts[0].rtUsd >= 1e3) { consider("rt", rts[0].rtUsd, a2); isCand = true; }
+        if (isCand) cands.set(a2, { rows: rws, extra: { roundtrips: rts } });
+      }
+      cur = page.cursor;
+    } while (cur);
+    const uniq = /* @__PURE__ */ new Set();
+    for (const cat of ["w", "l", "rt"]) keep[cat].forEach((x) => uniq.add(x.a2));
+    for (const a2 of uniq) {
+      const c = cands.get(a2);
+      if (!c) continue;
+      const hit = await updateRecords(a2, c.rows.sort((x, y) => y.profit - x.profit), c.extra);
+      if (hit) hits++;
+    }
+    if (timedOut) await rstore.set("bf-cursor", JSON.stringify({ c: cur || null })).catch(() => {
+    });
+    else await rstore.set("bf-cursor", JSON.stringify("done")).catch(() => {
+    });
+    return new Response(JSON.stringify({ done: !timedOut, scanned, candidates: uniq.size, boardHits: hits }), { headers: HEADERS });
+  }
   const addr = (url.searchParams.get("addr") || "").toLowerCase();
   if (!/^0x[0-9a-f]{40}$/.test(addr)) {
     return new Response(JSON.stringify({ available: false, error: "bad address" }), { status: 400, headers: HEADERS });
