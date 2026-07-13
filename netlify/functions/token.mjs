@@ -833,7 +833,7 @@ async function cgToken(addr, store) {
 }
 async function peakSince(contract, fromTs, store) {
   const bucket = Math.floor(fromTs / (30 * 864e5));
-  const ck = "peak/" + contract + "/" + bucket;
+  const ck = "peak2/" + contract + "/" + bucket;
   if (store) try {
     const c = await store.get(ck, { type: "json" });
     if (c && Date.now() - c.t < 7 * 24 * 3600 * 1e3) return c.v;
@@ -850,15 +850,22 @@ async function peakSince(contract, fromTs, store) {
     const j = await r.json();
     const prices = j && j.prices || [];
     if (!prices.length) return null;
-    let maxP = 0, maxTs = null;
-    for (const p of prices) {
-      if (p[1] > maxP) {
-        maxP = p[1];
-        maxTs = p[0];
+    let maxP = 0, maxTs = null, maxI = 0;
+    for (let i = 0; i < prices.length; i++) {
+      if (prices[i][1] > maxP) {
+        maxP = prices[i][1];
+        maxTs = prices[i][0];
+        maxI = i;
       }
     }
-    const v = maxP > 0 ? { price: maxP, ts: maxTs } : null;
-    if (store && v) try {
+    let series = prices;
+    if (prices.length > 500) {
+      const stride = Math.ceil(prices.length / 500);
+      series = prices.filter((_, i) => i % stride === 0 || i === maxI || i === prices.length - 1);
+    }
+    series = series.map((p) => [Math.round(p[0]), +p[1].toPrecision(6)]);
+    const v = { price: maxP, ts: maxTs, series };
+    if (store) try {
       await store.set(ck, JSON.stringify({ t: Date.now(), v }));
     } catch {
     }
@@ -867,37 +874,124 @@ async function peakSince(contract, fromTs, store) {
     return null;
   }
 }
-async function replay(addr, contract, refTs) {
+function peakBagOver(series, rows, addr) {
+  if (!series || !series.length || !rows || !rows.length) return null;
+  let dec = null;
+  const evs = [];
+  for (const t of rows) {
+    if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
+    let v;
+    try {
+      v = BigInt(t.value || "0");
+    } catch {
+      continue;
+    }
+    const ts = parseInt(t.timeStamp, 10) * 1e3;
+    if ((t.to || "").toLowerCase() === addr) evs.push([ts, v]);
+    else if ((t.from || "").toLowerCase() === addr) evs.push([ts, -v]);
+  }
+  const d = dec === null || isNaN(dec) ? 18 : dec;
+  const div = Math.pow(10, d);
+  let bal = 0n, i = 0, lastPrice = 0;
+  let best = { usd: 0, ts: null, bal: 0 };
+  const check = (ts) => {
+    const usd = Number(bal) / div * lastPrice;
+    if (usd > best.usd) best = { usd, ts, bal: Number(bal) / div };
+  };
+  for (const p of series) {
+    while (i < evs.length && evs[i][0] <= p[0]) {
+      bal += evs[i][1];
+      if (lastPrice > 0) check(evs[i][0]);
+      i++;
+    }
+    lastPrice = p[1];
+    check(p[0]);
+  }
+  while (i < evs.length) {
+    bal += evs[i][1];
+    check(evs[i][0]);
+    i++;
+  }
+  return best.ts ? best : null;
+}
+async function fetchTokenTx(addr, contract) {
   try {
     const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
     const j = await r.json();
     if (!j.result || !Array.isArray(j.result) || !j.result.length) return null;
-    let bal = 0n, peakBag = 0n, peakBeforeRef = 0n, balAtRef = null, dec = null, firstTs = null, lastTs = null, transfers = 0;
-    for (const t of j.result) {
-      if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
-      const ts = parseInt(t.timeStamp, 10) * 1e3;
-      if (firstTs === null) firstTs = ts;
-      lastTs = ts;
-      if (refTs && balAtRef === null && ts > refTs) balAtRef = bal;
-      let v;
-      try {
-        v = BigInt(t.value || "0");
-      } catch {
-        continue;
-      }
-      if ((t.to || "").toLowerCase() === addr) bal += v;
-      else if ((t.from || "").toLowerCase() === addr) bal -= v;
-      if (bal > peakBag) peakBag = bal;
-      if (refTs && ts <= refTs && bal > peakBeforeRef) peakBeforeRef = bal;
-      transfers++;
-    }
-    if (refTs && balAtRef === null) balAtRef = bal;
-    const d = dec === null || isNaN(dec) ? 18 : dec;
-    const f = (x) => Number(x) / Math.pow(10, d);
-    return { firstTs, lastTs, transfers, peakBag: f(peakBag), peakBeforeRef: f(peakBeforeRef), balNow: f(bal), balAtRef: balAtRef === null ? null : f(balAtRef) };
+    return j.result;
   } catch {
     return null;
   }
+}
+async function fetchWalletTx(addr) {
+  try {
+    const r = await fetch(RS + "?module=account&action=tokentx&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
+    const j = await r.json();
+    if (!j.result || !Array.isArray(j.result)) return null;
+    return j.result;
+  } catch {
+    return null;
+  }
+}
+function foldTok(rows, addr, refTs) {
+  if (!rows || !rows.length) return null;
+  let bal = 0n, peakBag = 0n, peakBeforeRef = 0n, balAtRef = null, dec = null, firstTs = null, lastTs = null, transfers = 0;
+  for (const t of rows) {
+    if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
+    const ts = parseInt(t.timeStamp, 10) * 1e3;
+    if (firstTs === null) firstTs = ts;
+    lastTs = ts;
+    if (refTs && balAtRef === null && ts > refTs) balAtRef = bal;
+    let v;
+    try {
+      v = BigInt(t.value || "0");
+    } catch {
+      continue;
+    }
+    if ((t.to || "").toLowerCase() === addr) bal += v;
+    else if ((t.from || "").toLowerCase() === addr) bal -= v;
+    if (bal > peakBag) peakBag = bal;
+    if (refTs && ts <= refTs && bal > peakBeforeRef) peakBeforeRef = bal;
+    transfers++;
+  }
+  if (refTs && balAtRef === null) balAtRef = bal;
+  const d = dec === null || isNaN(dec) ? 18 : dec;
+  const f = (x) => Number(x) / Math.pow(10, d);
+  return { firstTs, lastTs, transfers, peakBag: f(peakBag), peakBeforeRef: f(peakBeforeRef), balNow: f(bal), balAtRef: balAtRef === null ? null : f(balAtRef) };
+}
+function classifyLp(all, targetRows, contract, addr) {
+  const map = {};
+  for (const x of all) (map[x.hash] = map[x.hash] || []).push(x);
+  const isLpSym = (sy) => /^(JLP|PGL|ULP)$|(^|[^A-Z])LP([^A-Z]|$)/i.test(sy || "");
+  const inCp = {}, outCp = {};
+  for (const x of targetRows) {
+    if ((x.to || "").toLowerCase() === addr) inCp[(x.from || "").toLowerCase()] = 1;
+    else if ((x.from || "").toLowerCase() === addr) outCp[(x.to || "").toLowerCase()] = 1;
+  }
+  let dec = null;
+  const out = { adds: 0, removes: 0, inSwap: 0, inXfer: 0, inLp: 0, outSwap: 0, outXfer: 0, outLp: 0 };
+  for (const x of targetRows) {
+    if (dec === null && x.tokenDecimal) dec = parseInt(x.tokenDecimal, 10);
+    const amt = Number(x.value || "0") / Math.pow(10, dec === null || isNaN(dec) ? 18 : dec);
+    const sibs = (map[x.hash] || []).filter((y) => (y.contractAddress || "").toLowerCase() !== contract);
+    const inbound = (x.to || "").toLowerCase() === addr;
+    const cp = inbound ? (x.from || "").toLowerCase() : (x.to || "").toLowerCase();
+    const poolish = inCp[cp] && outCp[cp];
+    const lpIn = sibs.some((y) => isLpSym(y.tokenSymbol) && (y.to || "").toLowerCase() === addr);
+    const lpOut = sibs.some((y) => isLpSym(y.tokenSymbol) && (y.from || "").toLowerCase() === addr);
+    if (!inbound && lpIn) {
+      out.adds++;
+      out.outLp += amt;
+    } else if (inbound && lpOut) {
+      out.removes++;
+      out.inLp += amt;
+    } else if (inbound && (sibs.some((y) => (y.from || "").toLowerCase() === addr) || poolish)) out.inSwap += amt;
+    else if (!inbound && (sibs.some((y) => (y.to || "").toLowerCase() === addr) || poolish)) out.outSwap += amt;
+    else if (inbound) out.inXfer += amt;
+    else out.outXfer += amt;
+  }
+  return out;
 }
 var token_default = async (req) => {
   const url = new URL(req.url);
@@ -909,7 +1003,7 @@ var token_default = async (req) => {
   const store = storeOr("pnl");
   let rowsIdx = [];
   if (store) try {
-    const cached = await store.get("v21/" + addr, { type: "json" });
+    const cached = await store.get("v22/" + addr, { type: "json" });
     if (cached && cached.rowsIdx) rowsIdx = cached.rowsIdx;
   } catch {
   }
@@ -920,7 +1014,7 @@ var token_default = async (req) => {
     } catch {
     }
     if (store) try {
-      const cached = await store.get("v21/" + addr, { type: "json" });
+      const cached = await store.get("v22/" + addr, { type: "json" });
       if (cached && cached.rowsIdx) rowsIdx = cached.rowsIdx;
     } catch {
     }
@@ -943,14 +1037,19 @@ var token_default = async (req) => {
   if (!contract) {
     return new Response(JSON.stringify({ none: true, q }), { headers: HEADERS });
   }
-  const dk = "tok2/" + addr + "/" + contract;
+  const dk = "tok3/" + addr + "/" + contract;
   if (store) try {
     const c = await store.get(dk, { type: "json" });
     if (c && Date.now() - c.t < 7 * 24 * 3600 * 1e3) return new Response(JSON.stringify(c.d), { headers: HEADERS });
   } catch {
   }
-  const rp = await replay(addr, contract, null);
+  const all = await fetchWalletTx(addr);
+  const truncated = !!(all && all.length >= 9999);
+  let targetRows = all && !truncated ? all.filter((x) => (x.contractAddress || "").toLowerCase() === contract) : null;
+  if (!targetRows || !targetRows.length) targetRows = await fetchTokenTx(addr, contract);
+  const rp = foldTok(targetRows, addr, null);
   if (!rp) return new Response(JSON.stringify({ none: true, q }), { headers: HEADERS });
+  const lp = all && !truncated && targetRows ? classifyLp(all, targetRows, contract, addr) : null;
   const cg = await cgToken(contract, store);
   const pk = cg ? await peakSince(contract, rp.firstTs, store) : null;
   const peakPrice = pk ? pk.price : cg ? cg.ath : null;
@@ -958,7 +1057,7 @@ var token_default = async (req) => {
   const peakTs = peakTs0 ? Math.max(peakTs0, rp.firstTs) : null;
   let verdict = null, balAtPeak = null;
   if (peakTs) {
-    const rp2 = await replay(addr, contract, peakTs);
+    const rp2 = foldTok(targetRows, addr, peakTs);
     balAtPeak = rp2 ? rp2.balAtRef : null;
     if (balAtPeak !== null && rp.peakBag > 0) {
       const ratio = balAtPeak / rp.peakBag;
@@ -967,13 +1066,18 @@ var token_default = async (req) => {
       else verdict = "sold before the top";
     }
   }
+  const truePk = pk && pk.series ? peakBagOver(pk.series, targetRows, addr) : null;
+  if (lp && verdict && verdict !== "still aboard") {
+    const totalIn = lp.inSwap + lp.inXfer + lp.inLp;
+    if (totalIn > 0 && (lp.inXfer + lp.inLp) / totalIn >= 0.8 && peakTs && peakTs - rp.firstTs < 7 * 864e5) verdict = "bag arrived after the party";
+  }
   let updated = null;
   const NO_STORY = { "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7": 1 };
   const NO_STORY_SYM = { "WAVAX": 1, "USDT": 1, "USDC": 1, "DAI": 1, "MIM": 1, "FRAX": 1, "USDT.E": 1, "USDC.E": 1, "DAI.E": 1, "BUSD": 1, "TUSD": 1, "UST": 1, "USDD": 1, "EURC": 1, "AUSD": 1, "USD1": 1, "USDP": 1 };
   const infraTok = NO_STORY[contract] || (row && NO_STORY_SYM[(row.s || "").toUpperCase()]);
   if (!infraTok && store && peakPrice && peakTs && balAtPeak !== null) {
     try {
-      const cached = await store.get("v21/" + addr, { type: "json" });
+      const cached = await store.get("v22/" + addr, { type: "json" });
       if (cached && cached.stats) {
         const st2 = cached.stats;
         const avgSell = row && row.st > 0 ? row.so / row.st : 0;
@@ -983,7 +1087,8 @@ var token_default = async (req) => {
         const rp0 = rp;
         const exitRatio = rp0.peakBag > 0 ? balAtPeak / rp0.peakBag : 1;
         if (exitRatio >= 0.2 && balAtPeak > 0) {
-          const peakValue = balAtPeak * peakPrice;
+          const pBal2 = truePk ? truePk.bal : balAtPeak;
+          const peakValue = truePk ? truePk.usd : balAtPeak * peakPrice;
           const heldPart = Math.min(rp0.balNow, balAtPeak);
           const soldAfter = Math.max(0, balAtPeak - heldPart);
           const walked = soldAfter * avgSell + heldPart * cur;
@@ -1014,7 +1119,7 @@ var token_default = async (req) => {
           }
         }
         if (updated) {
-          await store.set("v21/" + addr, JSON.stringify(cached)).catch(() => {
+          await store.set("v22/" + addr, JSON.stringify(cached)).catch(() => {
           });
           try {
             const bs = storeOr("badges");
@@ -1037,12 +1142,15 @@ var token_default = async (req) => {
     lastActivity: new Date(rp.lastTs).toISOString().slice(0, 10),
     transfers: rp.transfers,
     peakBagTk: rp.peakBag,
-    peakBagUsd: peakPrice ? Math.round(rp.peakBag * peakPrice) : null,
-    peakDate: peakTs ? new Date(peakTs).toISOString().slice(0, 10) : null,
+    peakBagUsd: truePk ? Math.round(truePk.usd) : peakPrice ? Math.round(rp.peakBag * peakPrice) : null,
+    peakDate: truePk ? new Date(truePk.ts).toISOString().slice(0, 10) : peakTs ? new Date(peakTs).toISOString().slice(0, 10) : null,
     holdingNow: rp.balNow > 0,
     holdingUsd: rp.balNow > 0 && cg && cg.cur ? Math.round(rp.balNow * cg.cur) : null,
     verdict,
-    updated
+    updated,
+    lp: lp ? { adds: lp.adds, removes: lp.removes } : null,
+    recvTk: lp && lp.inXfer > 0 ? Math.round(lp.inXfer) : null,
+    truncated
   };
   if (store) try {
     await store.set(dk, JSON.stringify({ t: Date.now(), d }));

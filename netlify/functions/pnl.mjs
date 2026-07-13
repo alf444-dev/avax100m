@@ -862,7 +862,7 @@ async function replayBag(addr, contract, athTs, athTs2) {
 }
 async function peakSince(contract, fromTs, store) {
   const bucket = Math.floor(fromTs / (30 * 864e5));
-  const ck = "peak/" + contract + "/" + bucket;
+  const ck = "peak2/" + contract + "/" + bucket;
   if (store) try {
     const c = await store.get(ck, { type: "json" });
     if (c && Date.now() - c.t < 7 * 24 * 3600 * 1e3) return c.v;
@@ -879,15 +879,22 @@ async function peakSince(contract, fromTs, store) {
     const j = await r.json();
     const prices = j && j.prices || [];
     if (!prices.length) return null;
-    let maxP = 0, maxTs = null;
-    for (const p of prices) {
-      if (p[1] > maxP) {
-        maxP = p[1];
-        maxTs = p[0];
+    let maxP = 0, maxTs = null, maxI = 0;
+    for (let i = 0; i < prices.length; i++) {
+      if (prices[i][1] > maxP) {
+        maxP = prices[i][1];
+        maxTs = prices[i][0];
+        maxI = i;
       }
     }
-    const v = maxP > 0 ? { price: maxP, ts: maxTs } : null;
-    if (store && v) try {
+    let series = prices;
+    if (prices.length > 500) {
+      const stride = Math.ceil(prices.length / 500);
+      series = prices.filter((_, i) => i % stride === 0 || i === maxI || i === prices.length - 1);
+    }
+    series = series.map((p) => [Math.round(p[0]), +p[1].toPrecision(6)]);
+    const v = { price: maxP, ts: maxTs, series };
+    if (store) try {
       await store.set(ck, JSON.stringify({ t: Date.now(), v }));
     } catch {
     }
@@ -895,6 +902,46 @@ async function peakSince(contract, fromTs, store) {
   } catch {
     return null;
   }
+}
+function peakBagOver(series, rows, addr) {
+  if (!series || !series.length || !rows || !rows.length) return null;
+  let dec = null;
+  const evs = [];
+  for (const t of rows) {
+    if (dec === null && t.tokenDecimal) dec = parseInt(t.tokenDecimal, 10);
+    let v;
+    try {
+      v = BigInt(t.value || "0");
+    } catch {
+      continue;
+    }
+    const ts = parseInt(t.timeStamp, 10) * 1e3;
+    if ((t.to || "").toLowerCase() === addr) evs.push([ts, v]);
+    else if ((t.from || "").toLowerCase() === addr) evs.push([ts, -v]);
+  }
+  const d = dec === null || isNaN(dec) ? 18 : dec;
+  const div = Math.pow(10, d);
+  let bal = 0n, i = 0, lastPrice = 0;
+  let best = { usd: 0, ts: null, bal: 0 };
+  const check = (ts) => {
+    const usd = Number(bal) / div * lastPrice;
+    if (usd > best.usd) best = { usd, ts, bal: Number(bal) / div };
+  };
+  for (const p of series) {
+    while (i < evs.length && evs[i][0] <= p[0]) {
+      bal += evs[i][1];
+      if (lastPrice > 0) check(evs[i][0]);
+      i++;
+    }
+    lastPrice = p[1];
+    check(p[0]);
+  }
+  while (i < evs.length) {
+    bal += evs[i][1];
+    check(evs[i][0]);
+    i++;
+  }
+  return best.ts ? best : null;
 }
 async function fetchAllProfitability(addr, key) {
   let rows = [], cursor = null, pages = 0, capped = false;
@@ -1002,7 +1049,7 @@ async function enrich(rows, balances, ADDR, store, diag, deadline, depth) {
   await pool(cands, 3, async (c) => {
     const d = { sym: c.sym, sold: Math.round(c.sold) };
     if (diag) diag.push(d);
-    const ck = "cand/v1/" + ADDR + "/" + c.tokenAddress;
+    const ck = "cand/v2/" + ADDR + "/" + c.tokenAddress;
     if (store) try {
       const hit = await store.get(ck, { type: "json" });
       if (hit && Date.now() - hit.t < 7 * 24 * 3600 * 1e3) {
@@ -1058,7 +1105,9 @@ async function enrich(rows, balances, ADDR, store, diag, deadline, depth) {
       return;
     }
     const balAtPeak = rp2.balAtAth;
+    const truePk = pk && pk.series ? peakBagOver(pk.series, transfers, ADDR) : null;
     d.balAtPeak = balAtPeak;
+    if (truePk) d.truePeakUsd = Math.round(truePk.usd);
     const avgSell = c.soldTk > 0 ? c.sold / c.soldTk : 0;
     if (heldTk > 0 && heldTk * peakPrice > 500 && cg.cur <= peakPrice * 0.1) {
       out.flags.captain = { sym: c.sym, downPct: Math.round((1 - cg.cur / peakPrice) * 100) };
@@ -1069,8 +1118,8 @@ async function enrich(rows, balances, ADDR, store, diag, deadline, depth) {
         out.flags.boughtTop = { sym: c.sym };
       }
     }
-    if (balAtPeak > 0) {
-      const pv = balAtPeak * peakPrice;
+    if (balAtPeak > 0 || truePk) {
+      const pv = truePk ? truePk.usd : balAtPeak * peakPrice;
       for (const T of [1e4, 1e5, 1e6]) {
         if (pv >= T * 0.95 && pv < T) {
           out.flags.roundVictim = { sym: c.sym, peak: Math.round(pv), target: T };
@@ -1095,10 +1144,11 @@ async function enrich(rows, balances, ADDR, store, diag, deadline, depth) {
         if (athValue > proceeds * 5) out.flags.exitThere = { sym: c.sym, x: Math.round(athValue / Math.max(1, proceeds)) };
         out.ste = { missed: athValue - proceeds, missedUsd: Math.round(athValue - proceeds), sym: c.sym, line: "$" + c.sym, sub: "sold for ~" + usd(proceeds) + " \xB7 " + usd(athValue) + " at peak" };
       }
-    } else if (balAtPeak > 0) {
-      const peakValue = balAtPeak * peakPrice;
-      const heldPart = Math.min(heldTk, balAtPeak);
-      const soldAfter = Math.max(0, balAtPeak - heldPart);
+    } else if (balAtPeak > 0 || truePk && truePk.bal > 0) {
+      const pBal = truePk ? truePk.bal : balAtPeak;
+      const peakValue = truePk ? truePk.usd : balAtPeak * peakPrice;
+      const heldPart = Math.min(heldTk, pBal);
+      const soldAfter = Math.max(0, pBal - heldPart);
       const walked = soldAfter * avgSell + heldPart * cg.cur;
       const rt = peakValue - walked;
       d.peakValue = Math.round(peakValue);
@@ -1190,7 +1240,7 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v21/" + addr;
+  const cacheKey = "v22/" + addr;
   const deadline = Date.now() + 6500;
   const debug = url.searchParams.get("debug") === "1";
   const deeper = url.searchParams.get("deeper") === "1";
