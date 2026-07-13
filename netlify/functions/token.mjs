@@ -1149,8 +1149,9 @@ var token_default = async (req) => {
       lpGotUsd = Math.round((gw || 0) + lp.gotStable) || null;
     }
   }
-  if (lp && verdict && lpNetTk !== null && lpNetTk > 0 && lpNetTk > lp.outSwap && verdict !== "still aboard" && verdict !== "bag arrived after the party") {
-    verdict = "never sold. the pool sold it for you.";
+  if (lp && lpNetTk !== null && lpNetTk > 0 && lpNetTk > lp.outSwap && verdict !== "bag arrived after the party") {
+    const mostlyGone = rp.peakBag > 0 && lpNetTk >= rp.peakBag * 0.5;
+    if (verdict !== "still aboard" || mostlyGone) verdict = "never sold. the pool sold it for you.";
   }
   if (lp && verdict && verdict !== "still aboard") {
     const totalIn = lp.inSwap + lp.inXfer + lp.inLp;
