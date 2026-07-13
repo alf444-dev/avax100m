@@ -491,6 +491,7 @@
       return censusRow(n, c.ranks[n]||0, maxR);
     }).join("");
     var moves = Object.keys(c.moves).map(function(k){return [k, c.moves[k]];})
+      .filter(function(m){return m[0]!=="other";})
       .sort(function(a,b){return b[1]-a[1];}).slice(0,10);
     var maxM = moves.length ? moves[0][1] : 0;
     document.getElementById("c-moves").innerHTML = moves.map(function(m){
