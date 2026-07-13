@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /admin.html
+Disallow: /api/admin
 
 Sitemap: https://avax100m.xyz/sitemap.xml
