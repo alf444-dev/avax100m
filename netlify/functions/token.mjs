@@ -842,7 +842,7 @@ async function peakSince(contract, fromTs, store) {
   try {
     const u = "https://api.coingecko.com/api/v3/coins/avalanche/contract/" + contract + "/market_chart/range?vs_currency=usd&from=" + Math.floor(fromTs / 1e3) + "&to=" + Math.floor(Date.now() / 1e3);
     let r = await fetch(u);
-    if (r.status === 429) {
+    for (let a = 0; a < 2 && r.status === 429; a++) {
       await new Promise((res) => setTimeout(res, 2200));
       r = await fetch(u);
     }
@@ -1110,7 +1110,10 @@ var token_default = async (req) => {
   const dk = "tok5/" + addr + "/" + contract;
   if (store) try {
     const c = await store.get(dk, { type: "json" });
-    if (c && Date.now() - c.t < 7 * 24 * 3600 * 1e3) return new Response(JSON.stringify(c.d), { headers: HEADERS });
+    if (c) {
+      const ttl = c.deg ? 10 * 60 * 1e3 : 7 * 24 * 3600 * 1e3;
+      if (Date.now() - c.t < ttl) return new Response(JSON.stringify(c.d), { headers: HEADERS });
+    }
   } catch {
   }
   const all = await fetchWalletTx(addr);
@@ -1239,8 +1242,9 @@ var token_default = async (req) => {
     recvUsd: recvUsd ? Math.round(recvUsd) : null,
     truncated
   };
+  const deg = !pk || !pk.series || !!(lp && lp.xferInEvs.length && !recvUsd);
   if (store) try {
-    await store.set(dk, JSON.stringify({ t: Date.now(), d }));
+    await store.set(dk, JSON.stringify({ t: Date.now(), d, deg }));
   } catch {
   }
   return new Response(JSON.stringify(d), { headers: HEADERS });
