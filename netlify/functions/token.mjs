@@ -821,7 +821,8 @@ async function cgToken(addr, store) {
     const ath = md.ath && md.ath.usd;
     const cur = md.current_price && md.current_price.usd;
     const athDate = md.ath_date && md.ath_date.usd ? Date.parse(md.ath_date.usd) : null;
-    const v = ath && ath > 0 ? { ath, cur: cur || 0, athDate } : null;
+    const cgSym = j.symbol ? String(j.symbol).toUpperCase() : null;
+    const v = ath && ath > 0 ? { ath, cur: cur || 0, athDate, sym: cgSym } : null;
     if (store && v) try {
       await store.set("cg/" + addr, JSON.stringify({ t: Date.now(), v }));
     } catch {
@@ -1017,7 +1018,27 @@ function classifyLp(all, targetRows, contract, addr) {
     else if ((x.from || "").toLowerCase() === addr) outCp[(x.to || "").toLowerCase()] = 1;
   }
   let dec = null;
-  const out = { adds: 0, removes: 0, inSwap: 0, inXfer: 0, inLp: 0, outSwap: 0, outXfer: 0, outLp: 0, xferInEvs: [], putWavax: [], gotWavax: [], putStable: 0, gotStable: 0 };
+  const out = { adds: 0, removes: 0, inSwap: 0, inXfer: 0, inLp: 0, outSwap: 0, outXfer: 0, outLp: 0, xferInEvs: [], putWavax: [], gotWavax: [], putStable: 0, gotStable: 0, buyWavax: [], sellWavax: [], buyStable: 0, sellStable: 0, unpricedSwapTk: 0 };
+  const swapLegs = (sibs, ts, buying) => {
+    let found = false;
+    for (const y of sibs) {
+      const ca = (y.contractAddress || "").toLowerCase();
+      const sy = (y.tokenSymbol || "").toUpperCase();
+      const ydec = parseInt(y.tokenDecimal || "18", 10);
+      const yamt = Number(y.value || "0") / Math.pow(10, isNaN(ydec) ? 18 : ydec);
+      const userLeg = buying ? (y.from || "").toLowerCase() === addr : (y.to || "").toLowerCase() === addr;
+      if (!userLeg) continue;
+      if (ca === WAVAX_C) {
+        (buying ? out.buyWavax : out.sellWavax).push([ts, yamt]);
+        found = true;
+      } else if (STABLE_SYMS[sy]) {
+        if (buying) out.buyStable += yamt;
+        else out.sellStable += yamt;
+        found = true;
+      }
+    }
+    return found;
+  };
   const moneyLegs = (sibs, ts) => {
     for (const y of sibs) {
       const ca = (y.contractAddress || "").toLowerCase();
@@ -1053,8 +1074,13 @@ function classifyLp(all, targetRows, contract, addr) {
       out.removes++;
       out.inLp += amt;
       moneyLegs(sibs, ts2);
-    } else if (inbound && (sibs.some((y) => (y.from || "").toLowerCase() === addr) || poolish)) out.inSwap += amt;
-    else if (!inbound && (sibs.some((y) => (y.to || "").toLowerCase() === addr) || poolish)) out.outSwap += amt;
+    } else if (inbound && (sibs.some((y) => (y.from || "").toLowerCase() === addr) || poolish)) {
+      out.inSwap += amt;
+      if (!swapLegs(sibs, ts2, true)) out.unpricedSwapTk += amt;
+    } else if (!inbound && (sibs.some((y) => (y.to || "").toLowerCase() === addr) || poolish)) {
+      out.outSwap += amt;
+      if (!swapLegs(sibs, ts2, false)) out.unpricedSwapTk += amt;
+    }
     else if (inbound) {
       out.inXfer += amt;
       out.xferInEvs.push([parseInt(x.timeStamp, 10) * 1e3, amt]);
@@ -1107,7 +1133,7 @@ var token_default = async (req) => {
   if (!contract) {
     return new Response(JSON.stringify({ none: true, q }), { headers: HEADERS });
   }
-  const dk = "tok5/" + addr + "/" + contract;
+  const dk = "tok6/" + addr + "/" + contract;
   if (store) try {
     const c = await store.get(dk, { type: "json" });
     if (c) {
@@ -1141,15 +1167,24 @@ var token_default = async (req) => {
   }
   const truePk = pk && pk.series ? peakBagOver(pk.series, targetRows, addr) : null;
   const recvUsd = lp && lp.xferInEvs.length && pk && pk.series ? usdAtArrival(lp.xferInEvs, pk.series) : null;
-  let lpNetTk = null, lpPutUsd = null, lpGotUsd = null;
-  if (lp && (lp.adds || lp.removes)) {
-    lpNetTk = lp.outLp - lp.inLp;
-    if (lp.putWavax.length || lp.gotWavax.length || lp.putStable || lp.gotStable) {
-      const av = await avaxSeries(store);
+  let lpNetTk = null, lpPutUsd = null, lpGotUsd = null, synthInv = null, synthSold = null;
+  if (lp) {
+    const needAvax = lp.putWavax.length || lp.gotWavax.length || lp.buyWavax.length || lp.sellWavax.length;
+    const av = needAvax ? await avaxSeries(store) : null;
+    if (lp.adds || lp.removes) {
+      lpNetTk = lp.outLp - lp.inLp;
       const pw = av && lp.putWavax.length ? usdAtArrival(lp.putWavax, av) : 0;
       const gw = av && lp.gotWavax.length ? usdAtArrival(lp.gotWavax, av) : 0;
       lpPutUsd = Math.round((pw || 0) + lp.putStable) || null;
       lpGotUsd = Math.round((gw || 0) + lp.gotStable) || null;
+    }
+    if (!row && (lp.inSwap > 0 || lp.outSwap > 0)) {
+      const bw = av && lp.buyWavax.length ? usdAtArrival(lp.buyWavax, av) : 0;
+      const sw = av && lp.sellWavax.length ? usdAtArrival(lp.sellWavax, av) : 0;
+      const inv = (bw || 0) + lp.buyStable;
+      const sold = (sw || 0) + lp.sellStable;
+      if (inv > 0) synthInv = Math.round(inv);
+      if (sold > 0) synthSold = Math.round(sold);
     }
   }
   if (lp && lpNetTk !== null && lpNetTk > 0 && lpNetTk > lp.outSwap && verdict !== "bag arrived after the party") {
@@ -1169,10 +1204,10 @@ var token_default = async (req) => {
       const cached = await store.get("v23/" + addr, { type: "json" });
       if (cached && cached.stats) {
         const st2 = cached.stats;
-        const avgSell = row && row.st > 0 ? row.so / row.st : 0;
+        const avgSell = row && row.st > 0 ? row.so / row.st : synthSold && lp && lp.outSwap > 0 ? synthSold / lp.outSwap : 0;
         const cur = cg ? cg.cur : 0;
         const usd2 = (n) => "$" + Math.round(Math.abs(n)).toLocaleString("en-US");
-        const symU = row ? row.s : "?";
+        const symU = row ? row.s : cg && cg.sym ? cg.sym : "?";
         const rp0 = rp;
         const exitRatio = rp0.peakBag > 0 ? balAtPeak / rp0.peakBag : 1;
         if (exitRatio >= 0.2 && balAtPeak > 0) {
@@ -1192,12 +1227,12 @@ var token_default = async (req) => {
               updated = "roundtrip";
             }
           }
-        } else if (row && row.so > 50) {
+        } else if (row && row.so > 50 || synthSold > 50) {
           const exitedTk = rp0.peakBeforeRef - balAtPeak;
           const proceeds = exitedTk * avgSell;
           const athValue = exitedTk * peakPrice;
-          if (proceeds > 50 && athValue > 500 && athValue > proceeds * 3) {
-            const missed = athValue - proceeds;
+          const missed = athValue - proceeds;
+          if (proceeds > 50 && athValue > 500 && (athValue > proceeds * 3 || missed > 25e3 && athValue > proceeds * 1.5)) {
             const best = st2.soldEarly && st2.soldEarly[0] && st2.soldEarly[0].missedUsd || 0;
             if (missed > best && !(st2.soldEarly || []).some((x) => x.sym === symU)) {
               const entry = { line: "$" + symU, sub: "sold for ~" + usd2(proceeds) + " \xB7 " + usd2(athValue) + " at peak", sym: symU, missedUsd: Math.round(missed), missedX: proceeds > 0 ? +(athValue / proceeds).toFixed(1) : 0 };
@@ -1225,8 +1260,10 @@ var token_default = async (req) => {
     sym,
     contract,
     realized: row ? row.p : null,
-    invested: row ? row.i : null,
-    soldUsd: row ? row.so : null,
+    invested: row ? row.i : synthInv,
+    soldUsd: row ? row.so : synthSold,
+    synth: !row && !!(synthInv || synthSold),
+    synthPartial: !row && !!(lp && lp.unpricedSwapTk > 0),
     firstHeld: new Date(rp.firstTs).toISOString().slice(0, 10),
     lastActivity: new Date(rp.lastTs).toISOString().slice(0, 10),
     transfers: rp.transfers,
