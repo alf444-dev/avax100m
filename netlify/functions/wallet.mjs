@@ -161,7 +161,7 @@ h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:
 .addrline .a{color:var(--ink)}
 .badges{display:flex;flex-wrap:wrap;gap:10px}
 .brack{position:absolute;top:50%;transform:translateY(-50%);right:0;display:grid;grid-template-columns:repeat(5,38px);gap:8px;justify-content:end;max-width:270px}
-.brack-label{grid-column:1/-1;text-align:right;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
+.brack-label{grid-column:1/-1;text-align:right;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
 .brack-label b{color:var(--red);font-weight:700}
 .brack-label .hint{color:var(--faint)}
 @media(hover:none){.brack-label .hint::before{content:"tap"}}
@@ -177,16 +177,16 @@ h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:
 .btile .tip .tn{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
 .btile .tip .tn .bt{color:var(--red)}
 .btile.medal .tip .tn,.btile.medal .tip .tr,.btile.medal .tip .tv{color:var(--ink)}
-.btile .tip .tr{display:block;font-size:9px;color:var(--dim);letter-spacing:.1em;margin:3px 0 7px}
+.btile .tip .tr{display:block;font-size:10px;color:var(--dim);letter-spacing:.1em;margin:3px 0 7px}
 .btile .tip .tv{font-size:10px;color:var(--dim);letter-spacing:.05em;line-height:1.55}
 .btile .tip .tv b{color:var(--ink)}
-.btile .tip .tl{color:var(--red);letter-spacing:.2em;font-size:9px;display:block;margin-bottom:3px}
+.btile .tip .tl{color:var(--red);letter-spacing:.2em;font-size:10px;display:block;margin-bottom:3px}
 @media(max-width:760px){.brack{position:static;transform:none;display:flex;flex-wrap:wrap;justify-content:flex-start;max-width:none;margin:22px 0 4px}.btile .tip{right:auto;left:-1px}.brack-label{width:100%;text-align:left}}
 .bdg{position:relative;border:1px solid var(--faint);padding:8px 13px 7px;display:flex;align-items:center;gap:9px;outline:none;cursor:default}
 .bdg:hover,.bdg:focus-visible{border-color:var(--red)}
 .bdg svg{width:16px;height:16px;flex:none;display:block}
 .bdg .bn{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}
-.bdg .br{display:block;font-size:9px;color:var(--dim);letter-spacing:.08em;font-weight:400}
+.bdg .br{display:block;font-size:10px;color:var(--dim);letter-spacing:.08em;font-weight:400}
 .bdg .bt{color:var(--red)}
 .bdg.medal{background:var(--red);border-color:var(--red)}
 .bdg.medal .bn,.bdg.medal .br{color:#0a0a0a}
@@ -195,7 +195,7 @@ h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:
 .bdg.medal .s-ink,.bdg.medal .s-red{stroke:#0a0a0a}
 .bdg .ev{display:none;position:absolute;left:-1px;top:calc(100% + 4px);min-width:230px;max-width:320px;z-index:5;background:var(--bg);border:1px solid var(--red);padding:8px 11px;font-size:10px;color:var(--dim);letter-spacing:.05em;line-height:1.55;white-space:normal}
 .bdg .ev b{color:var(--ink)}
-.bdg .ev .evl{color:var(--red);letter-spacing:.2em;font-size:9px;display:block;margin-bottom:3px}
+.bdg .ev .evl{color:var(--red);letter-spacing:.2em;font-size:10px;display:block;margin-bottom:3px}
 .bdg:hover .ev,.bdg:focus-visible .ev{display:block}
 .g-ink{fill:var(--ink)}.g-red{fill:var(--red)}
 .s-ink{stroke:var(--ink);fill:none;stroke-width:2}.s-red{stroke:var(--red);fill:none;stroke-width:2}.s-thin{stroke-width:1.5}
@@ -235,17 +235,17 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     <div id="status-line" style="display:none;margin-top:20px;font-size:15px;color:var(--ink);letter-spacing:.02em">\u201C<span id="status-text"></span>\u201D</div>
     <div id="avvy" style="display:none;margin-top:24px;font-size:20px;font-weight:700;color:var(--ink);letter-spacing:.02em"></div>
     <div class="addrline">
-      <span class="a">${esc(short)}</span>
-      <button class="btn" id="copy-addr">copy address</button>
-      <button class="btn" id="copy-link">copy page link</button>
+      <span class="a" id="copy-addr" title="click to copy address" style="cursor:pointer;border-bottom:1px dotted var(--faint)">${esc(short)}</span>
+      <button class="btn" id="copy-link">copy link</button>
       <button class="btn primary" id="share-x">share on x</button>
       <button class="btn" id="claim-btn" style="display:none" title="right-click for the hardware-wallet route">claim this page</button>
       <button class="btn" id="status-btn" style="display:none">customize</button>
       <span id="settled" style="display:none;font-size:10px;color:var(--dim);letter-spacing:.08em"></span>
     </div>
+    <div id="claim-why" style="display:none;font-size:11px;color:var(--dim);margin-top:10px;letter-spacing:.05em">claim to set a status, pick a theme, build your top 8, wake the oracle.</div>
     <div id="claim-msg" style="display:none;font-size:11px;color:var(--dim);margin-top:10px;letter-spacing:.05em"></div>
     <div id="cust" style="display:none;margin-top:18px;border:1px solid var(--faint);padding:16px 18px;max-width:560px">
-      <div style="font-size:10px;color:var(--red);letter-spacing:.25em;text-transform:uppercase;margin-bottom:12px">customize \xB7 one signature saves everything</div>
+      <div style="font-size:10px;color:var(--red);letter-spacing:.25em;text-transform:uppercase;margin-bottom:12px">customize \xB7 the owner\u2019s signature saves everything</div>
       <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">status \xB7 100 chars \xB7 no links</div>
       <input id="cust-status" maxlength="100" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px;letter-spacing:.02em;outline:none" placeholder="never selling. ask my roundtrip.">
       <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">accent</div>
@@ -262,6 +262,51 @@ footer a:hover{color:var(--red);border-color:var(--red)}
   </div>
 
   <div id="ticker" style="display:none;border:1px solid var(--faint);padding:11px 16px;margin-top:18px;font-size:11px;color:var(--dim);letter-spacing:.08em" aria-live="off"><span style="color:var(--red)">\u25B8</span> <span id="ticker-t" style="transition:opacity .45s ease"></span></div>
+
+
+  <section>
+    <h2>origin</h2>
+    <div class="grid">
+      <div class="cell"><div class="k">era of arrival</div><div class="v red">${esc(w.era[1])}</div></div>
+      <div class="cell"><div class="k">first seen</div><div class="v">${esc(w.dateStr)}<br><small>#${w.blk.toLocaleString("en-US")}</small></div></div>
+      <div class="cell"><div class="k">${esc(w.mv.key.toLowerCase())}</div><div class="v">${esc(w.mv.val)}</div><div id="holding" style="font-size:11px;color:var(--dim);margin-top:4px"></div></div>
+      <div class="cell"><div class="k">arrived in the first</div><div class="v red">${esc(w.earlyStr)}</div></div>
+      <div class="cell"><div class="k">days on mainnet</div><div class="v">${w.days.toLocaleString("en-US")}</div></div>
+      <div class="cell"><div class="k">mainnet survived</div><div class="v">${w.pct.toFixed(1)}%</div></div>
+      <div class="cell"><div class="k">txs sent</div><div class="v">${w.txc === null ? "\u2014" : w.txc.toLocaleString("en-US")}</div></div>
+      <div class="cell"><div class="k">avax at arrival</div><div class="v" id="price">\u2014</div></div>
+    </div>
+    <div class="note" id="cohort"></div>
+  </section>
+
+  <section>
+    <h2>realized p&amp;l</h2>
+    <div class="grid" id="pnl-grid">
+      <div class="cell"><div class="k">biggest w</div><div class="v" id="pnl-w"><small style="color:var(--dim);font-weight:400">scanning\u2026</small></div></div>
+      <div class="cell"><div class="k">biggest l</div><div class="v" id="pnl-l"><small style="color:var(--dim);font-weight:400">scanning\u2026</small></div></div>
+      <div class="cell"><div class="k">biggest roundtrip</div><div class="v" id="pnl-rt"><small style="color:var(--dim);font-weight:400">scanning\u2026</small></div></div>
+      <div class="cell"><div class="k">sold too early</div><div class="v" id="pnl-ste"><small style="color:var(--dim);font-weight:400">scanning\u2026</small></div></div>
+    </div>
+    <div class="note" id="pnl-summary" style="display:none;font-size:13px;color:var(--ink)"></div>
+    <div class="note" id="pnl-note">syncing trade history\u2026</div>
+    <button class="btn" id="ledger-toggle" style="display:none;margin-top:16px">full ledger \u2192</button>
+    <button class="btn" id="pnl-deeper" style="display:none;margin-top:16px;margin-left:8px">dig deeper</button>
+    <div id="ledger" style="display:none;margin-top:22px">
+      <div class="grid" style="grid-template-columns:repeat(4,1fr)">
+        <div class="cell"><div class="k">top wins</div><div id="lg-w" style="font-size:12px;margin-top:8px"></div></div>
+        <div class="cell"><div class="k">top losses</div><div id="lg-l" style="font-size:12px;margin-top:8px"></div></div>
+        <div class="cell"><div class="k">roundtrips</div><div id="lg-rt" style="font-size:12px;margin-top:8px"></div></div>
+        <div class="cell"><div class="k">sold too early</div><div id="lg-ste" style="font-size:12px;margin-top:8px"></div></div>
+      </div>
+    </div>
+    <div id="pnl-card-wrap" style="display:none;margin-top:22px">
+      <canvas id="pnl-card" width="1080" height="1350" style="width:100%;max-width:360px;border:1px solid var(--faint);display:block"></canvas>
+      <div style="display:flex;gap:10px;margin-top:12px;max-width:360px">
+        <button class="btn" id="pnl-dl" style="flex:1">download p&amp;l card</button>
+        <button class="btn primary" id="pnl-share" style="flex:1">share on x</button>
+      </div>
+    </div>
+  </section>
 
   <section id="oracle-sec" style="display:none">
     <h2>ask the chain</h2>
@@ -291,50 +336,6 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     <h2>top 8</h2>
     <div id="top8-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px"></div>
     <div class="note" id="top8-note"></div>
-  </section>
-
-  <section>
-    <h2>origin</h2>
-    <div class="grid">
-      <div class="cell"><div class="k">era of arrival</div><div class="v red">${esc(w.era[1])}</div></div>
-      <div class="cell"><div class="k">first seen</div><div class="v">${esc(w.dateStr)}<br><small>#${w.blk.toLocaleString("en-US")}</small></div></div>
-      <div class="cell"><div class="k">${esc(w.mv.key.toLowerCase())}</div><div class="v">${esc(w.mv.val)}</div><div id="holding" style="font-size:11px;color:var(--dim);margin-top:4px"></div></div>
-      <div class="cell"><div class="k">arrived in the first</div><div class="v red">${esc(w.earlyStr)}</div></div>
-      <div class="cell"><div class="k">days on mainnet</div><div class="v">${w.days.toLocaleString("en-US")}</div></div>
-      <div class="cell"><div class="k">mainnet survived</div><div class="v">${w.pct.toFixed(1)}%</div></div>
-      <div class="cell"><div class="k">txs sent</div><div class="v">${w.txc === null ? "\u2014" : w.txc.toLocaleString("en-US")}</div></div>
-      <div class="cell"><div class="k">avax at arrival</div><div class="v" id="price">\u2014</div></div>
-    </div>
-    <div class="note" id="cohort"></div>
-  </section>
-
-  <section>
-    <h2>realized p&amp;l</h2>
-    <div class="grid" id="pnl-grid">
-      <div class="cell"><div class="k">biggest w</div><div class="v" id="pnl-w">\u2014</div></div>
-      <div class="cell"><div class="k">biggest l</div><div class="v" id="pnl-l">\u2014</div></div>
-      <div class="cell"><div class="k">biggest roundtrip</div><div class="v" id="pnl-rt">\u2014</div></div>
-      <div class="cell"><div class="k">sold too early</div><div class="v" id="pnl-ste">\u2014</div></div>
-    </div>
-    <div class="note" id="pnl-summary" style="display:none;font-size:13px;color:var(--ink)"></div>
-    <div class="note" id="pnl-note">syncing trade history\u2026</div>
-    <button class="btn" id="ledger-toggle" style="display:none;margin-top:16px">full ledger \u2192</button>
-    <button class="btn" id="pnl-deeper" style="display:none;margin-top:16px;margin-left:8px">dig deeper</button>
-    <div id="ledger" style="display:none;margin-top:22px">
-      <div class="grid" style="grid-template-columns:repeat(4,1fr)">
-        <div class="cell"><div class="k">top wins</div><div id="lg-w" style="font-size:12px;margin-top:8px"></div></div>
-        <div class="cell"><div class="k">top losses</div><div id="lg-l" style="font-size:12px;margin-top:8px"></div></div>
-        <div class="cell"><div class="k">roundtrips</div><div id="lg-rt" style="font-size:12px;margin-top:8px"></div></div>
-        <div class="cell"><div class="k">sold too early</div><div id="lg-ste" style="font-size:12px;margin-top:8px"></div></div>
-      </div>
-    </div>
-    <div id="pnl-card-wrap" style="display:none;margin-top:22px">
-      <canvas id="pnl-card" width="1080" height="1350" style="width:100%;max-width:360px;border:1px solid var(--faint);display:block"></canvas>
-      <div style="display:flex;gap:10px;margin-top:12px;max-width:360px">
-        <button class="btn" id="pnl-dl" style="flex:1">download p&amp;l card</button>
-        <button class="btn primary" id="pnl-share" style="flex:1">share on x</button>
-      </div>
-    </div>
   </section>
 </main>
 
@@ -431,10 +432,11 @@ function updDeeper(s){
   db.style.opacity="1";
   db.style.display="inline-block"; db.disabled=false;
 }
+function pnlDash(){ ["pnl-w","pnl-l","pnl-rt","pnl-ste"].forEach(function(id){ document.getElementById(id).textContent="\u2014"; }); }
 function loadPnl(force){
  fetch(SITE+"/api/pnl?addr="+D.addr+(force?"&refresh=1":"")).then(function(r){return r.json();}).then(function(p){
   var note=document.getElementById("pnl-note");
-  if(!p || !p.available){ note.textContent="trade history sync coming soon."; return; }
+  if(!p || !p.available){ note.textContent="trade history sync coming soon."; pnlDash(); return; }
   var s=p.stats||{};
   renderPnl(s);
   if(s.partial && pnlTries<3){ pnlTries++; note.textContent="still digging through your history\u2026"; setTimeout(function(){loadPnl(true);},3000); return; }
@@ -444,7 +446,7 @@ function loadPnl(force){
     fetch(SITE+"/api/pnl?addr="+D.addr+"&refresh=1").then(function(r){return r.json();})
       .then(function(p2){ if(p2 && p2.available){ renderPnl(p2.stats); updDeeper(p2.stats); } }).catch(function(){});
   }
- }).catch(function(){ document.getElementById("pnl-note").textContent="trade history sync coming soon."; });
+ }).catch(function(){ document.getElementById("pnl-note").textContent="trade history sync coming soon."; pnlDash(); });
 }
 loadPnl(false);
 (function(){
@@ -629,6 +631,7 @@ function claimInfo(){
       renderTop8(CUR.top8, c.in8Count||0);
     } else {
       document.getElementById("claim-btn").style.display="inline-block";
+      document.getElementById("claim-why").style.display="block";
     }
   }).catch(function(){});
 }
@@ -784,7 +787,11 @@ document.getElementById("tok-q").addEventListener("keydown",function(e){ if(e.ke
 /* ---- top 8 render ---- */
 function renderTop8(list,in8){
   var sec=document.getElementById("top8-sec");
-  if(!list||!list.length){ sec.style.display="none"; return; }
+  if(!list||!list.length){
+    if(CLAIMED){ sec.style.display="block"; document.getElementById("top8-grid").innerHTML=""; document.getElementById("top8-note").textContent="no top 8 yet. the owner could fix that."; }
+    else sec.style.display="none";
+    return;
+  }
   sec.style.display="block";
   var g=document.getElementById("top8-grid");
   g.innerHTML=(list||[]).map(function(e,i){
