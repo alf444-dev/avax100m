@@ -231,6 +231,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     <div class="eyebrow">avalanche c-chain \xB7 wallet profile</div>
     <h1>${esc(w.rank[1])}</h1>
     <div class="tagline">${esc(w.rank[2])}</div>
+    <div id="proof" style="display:none;margin-top:14px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)"></div>
     <div id="status-line" style="display:none;margin-top:20px;font-size:15px;color:var(--ink);letter-spacing:.02em">\u201C<span id="status-text"></span>\u201D</div>
     <div id="avvy" style="display:none;margin-top:24px;font-size:20px;font-weight:700;color:var(--ink);letter-spacing:.02em"></div>
     <div class="addrline">
@@ -259,6 +260,8 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       </div>
     </div>
   </div>
+
+  <div id="ticker" style="display:none;border:1px solid var(--faint);padding:11px 16px;margin-top:18px;font-size:11px;color:var(--dim);letter-spacing:.08em" aria-live="off"><span style="color:var(--red)">\u25B8</span> <span id="ticker-t" style="transition:opacity .45s ease"></span></div>
 
   <section id="oracle-sec" style="display:none">
     <h2>ask the chain</h2>
@@ -372,10 +375,34 @@ binance(D.ts).then(function(pp){return (pp[0]&&pp[1])?pp:gecko(D.ts);}).catch(fu
  .then(function(pp){ if(pp&&pp[0]&&pp[1]) document.getElementById("price").innerHTML=fmtPrice(pp[0])+' <small>'+fmtChange(pp[1],pp[0])+' since</small>'; })
  .catch(function(){});
 
+/* ---- stat ticker ---- */
+var TICK=[],TICKI=0,TICKON=false,TICKTMR=null;
+function tickAdd(t){ if(t&&TICK.indexOf(t)<0){ TICK.push(t); tickStart(); } }
+function tickStart(){
+  var el=document.getElementById("ticker"),tx=document.getElementById("ticker-t");
+  if(!el||!tx||!TICK.length) return;
+  if(!TICKON){
+    TICKON=true;
+    for(var i=TICK.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var tmp=TICK[i];TICK[i]=TICK[j];TICK[j]=tmp; }
+    el.style.display="block"; tx.textContent=TICK[0];
+    if(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    TICKTMR=setInterval(function(){
+      tx.style.opacity="0";
+      setTimeout(function(){ TICKI=(TICKI+1)%TICK.length; tx.textContent=TICK[TICKI]; tx.style.opacity="1"; },450);
+    },5500);
+  }
+}
+tickAdd("arrived when only "+D.survived+"% of today's blocks existed");
+tickAdd("day "+D.days.toLocaleString("en-US")+" on mainnet. blocks don't wait.");
+if(D.txs) tickAdd(D.txs.toLocaleString("en-US")+" transactions and counting");
+if(D.mvKey&&D.mvVal) tickAdd(D.mvKey.toLowerCase()+": "+D.mvVal.toLowerCase());
+tickAdd("class of "+D.era.toLowerCase());
+
 /* census cohort line */
 fetch(SITE+"/api/census").then(function(r){return r.json();}).then(function(c){
   if(c&&c.total&&c.eras&&c.eras[D.era]){
     document.getElementById("cohort").textContent="one of "+c.eras[D.era].toLocaleString("en-US")+" "+D.era.toLowerCase()+" wallets in the census \xB7 "+c.total.toLocaleString("en-US")+" counted";
+    tickAdd("one of "+c.eras[D.era].toLocaleString("en-US")+" "+D.era.toLowerCase()+" wallets counted");
   }
 }).catch(function(){});
 
@@ -438,6 +465,12 @@ function renderPnl(s){
   function set(id,o){ var el=document.getElementById(id);
     if(!o){ el.textContent="\u2014"; return; }
     el.innerHTML=o.line+(o.sub?' <small>'+o.sub+'</small>':""); }
+  function feed(pre,o){ if(o&&o.line) tickAdd(pre+": "+o.line+(o.sub?" \u00b7 "+o.sub:"")); }
+  feed("biggest w",s.biggestW);
+  feed("biggest l",s.biggestL);
+  feed("biggest roundtrip",s.roundtrip);
+  feed("sold too early",s.soldTooEarly);
+  if(s.summary&&s.summary.total) tickAdd("realized total: "+s.summary.total+(s.summary.winrate?" \u00b7 "+s.summary.winrate+" winrate":""));
   set("pnl-w", s.biggestW);
   set("pnl-l", s.biggestL);
   set("pnl-rt", s.roundtrip);
@@ -573,9 +606,15 @@ function applyTheme(t){
   if(LAST_PNL) drawPnlCard(LAST_PNL);
 }
 function claimInfo(){
-  fetch(SITE+"/api/claim?addr="+D.addr+"&info=1").then(function(r){return r.json();}).then(function(c){
+  fetch(SITE+"/api/claim?addr="+D.addr+"&info=1&view=1").then(function(r){return r.json();}).then(function(c){
     CLAIMED=!!(c&&c.claimed);
     updDeeper(null);
+    var pf=[];
+    if(c&&c.in8Count) pf.push("\u2605 in "+c.in8Count+" top 8"+(c.in8Count>1?"s":""));
+    if(c&&c.views) pf.push(c.views.toLocaleString("en-US")+" visit"+(c.views>1?"s":"")+" this week");
+    if(pf.length){ var pe=document.getElementById("proof"); pe.textContent=pf.join(" \u00b7 "); pe.style.display="block"; }
+    if(c&&c.in8Count) tickAdd("in "+c.in8Count+" top 8"+(c.in8Count>1?"s":"")+". unilateral, like the old days.");
+    if(c&&c.views&&c.views>1) tickAdd(c.views.toLocaleString("en-US")+" visits this week");
     if(CLAIMED){
       CUR.status=c.status||""; CUR.theme=c.theme||"red"; CUR.cardBadges=c.cardBadges||[];
       applyTheme(CUR.theme);
@@ -585,10 +624,10 @@ function claimInfo(){
       s.style.display="inline";
       document.getElementById("status-btn").style.display="inline-block";
       document.getElementById("oracle-sec").style.display="block";
+      if(c.settledBlock) tickAdd("settled at block #"+c.settledBlock.toLocaleString("en-US"));
       CUR.top8=c.top8||[];
       renderTop8(CUR.top8, c.in8Count||0);
     } else {
-      if(c&&c.in8Count) renderTop8([], c.in8Count);
       document.getElementById("claim-btn").style.display="inline-block";
     }
   }).catch(function(){});
@@ -745,7 +784,7 @@ document.getElementById("tok-q").addEventListener("keydown",function(e){ if(e.ke
 /* ---- top 8 render ---- */
 function renderTop8(list,in8){
   var sec=document.getElementById("top8-sec");
-  if((!list||!list.length)&&!in8){ sec.style.display="none"; return; }
+  if(!list||!list.length){ sec.style.display="none"; return; }
   sec.style.display="block";
   var g=document.getElementById("top8-grid");
   g.innerHTML=(list||[]).map(function(e,i){
@@ -760,30 +799,7 @@ function renderTop8(list,in8){
       if(j&&j.addr){ a.href=SITE+"/w/"+j.addr; a.target="_blank"; a.rel="noopener"; }
     }).catch(function(){});
   });
-  document.getElementById("top8-note").textContent=(in8?("this wallet appears in "+in8+" top 8"+(in8>1?"s":"")+". "):"")+(list&&list.length?"chosen by the owner. unilateral, like the old days.":"");
-}
-
-/* ---- the oracle ---- */
-
-/* ---- top 8 render ---- */
-function renderTop8(list,in8){
-  var sec=document.getElementById("top8-sec");
-  if((!list||!list.length)&&!in8){ sec.style.display="none"; return; }
-  sec.style.display="block";
-  var g=document.getElementById("top8-grid");
-  g.innerHTML=(list||[]).map(function(e,i){
-    var label=e.indexOf(".avax")>-1?e:(e.slice(0,8)+"\u2026"+e.slice(-6));
-    var href=e.indexOf(".avax")>-1?"#":(SITE+"/w/"+e);
-    return '<a data-e="'+e+'" href="'+href+'" '+(href==="#"?'':'target="_blank" rel="noopener" ')+'style="border:1px solid var(--faint);padding:12px 14px;text-decoration:none;color:var(--ink);display:block"><span style="color:var(--red);font-size:10px;letter-spacing:.15em">#'+(i+1)+'</span><div style="font-size:12px;margin-top:5px;word-break:break-all">'+label+'</div></a>';
-  }).join("");
-  // resolve .avax entries to live links
-  g.querySelectorAll("a[href='#']").forEach(function(a){
-    var nm=a.getAttribute("data-e");
-    fetch(SITE+"/api/resolve?name="+encodeURIComponent(nm)).then(function(r){return r.json();}).then(function(j){
-      if(j&&j.addr){ a.href=SITE+"/w/"+j.addr; a.target="_blank"; a.rel="noopener"; }
-    }).catch(function(){});
-  });
-  document.getElementById("top8-note").textContent=(in8?("this wallet appears in "+in8+" top 8"+(in8>1?"s":"")+". "):"")+(list&&list.length?"chosen by the owner. unilateral, like the old days.":"");
+  document.getElementById("top8-note").textContent="chosen by the owner. unilateral, like the old days.";
 }
 
 /* ---- the oracle ---- */

@@ -37715,7 +37715,20 @@ var claim_default = async (req) => {
         in8 = await store.get("in8/" + addr, { type: "json" }) || [];
       } catch {
       }
-      return new Response(JSON.stringify(c ? { claimed: true, settledAt: c.t, settledBlock: c.blk || null, status: c.status || null, theme: c.theme || "red", cardBadges: c.cardBadges || [], top8: c.top8 || [], in8Count: in8.length } : { claimed: false, in8Count: in8.length }), { headers: HEADERS });
+      let views = null;
+      if (c && url.searchParams.get("view") === "1") {
+        try {
+          const wk = Math.floor(Date.now() / 6048e5);
+          let v = await store.get("v/" + addr, { type: "json" }).catch(() => null);
+          if (!v || v.w !== wk) v = { w: wk, n: 0 };
+          v.n++;
+          views = v.n;
+          await store.set("v/" + addr, JSON.stringify(v)).catch(() => {
+          });
+        } catch {
+        }
+      }
+      return new Response(JSON.stringify(c ? { claimed: true, settledAt: c.t, settledBlock: c.blk || null, status: c.status || null, theme: c.theme || "red", cardBadges: c.cardBadges || [], top8: c.top8 || [], in8Count: in8.length, views } : { claimed: false, in8Count: in8.length }), { headers: HEADERS });
     }
     const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16))).map((b) => b.toString(16).padStart(2, "0")).join("");
     await store.set("n/" + addr, JSON.stringify({ nonce, t: Date.now() })).catch(() => {
