@@ -309,6 +309,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       <div style="display:flex;gap:10px;margin-top:12px;max-width:360px">
         <button class="btn" id="pnl-dl" style="flex:1">download p&amp;l card</button>
         <button class="btn primary" id="pnl-share" style="flex:1">share on x</button>
+        <button class="btn" id="pnl-close" title="close the card" style="flex:0 0 auto;padding:6px 10px">\u2715</button>
       </div>
     </div>
   </section>
@@ -935,6 +936,10 @@ var LAST_PNL = null;
 
 /* shareable p&l card */
 function redrawCard(){ if(LAST_PNL && document.getElementById("pnl-card-wrap").style.display==="block") drawPnlCard(LAST_PNL); }
+document.getElementById("pnl-close").addEventListener("click",function(){
+  document.getElementById("pnl-card-wrap").style.display="none";
+  document.getElementById("pnl-gen").style.display="inline-block";
+});
 document.getElementById("pnl-gen").addEventListener("click",function(){
   if(!LAST_PNL) return;
   drawPnlCard(LAST_PNL);
