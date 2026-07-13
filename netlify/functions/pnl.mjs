@@ -9,7 +9,7 @@ var REC_ERAS = [
   [Date.UTC(2021, 1, 9), "GENESIS"], [Date.UTC(2021, 7, 18), "PANGOLIN SPRING"], [Date.UTC(2021, 10, 21), "AVALANCHE RUSH"],
   [Date.UTC(2022, 1, 1), "WONDERLAND"], [Date.UTC(2022, 4, 9), "SUBNET SZN"], [Date.UTC(2023, 0, 1), "THE LONG WINTER"],
   [Date.UTC(2023, 9, 1), "THE DESERT"], [Date.UTC(2023, 11, 5), "STARS ARENA"], [Date.UTC(2024, 2, 6), "COQ SZN"],
-  [Date.UTC(2024, 11, 16), "DURANGO"], [Date.UTC(2025, 0, 25), "AVALANCHE9000"], [Date.UTC(2025, 5, 1), "PRESALE SZN"],
+  [Date.UTC(2024, 10, 16), "CHAD CHAIN"], [Date.UTC(2025, 0, 25), "AVALANCHE9000"], [Date.UTC(2025, 5, 1), "PRESALE SZN"],
   [Date.UTC(2025, 10, 19), "ARENA SUMMER"], [Infinity, "GRANITE"]
 ];
 async function walletEra(addr) {
