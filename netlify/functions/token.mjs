@@ -960,6 +960,19 @@ function foldTok(rows, addr, refTs) {
   const f = (x) => Number(x) / Math.pow(10, d);
   return { firstTs, lastTs, transfers, peakBag: f(peakBag), peakBeforeRef: f(peakBeforeRef), balNow: f(bal), balAtRef: balAtRef === null ? null : f(balAtRef) };
 }
+function usdAtArrival(evs, series) {
+  if (!evs || !evs.length || !series || !series.length) return null;
+  const sorted = evs.slice().sort((a, b) => a[0] - b[0]);
+  let i = 0, last = series[0][1], sum = 0;
+  for (const [ts, amt] of sorted) {
+    while (i < series.length && series[i][0] <= ts) {
+      last = series[i][1];
+      i++;
+    }
+    sum += amt * last;
+  }
+  return sum;
+}
 function classifyLp(all, targetRows, contract, addr) {
   const map = {};
   for (const x of all) (map[x.hash] = map[x.hash] || []).push(x);
@@ -970,7 +983,7 @@ function classifyLp(all, targetRows, contract, addr) {
     else if ((x.from || "").toLowerCase() === addr) outCp[(x.to || "").toLowerCase()] = 1;
   }
   let dec = null;
-  const out = { adds: 0, removes: 0, inSwap: 0, inXfer: 0, inLp: 0, outSwap: 0, outXfer: 0, outLp: 0 };
+  const out = { adds: 0, removes: 0, inSwap: 0, inXfer: 0, inLp: 0, outSwap: 0, outXfer: 0, outLp: 0, xferInEvs: [] };
   for (const x of targetRows) {
     if (dec === null && x.tokenDecimal) dec = parseInt(x.tokenDecimal, 10);
     const amt = Number(x.value || "0") / Math.pow(10, dec === null || isNaN(dec) ? 18 : dec);
@@ -988,7 +1001,10 @@ function classifyLp(all, targetRows, contract, addr) {
       out.inLp += amt;
     } else if (inbound && (sibs.some((y) => (y.from || "").toLowerCase() === addr) || poolish)) out.inSwap += amt;
     else if (!inbound && (sibs.some((y) => (y.to || "").toLowerCase() === addr) || poolish)) out.outSwap += amt;
-    else if (inbound) out.inXfer += amt;
+    else if (inbound) {
+      out.inXfer += amt;
+      out.xferInEvs.push([parseInt(x.timeStamp, 10) * 1e3, amt]);
+    }
     else out.outXfer += amt;
   }
   return out;
@@ -1037,7 +1053,7 @@ var token_default = async (req) => {
   if (!contract) {
     return new Response(JSON.stringify({ none: true, q }), { headers: HEADERS });
   }
-  const dk = "tok3/" + addr + "/" + contract;
+  const dk = "tok4/" + addr + "/" + contract;
   if (store) try {
     const c = await store.get(dk, { type: "json" });
     if (c && Date.now() - c.t < 7 * 24 * 3600 * 1e3) return new Response(JSON.stringify(c.d), { headers: HEADERS });
@@ -1067,6 +1083,7 @@ var token_default = async (req) => {
     }
   }
   const truePk = pk && pk.series ? peakBagOver(pk.series, targetRows, addr) : null;
+  const recvUsd = lp && lp.xferInEvs.length && pk && pk.series ? usdAtArrival(lp.xferInEvs, pk.series) : null;
   if (lp && verdict && verdict !== "still aboard") {
     const totalIn = lp.inSwap + lp.inXfer + lp.inLp;
     if (totalIn > 0 && (lp.inXfer + lp.inLp) / totalIn >= 0.8 && peakTs && peakTs - rp.firstTs < 7 * 864e5) verdict = "bag arrived after the party";
@@ -1150,6 +1167,7 @@ var token_default = async (req) => {
     updated,
     lp: lp ? { adds: lp.adds, removes: lp.removes } : null,
     recvTk: lp && lp.inXfer > 0 ? Math.round(lp.inXfer) : null,
+    recvUsd: recvUsd ? Math.round(recvUsd) : null,
     truncated
   };
   if (store) try {

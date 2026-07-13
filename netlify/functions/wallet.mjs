@@ -710,14 +710,17 @@ function tokLookup(){
     if(t.realized!==null) rows+=tokRow("realized p&l",(t.realized<0?"\u2212":"+")+"$"+Math.abs(t.realized).toLocaleString("en-US"));
     if(t.invested!==null) rows+=tokRow("invested","$"+t.invested.toLocaleString("en-US"));
     if(t.soldUsd!==null) rows+=tokRow("sold for","$"+t.soldUsd.toLocaleString("en-US"));
+    function cnum(n){ if(n>=1e12) return (n/1e12).toFixed(2)+"t"; if(n>=1e9) return (n/1e9).toFixed(2)+"b"; if(n>=1e6) return (n/1e6).toFixed(2)+"m"; if(n>=1e4) return (n/1e3).toFixed(1)+"k"; return n.toLocaleString("en-US"); }
+    if(t.recvUsd) rows+=tokRow("received","\u2248$"+t.recvUsd.toLocaleString("en-US")+" at arrival"+(t.recvTk?" \xB7 "+cnum(t.recvTk)+" tokens":""));
+    else if(t.recvTk) rows+=tokRow("received","\u2248"+cnum(t.recvTk)+" tokens by transfer");
     if(t.peakBagUsd!==null) rows+=tokRow("peak bag (in this wallet)","$"+t.peakBagUsd.toLocaleString("en-US")+(t.peakDate?" \xB7 "+t.peakDate:""));
     rows+=tokRow("first held",t.firstHeld);
     rows+=tokRow("transfers",t.transfers);
     if(t.lp&&(t.lp.adds||t.lp.removes)) rows+=tokRow("via lp",t.lp.adds+" add"+(t.lp.adds!==1?"s":"")+" \xB7 "+t.lp.removes+" remove"+(t.lp.removes!==1?"s":""));
-    if(t.recvTk) rows+=tokRow("received","\u2248"+t.recvTk.toLocaleString("en-US")+" tokens by transfer");
     rows+=tokRow("holding now",t.holdingNow?("yes"+(t.holdingUsd!==null?" \xB7 $"+t.holdingUsd.toLocaleString("en-US"):"")):"no");
     if(t.verdict) rows+=tokRow("verdict",'<b style="color:var(--red)">'+t.verdict+'</b>');
-    if(t.recvTk||t.lp&&t.lp.removes) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">p&l values transferred-in tokens at their arrival price. sold \u2212 invested is just the swaps.</div>';
+    if(t.recvUsd) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">most of this bag arrived by transfer, already worth \u2248$'+t.recvUsd.toLocaleString("en-US")+'. the p&l measures what happened to it after \u2014 not what was paid for it.</div>';
+    else if(t.recvTk||t.lp&&t.lp.removes) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">p&l values transferred-in tokens at their arrival price. sold \u2212 invested is just the swaps.</div>';
     if(t.updated) rows+=tokRow("discovery",'<b style="color:var(--red)">this beat your tracked '+t.updated+' \u2014 your p&l has been updated</b>');
     out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:16px;font-weight:700;letter-spacing:.06em;margin-bottom:10px">$'+t.sym+'</div>'+rows+'</div>';
     if(t.updated){ fetch(SITE+"/api/pnl?addr="+D.addr).then(function(r){return r.json();}).then(function(p){ if(p&&p.available) renderPnl(p.stats); }).catch(function(){}); }
