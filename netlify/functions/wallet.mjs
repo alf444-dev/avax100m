@@ -716,7 +716,13 @@ function tokLookup(){
     if(t.peakBagUsd!==null) rows+=tokRow("peak bag (in this wallet)","$"+t.peakBagUsd.toLocaleString("en-US")+(t.peakDate?" \xB7 "+t.peakDate:""));
     rows+=tokRow("first held",t.firstHeld);
     rows+=tokRow("transfers",t.transfers);
-    if(t.lp&&(t.lp.adds||t.lp.removes)) rows+=tokRow("via lp",t.lp.adds+" add"+(t.lp.adds!==1?"s":"")+" \xB7 "+t.lp.removes+" remove"+(t.lp.removes!==1?"s":""));
+    if(t.lp&&(t.lp.adds||t.lp.removes)){
+      var lv=t.lp.adds+" add"+(t.lp.adds!==1?"s":"")+" \xB7 "+t.lp.removes+" remove"+(t.lp.removes!==1?"s":"");
+      if(t.lp.netTk>0) lv+=" \xB7 net \u2212"+cnum(t.lp.netTk)+" tokens through the pool";
+      else if(t.lp.netTk<0) lv+=" \xB7 net +"+cnum(-t.lp.netTk)+" tokens from the pool";
+      if(t.lp.putUsd||t.lp.gotUsd) lv+=" \xB7 $"+(t.lp.putUsd||0).toLocaleString("en-US")+" in \u2192 $"+(t.lp.gotUsd||0).toLocaleString("en-US")+" back";
+      rows+=tokRow("via lp",lv);
+    }
     rows+=tokRow("holding now",t.holdingNow?("yes"+(t.holdingUsd!==null?" \xB7 $"+t.holdingUsd.toLocaleString("en-US"):"")):"no");
     if(t.verdict) rows+=tokRow("verdict",'<b style="color:var(--red)">'+t.verdict+'</b>');
     if(t.recvUsd) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">most of this bag arrived by transfer, already worth \u2248$'+t.recvUsd.toLocaleString("en-US")+'. the p&l measures what happened to it after \u2014 not what was paid for it.</div>';

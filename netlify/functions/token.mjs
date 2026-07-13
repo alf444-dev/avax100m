@@ -960,6 +960,40 @@ function foldTok(rows, addr, refTs) {
   const f = (x) => Number(x) / Math.pow(10, d);
   return { firstTs, lastTs, transfers, peakBag: f(peakBag), peakBeforeRef: f(peakBeforeRef), balNow: f(bal), balAtRef: balAtRef === null ? null : f(balAtRef) };
 }
+var WAVAX_C = "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7";
+var STABLE_SYMS = { "USDT": 1, "USDC": 1, "DAI": 1, "MIM": 1, "FRAX": 1, "USDT.E": 1, "USDC.E": 1, "DAI.E": 1, "BUSD": 1, "TUSD": 1 };
+async function avaxSeries(store) {
+  const ck = "avaxusd/v1";
+  if (store) try {
+    const c = await store.get(ck, { type: "json" });
+    if (c && Date.now() - c.t < 24 * 3600 * 1e3) return c.v;
+  } catch {
+  }
+  try {
+    const u = "https://api.coingecko.com/api/v3/coins/avalanche-2/market_chart/range?vs_currency=usd&from=1600000000&to=" + Math.floor(Date.now() / 1e3);
+    let r = await fetch(u);
+    if (r.status === 429) {
+      await new Promise((res) => setTimeout(res, 2200));
+      r = await fetch(u);
+    }
+    if (!r.ok) return null;
+    const j = await r.json();
+    let prices = j && j.prices || [];
+    if (!prices.length) return null;
+    if (prices.length > 500) {
+      const stride = Math.ceil(prices.length / 500);
+      prices = prices.filter((_, i) => i % stride === 0 || i === prices.length - 1);
+    }
+    const v = prices.map((p) => [Math.round(p[0]), +p[1].toPrecision(6)]);
+    if (store) try {
+      await store.set(ck, JSON.stringify({ t: Date.now(), v }));
+    } catch {
+    }
+    return v;
+  } catch {
+    return null;
+  }
+}
 function usdAtArrival(evs, series) {
   if (!evs || !evs.length || !series || !series.length) return null;
   const sorted = evs.slice().sort((a, b) => a[0] - b[0]);
@@ -983,7 +1017,24 @@ function classifyLp(all, targetRows, contract, addr) {
     else if ((x.from || "").toLowerCase() === addr) outCp[(x.to || "").toLowerCase()] = 1;
   }
   let dec = null;
-  const out = { adds: 0, removes: 0, inSwap: 0, inXfer: 0, inLp: 0, outSwap: 0, outXfer: 0, outLp: 0, xferInEvs: [] };
+  const out = { adds: 0, removes: 0, inSwap: 0, inXfer: 0, inLp: 0, outSwap: 0, outXfer: 0, outLp: 0, xferInEvs: [], putWavax: [], gotWavax: [], putStable: 0, gotStable: 0 };
+  const moneyLegs = (sibs, ts) => {
+    for (const y of sibs) {
+      const ca = (y.contractAddress || "").toLowerCase();
+      const sy = (y.tokenSymbol || "").toUpperCase();
+      const ydec = parseInt(y.tokenDecimal || "18", 10);
+      const yamt = Number(y.value || "0") / Math.pow(10, isNaN(ydec) ? 18 : ydec);
+      const yIn = (y.to || "").toLowerCase() === addr;
+      const yOut = (y.from || "").toLowerCase() === addr;
+      if (ca === WAVAX_C) {
+        if (yOut) out.putWavax.push([ts, yamt]);
+        else if (yIn) out.gotWavax.push([ts, yamt]);
+      } else if (STABLE_SYMS[sy]) {
+        if (yOut) out.putStable += yamt;
+        else if (yIn) out.gotStable += yamt;
+      }
+    }
+  };
   for (const x of targetRows) {
     if (dec === null && x.tokenDecimal) dec = parseInt(x.tokenDecimal, 10);
     const amt = Number(x.value || "0") / Math.pow(10, dec === null || isNaN(dec) ? 18 : dec);
@@ -993,12 +1044,15 @@ function classifyLp(all, targetRows, contract, addr) {
     const poolish = inCp[cp] && outCp[cp];
     const lpIn = sibs.some((y) => isLpSym(y.tokenSymbol) && (y.to || "").toLowerCase() === addr);
     const lpOut = sibs.some((y) => isLpSym(y.tokenSymbol) && (y.from || "").toLowerCase() === addr);
+    const ts2 = parseInt(x.timeStamp, 10) * 1e3;
     if (!inbound && lpIn) {
       out.adds++;
       out.outLp += amt;
+      moneyLegs(sibs, ts2);
     } else if (inbound && lpOut) {
       out.removes++;
       out.inLp += amt;
+      moneyLegs(sibs, ts2);
     } else if (inbound && (sibs.some((y) => (y.from || "").toLowerCase() === addr) || poolish)) out.inSwap += amt;
     else if (!inbound && (sibs.some((y) => (y.to || "").toLowerCase() === addr) || poolish)) out.outSwap += amt;
     else if (inbound) {
@@ -1053,7 +1107,7 @@ var token_default = async (req) => {
   if (!contract) {
     return new Response(JSON.stringify({ none: true, q }), { headers: HEADERS });
   }
-  const dk = "tok4/" + addr + "/" + contract;
+  const dk = "tok5/" + addr + "/" + contract;
   if (store) try {
     const c = await store.get(dk, { type: "json" });
     if (c && Date.now() - c.t < 7 * 24 * 3600 * 1e3) return new Response(JSON.stringify(c.d), { headers: HEADERS });
@@ -1084,6 +1138,20 @@ var token_default = async (req) => {
   }
   const truePk = pk && pk.series ? peakBagOver(pk.series, targetRows, addr) : null;
   const recvUsd = lp && lp.xferInEvs.length && pk && pk.series ? usdAtArrival(lp.xferInEvs, pk.series) : null;
+  let lpNetTk = null, lpPutUsd = null, lpGotUsd = null;
+  if (lp && (lp.adds || lp.removes)) {
+    lpNetTk = lp.outLp - lp.inLp;
+    if (lp.putWavax.length || lp.gotWavax.length || lp.putStable || lp.gotStable) {
+      const av = await avaxSeries(store);
+      const pw = av && lp.putWavax.length ? usdAtArrival(lp.putWavax, av) : 0;
+      const gw = av && lp.gotWavax.length ? usdAtArrival(lp.gotWavax, av) : 0;
+      lpPutUsd = Math.round((pw || 0) + lp.putStable) || null;
+      lpGotUsd = Math.round((gw || 0) + lp.gotStable) || null;
+    }
+  }
+  if (lp && verdict && lpNetTk !== null && lpNetTk > 0 && lpNetTk > lp.outSwap && verdict !== "still aboard" && verdict !== "bag arrived after the party") {
+    verdict = "never sold. the pool sold it for you.";
+  }
   if (lp && verdict && verdict !== "still aboard") {
     const totalIn = lp.inSwap + lp.inXfer + lp.inLp;
     if (totalIn > 0 && (lp.inXfer + lp.inLp) / totalIn >= 0.8 && peakTs && peakTs - rp.firstTs < 7 * 864e5) verdict = "bag arrived after the party";
@@ -1165,7 +1233,7 @@ var token_default = async (req) => {
     holdingUsd: rp.balNow > 0 && cg && cg.cur ? Math.round(rp.balNow * cg.cur) : null,
     verdict,
     updated,
-    lp: lp ? { adds: lp.adds, removes: lp.removes } : null,
+    lp: lp ? { adds: lp.adds, removes: lp.removes, netTk: lpNetTk !== null ? Math.round(lpNetTk) : null, putUsd: lpPutUsd, gotUsd: lpGotUsd } : null,
     recvTk: lp && lp.inXfer > 0 ? Math.round(lp.inXfer) : null,
     recvUsd: recvUsd ? Math.round(recvUsd) : null,
     truncated
