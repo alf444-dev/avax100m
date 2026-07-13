@@ -491,6 +491,14 @@ function renderPnl(s){
   set("pnl-l", s.biggestL);
   set("pnl-rt", s.roundtrip);
   set("pnl-ste", s.soldTooEarly);
+  if(s.records&&s.records.length){
+    var RC={w:"pnl-w",l:"pnl-l",rt:"pnl-rt"};
+    s.records.forEach(function(h){
+      var el=document.getElementById(RC[h.cat]); if(!el) return;
+      el.innerHTML+=' <span style="color:var(--red);font-size:10px;letter-spacing:.12em;text-transform:uppercase">\u2605 #'+h.pos+' all-time</span>';
+      tickAdd("record books: #"+h.pos+" all-time "+(h.cat==="w"?"w":h.cat==="l"?"l":"roundtrip")+" on this site");
+    });
+  }
   if(s.summary && s.summary.total){
     var sm=document.getElementById("pnl-summary");
     sm.innerHTML="total realized: <b style='color:var(--red)'>"+s.summary.total+"</b>"

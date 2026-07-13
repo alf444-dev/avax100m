@@ -28,6 +28,7 @@ var census_default = async (req) => {
   const store = getStore("census");
   if (req.method === "GET") {
     const counts2 = await store.get("counts", { type: "json" }) || EMPTY();
+    counts2.records = await getStore("records").get("records", { type: "json" }).catch(() => null) || null;
     return new Response(JSON.stringify(counts2), { headers: HEADERS });
   }
   if (req.method !== "POST") {

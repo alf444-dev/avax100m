@@ -5,6 +5,80 @@ var HEADERS = { "content-type": "application/json", "access-control-allow-origin
 var CACHE_MS = 7 * 24 * 3600 * 1e3;
 var MORALIS = "https://deep-index.moralis.io/api/v2.2";
 var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
+var REC_ERAS = [
+  [Date.UTC(2021, 1, 9), "GENESIS"], [Date.UTC(2021, 7, 18), "PANGOLIN SPRING"], [Date.UTC(2021, 10, 21), "AVALANCHE RUSH"],
+  [Date.UTC(2022, 1, 1), "WONDERLAND"], [Date.UTC(2022, 4, 9), "SUBNET SZN"], [Date.UTC(2023, 0, 1), "THE LONG WINTER"],
+  [Date.UTC(2023, 9, 1), "THE DESERT"], [Date.UTC(2023, 11, 5), "STARS ARENA"], [Date.UTC(2024, 2, 6), "COQ SZN"],
+  [Date.UTC(2024, 11, 16), "DURANGO"], [Date.UTC(2025, 0, 25), "AVALANCHE9000"], [Date.UTC(2025, 5, 1), "PRESALE SZN"],
+  [Date.UTC(2025, 10, 19), "ARENA SUMMER"], [Infinity, "GRANITE"]
+];
+async function walletEra(addr) {
+  try {
+    const j = await fetch(RS + "?module=account&action=txlist&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=1&sort=asc").then((r) => r.json());
+    const f = j && j.result && j.result[0];
+    if (!f) return null;
+    const ts = parseInt(f.timeStamp, 10) * 1e3;
+    for (const e of REC_ERAS) if (ts < e[0]) return e[1];
+    return REC_ERAS[REC_ERAS.length - 1][1];
+  } catch {
+    return null;
+  }
+}
+async function walletTag(addr) {
+  try {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("rec/" + addr));
+    return Array.from(new Uint8Array(buf)).slice(0, 5).map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return null;
+  }
+}
+async function updateRecords(addr, rows, extra) {
+  try {
+    const rstore = getStore("records");
+    const wins = rows.filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit);
+    const losses = rows.filter((r) => r.profit < 0).sort((a, b) => a.profit - b.profit);
+    const rt0 = extra && extra.roundtrips && extra.roundtrips[0];
+    const cand = {
+      w: wins[0] && wins[0].profit >= 1e3 ? { v: Math.round(wins[0].profit), sym: wins[0].sym } : null,
+      l: losses[0] && losses[0].profit <= -1e3 ? { v: Math.round(losses[0].profit), sym: losses[0].sym } : null,
+      rt: rt0 && rt0.rtUsd >= 1e3 ? { v: rt0.rtUsd, sym: rt0.sym } : null
+    };
+    if (!cand.w && !cand.l && !cand.rt) return null;
+    const rec = await rstore.get("records", { type: "json" }).catch(() => null) || { w: [], l: [], rt: [] };
+    const tag = await walletTag(addr);
+    let era = null, dirty = false;
+    const hits = [];
+    for (const cat of ["w", "l", "rt"]) {
+      const c = cand[cat];
+      if (!c) continue;
+      let board = rec[cat] || [];
+      const beats = (a, b) => cat === "l" ? a < b : a > b;
+      const mine = tag ? board.findIndex((b) => b.h === tag) : -1;
+      if (mine > -1) {
+        if (beats(c.v, board[mine].v)) {
+          board.splice(mine, 1);
+        } else {
+          hits.push({ cat, pos: mine + 1 });
+          continue;
+        }
+      }
+      if (board.length >= 5 && !beats(c.v, board[4].v)) continue;
+      if (era === null) era = await walletEra(addr);
+      board.push({ v: c.v, sym: c.sym, era: era || void 0, h: tag || void 0, t: Date.now() });
+      board.sort((a, b) => cat === "l" ? a.v - b.v : b.v - a.v);
+      rec[cat] = board = board.slice(0, 5);
+      dirty = true;
+      const pos = board.findIndex((b) => b.v === c.v && b.sym === c.sym);
+      if (pos > -1) hits.push({ cat, pos: pos + 1 });
+    }
+    if (dirty) await rstore.set("records", JSON.stringify(rec)).catch(() => {
+    });
+    return hits.length ? hits : null;
+  } catch {
+    return null;
+  }
+}
+
 var usd = (n) => "$" + Math.round(Math.abs(n)).toLocaleString("en-US");
 var signedUsd = (n) => (n < 0 ? "-" : "+") + usd(n);
 async function mfetch(path, key) {
@@ -525,6 +599,7 @@ var pnl_default = async (req) => {
     stats.soldTooEarly = extra.soldTooEarly;
     stats.roundtrips = extra.roundtrips;
     stats.soldEarly = extra.soldEarly;
+    stats.records = await updateRecords(addr, rows, extra);
     const rowsIdx = rows.slice(0, 300).map((r) => ({ s: r.sym, a: r.tokenAddress, p: Math.round(r.profit), i: Math.round(r.invested), so: Math.round(r.sold), bt: r.boughtTk, st: r.soldTk }));
     if (store && !debug) await store.set(cacheKey, JSON.stringify({ t: Date.now(), stats, rowsIdx })).catch(() => {
     });
