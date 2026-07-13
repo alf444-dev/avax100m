@@ -1215,10 +1215,10 @@ function summarize(rows, capped) {
   const losses = rows.filter((r) => r.profit < 0).sort((a, b) => a.profit - b.profit);
   const total = rows.reduce((s, r) => s + r.profit, 0);
   const decided = wins.length + losses.length;
-  base.biggestW = wins[0] ? { line: signedUsd(wins[0].profit), sub: "$" + wins[0].sym } : null;
-  base.biggestL = losses[0] ? { line: signedUsd(losses[0].profit), sub: "$" + losses[0].sym } : null;
-  base.topW = wins.slice(0, 5).map((r) => ({ line: signedUsd(r.profit), sub: "$" + r.sym }));
-  base.topL = losses.slice(0, 5).map((r) => ({ line: signedUsd(r.profit), sub: "$" + r.sym }));
+  base.biggestW = wins[0] ? { line: signedUsd(wins[0].profit), sub: "$" + wins[0].sym, usd: Math.round(wins[0].profit), sym: wins[0].sym } : null;
+  base.biggestL = losses[0] ? { line: signedUsd(losses[0].profit), sub: "$" + losses[0].sym, usd: Math.round(losses[0].profit), sym: losses[0].sym } : null;
+  base.topW = wins.slice(0, 5).map((r) => ({ line: signedUsd(r.profit), sub: "$" + r.sym, usd: Math.round(r.profit), sym: r.sym }));
+  base.topL = losses.slice(0, 5).map((r) => ({ line: signedUsd(r.profit), sub: "$" + r.sym, usd: Math.round(r.profit), sym: r.sym }));
   base.summary = {
     total: signedUsd(total),
     winrate: decided >= 3 ? Math.round(wins.length / decided * 100) + "%" : null,

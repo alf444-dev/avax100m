@@ -779,6 +779,7 @@ function tokLookup(){
     function cnum(n){ if(n>=1e12) return (n/1e12).toFixed(2)+"t"; if(n>=1e9) return (n/1e9).toFixed(2)+"b"; if(n>=1e6) return (n/1e6).toFixed(2)+"m"; if(n>=1e4) return (n/1e3).toFixed(1)+"k"; return n.toLocaleString("en-US"); }
     if(t.recvUsd) rows+=tokRow("received","\u2248$"+t.recvUsd.toLocaleString("en-US")+" at arrival"+(t.recvTk?" \xB7 "+cnum(t.recvTk)+" tokens":""));
     else if(t.recvTk) rows+=tokRow("received","\u2248"+cnum(t.recvTk)+" tokens by transfer");
+    if(t.airdropRealized) rows+=tokRow("airdrop realized","\u2248+$"+t.airdropRealized.toLocaleString("en-US"));
     if(t.peakBagUsd!==null) rows+=tokRow("peak bag (in this wallet)","$"+t.peakBagUsd.toLocaleString("en-US")+(t.peakDate?" \xB7 "+t.peakDate:""));
     rows+=tokRow("first held",t.firstHeld);
     rows+=tokRow("transfers",t.transfers);

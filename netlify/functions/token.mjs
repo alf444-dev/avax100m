@@ -962,6 +962,11 @@ function foldTok(rows, addr, refTs) {
   return { firstTs, lastTs, transfers, peakBag: f(peakBag), peakBeforeRef: f(peakBeforeRef), balNow: f(bal), balAtRef: balAtRef === null ? null : f(balAtRef) };
 }
 var WAVAX_C = "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7";
+var AIRDROP_META = {
+  "0xffff003a6bad9b743d658048742935fffe2b6ed7": "KET",
+  "0x7698a5311da174a95253ce86c21ca7272b9b05f8": "WINK",
+  "0x0f669808d88b2b0b3d23214dcd2a1cc6a8b1b5cd": "BLUB"
+};
 var STABLE_SYMS = { "USDT": 1, "USDC": 1, "DAI": 1, "MIM": 1, "FRAX": 1, "USDT.E": 1, "USDC.E": 1, "DAI.E": 1, "BUSD": 1, "TUSD": 1 };
 async function avaxSeries(store) {
   const ck = "avaxusd/v1";
@@ -1133,7 +1138,7 @@ var token_default = async (req) => {
   if (!contract) {
     return new Response(JSON.stringify({ none: true, q }), { headers: HEADERS });
   }
-  const dk = "tok6/" + addr + "/" + contract;
+  const dk = "tok7/" + addr + "/" + contract;
   if (store) try {
     const c = await store.get(dk, { type: "json" });
     if (c) {
@@ -1186,6 +1191,13 @@ var token_default = async (req) => {
       if (inv > 0) synthInv = Math.round(inv);
       if (sold > 0) synthSold = Math.round(sold);
     }
+  }
+  let airdropRealized = null;
+  if (AIRDROP_META[contract] && lp && lp.xferInEvs.length && recvUsd > 50) {
+    const proceeds = row ? row.so : synthSold || 0;
+    const inv = row ? row.i : synthInv || 0;
+    const ar = proceeds - inv;
+    if (ar > 0) airdropRealized = Math.round(ar);
   }
   if (lp && lpNetTk !== null && lpNetTk > 0 && lpNetTk > lp.outSwap && verdict !== "bag arrived after the party") {
     const mostlyGone = rp.peakBag > 0 && lpNetTk >= rp.peakBag * 0.5;
@@ -1242,6 +1254,15 @@ var token_default = async (req) => {
             }
           }
         }
+        if (airdropRealized > 0) {
+          const curBest = st2.biggestW && (st2.biggestW.usd || parseInt(String(st2.biggestW.line).replace(/[^0-9]/g, ""), 10) || 0) || 0;
+          if (airdropRealized > curBest && !(st2.topW || []).some((x) => x.sym === symU || x.sub === "$" + symU)) {
+            const entry = { line: "+$" + airdropRealized.toLocaleString("en-US"), sub: "$" + symU, sym: symU, usd: airdropRealized };
+            st2.topW = [entry].concat(st2.topW || []).slice(0, 5);
+            st2.biggestW = { line: entry.line, sub: entry.sub, usd: airdropRealized, sym: symU };
+            updated = updated ? updated + " + biggest win" : "biggest win";
+          }
+        }
         if (updated) {
           await store.set("v23/" + addr, JSON.stringify(cached)).catch(() => {
           });
@@ -1262,6 +1283,7 @@ var token_default = async (req) => {
     realized: row ? row.p : null,
     invested: row ? row.i : synthInv,
     soldUsd: row ? row.so : synthSold,
+    airdropRealized,
     synth: !row && !!(synthInv || synthSold),
     synthPartial: !row && !!(lp && lp.unpricedSwapTk > 0),
     firstHeld: new Date(rp.firstTs).toISOString().slice(0, 10),
