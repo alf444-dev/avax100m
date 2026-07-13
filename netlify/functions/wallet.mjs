@@ -213,6 +213,10 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .cell .v.red{color:var(--red)}
 .cell .v small{font-size:11px;color:var(--dim);font-weight:400}
 .note{margin-top:14px;font-size:11px;color:var(--dim);letter-spacing:.06em}
+.toolrow{display:flex;gap:44px;border-bottom:1px solid var(--faint)}
+.toolrow section{flex:1;border-bottom:none;min-width:0}
+.toolrow h2{font-size:11px;color:var(--dim)}
+@media(max-width:760px){.toolrow{flex-direction:column;gap:0}.toolrow section{border-bottom:1px solid var(--faint)}.toolrow section:last-child{border-bottom:none}}
 footer{padding:36px 0 64px;color:var(--dim);font-size:12px}
 footer .frow{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
 footer a{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--faint)}
@@ -291,6 +295,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     <div class="note" id="pnl-note">syncing trade history\u2026</div>
     <button class="btn" id="ledger-toggle" style="display:none;margin-top:16px">full ledger \u2192</button>
     <button class="btn" id="pnl-deeper" style="display:none;margin-top:16px;margin-left:8px">dig deeper</button>
+    <button class="btn primary" id="pnl-gen" style="display:none;margin-top:16px;margin-left:8px">generate p&amp;l card \u2192</button>
     <div id="ledger" style="display:none;margin-top:22px">
       <div class="grid" style="grid-template-columns:repeat(4,1fr)">
         <div class="cell"><div class="k">top wins</div><div id="lg-w" style="font-size:12px;margin-top:8px"></div></div>
@@ -308,6 +313,13 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     </div>
   </section>
 
+  <section id="top8-sec" style="display:none">
+    <h2>top 8</h2>
+    <div id="top8-grid" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <div class="note" id="top8-note"></div>
+  </section>
+
+  <div class="toolrow">
   <section id="oracle-sec" style="display:none">
     <h2>ask the chain</h2>
     <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
@@ -331,12 +343,8 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     <div id="tok-out" style="margin-top:18px"></div>
     <div class="note">your complete history with any token you've touched. or proof you never touched it.</div>
   </section>
+  </div>
 
-  <section id="top8-sec" style="display:none">
-    <h2>top 8</h2>
-    <div id="top8-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px"></div>
-    <div class="note" id="top8-note"></div>
-  </section>
 </main>
 
 <footer><div class="wrap frow">
@@ -464,6 +472,7 @@ loadPnl(false);
 })();
 
 function renderPnl(s){
+  LAST_PNL = s;
   function set(id,o){ var el=document.getElementById(id);
     if(!o){ el.textContent="\u2014"; return; }
     el.innerHTML=o.line+(o.sub?' <small>'+o.sub+'</small>':""); }
@@ -503,7 +512,9 @@ function renderPnl(s){
       tg.textContent=open?"full ledger \u2192":"close ledger";
     };
   }
-  drawPnlCard(s);
+  var gb=document.getElementById("pnl-gen");
+  if(document.getElementById("pnl-card-wrap").style.display==="block"){ drawPnlCard(s); }
+  else gb.style.display="inline-block";
 }
 
 /* badge glyphs \u2014 ops: [0,x,y,w,h,c]=rect [1,..]=stroke rect [2,"pts",c]=poly [3,x1,y1,x2,y2,c,w]=line [4,"pts",c]=polyline [5,cx,cy,r,c,f]=circle */
@@ -594,7 +605,7 @@ fetch(SITE+"/api/badges?addr="+D.addr).then(function(r){return r.json();}).then(
     return '<span class="btile'+(i===0?' medal':'')+'" tabindex="0" aria-label="'+nm+'">'+svgFor(b.id)
       +'<span class="tip"><span class="tl">EVIDENCE</span><span class="tn">'+nm+tier+'</span><span class="tr">'+rar+'</span><span class="tv">'+b.ev+'</span></span></span>';
   }).join("");
-  if(LAST_PNL) drawPnlCard(LAST_PNL);
+  redrawCard();
 }).catch(function(){});
 
 /* ---- claim / status / oracle ---- */
@@ -605,7 +616,7 @@ function applyTheme(t){
   var c=THEMES[t]||THEMES.red;
   document.documentElement.style.setProperty("--red",c);
   window.THEME_HEX=c;
-  if(LAST_PNL) drawPnlCard(LAST_PNL);
+  redrawCard();
 }
 function claimInfo(){
   fetch(SITE+"/api/claim?addr="+D.addr+"&info=1&view=1").then(function(r){return r.json();}).then(function(c){
@@ -728,7 +739,7 @@ document.getElementById("cust-save").addEventListener("click",function(){
               var ai=CUR.cardBadges.indexOf(a.id), bi=CUR.cardBadges.indexOf(b.id);
               return (ai<0?9:ai)-(bi<0?9:bi);
             });
-            if(LAST_PNL) drawPnlCard(LAST_PNL);
+            redrawCard();
           }
           document.getElementById("cust").style.display="none";
           cmsg("saved. signed. permanent-ish.");
@@ -797,7 +808,7 @@ function renderTop8(list,in8){
   g.innerHTML=(list||[]).map(function(e,i){
     var label=e.indexOf(".avax")>-1?e:(e.slice(0,8)+"\u2026"+e.slice(-6));
     var href=e.indexOf(".avax")>-1?"#":(SITE+"/w/"+e);
-    return '<a data-e="'+e+'" href="'+href+'" '+(href==="#"?'':'target="_blank" rel="noopener" ')+'style="border:1px solid var(--faint);padding:12px 14px;text-decoration:none;color:var(--ink);display:block"><span style="color:var(--red);font-size:10px;letter-spacing:.15em">#'+(i+1)+'</span><div style="font-size:12px;margin-top:5px;word-break:break-all">'+label+'</div></a>';
+    return '<a data-e="'+e+'" href="'+href+'" '+(href==="#"?'':'target="_blank" rel="noopener" ')+'style="border:1px solid var(--faint);padding:6px 12px;text-decoration:none;color:var(--ink);display:inline-flex;gap:8px;align-items:baseline;font-size:12px"><span style="color:var(--red);font-size:10px;letter-spacing:.15em">#'+(i+1)+'</span>'+label+'</a>';
   }).join("");
   // resolve .avax entries to live links
   g.querySelectorAll("a[href='#']").forEach(function(a){
@@ -917,12 +928,18 @@ fetch(SITE+"/api/resolve?addr="+D.addr).then(function(r){return r.json();}).then
     var el = document.getElementById("avvy");
     el.textContent = j.name;
     el.style.display = "block";
-    if(LAST_PNL) drawPnlCard(LAST_PNL); // re-render the card wearing the name
+    redrawCard(); // re-render the card wearing the name
   }
 }).catch(function(){});
 var LAST_PNL = null;
 
 /* shareable p&l card */
+function redrawCard(){ if(LAST_PNL && document.getElementById("pnl-card-wrap").style.display==="block") drawPnlCard(LAST_PNL); }
+document.getElementById("pnl-gen").addEventListener("click",function(){
+  if(!LAST_PNL) return;
+  drawPnlCard(LAST_PNL);
+  this.style.display="none";
+});
 function drawPnlCard(s){
   if(!s.biggestW && !s.biggestL && !s.roundtrip && !s.soldTooEarly) return;
   LAST_PNL = s;
