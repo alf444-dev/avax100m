@@ -48,20 +48,20 @@ function tsOf(j) {
 // same method as the live checker: earliest of normal tx, token transfer, internal tx.
 // txlist-only misses wallets whose first touch was a token receive/airdrop,
 // stamping them with a much later era (e.g. inscription-era first native tx -> COQ SZN).
-async function firstTs(addr) {
+// returns both so the audit/fix passes can compare in one routescan round.
+async function firstTsBoth(addr) {
   const base = RS + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=1&sort=asc";
   const [tx, tok, itx] = await Promise.all([
     fetch(base + "&action=txlist").then((r) => r.json()).catch(() => null),
     fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => null),
     fetch(base + "&action=txlistinternal").then((r) => r.json()).catch(() => null)
   ]);
-  const cands = [tsOf(tx), tsOf(tok), tsOf(itx)].filter((t) => t !== null);
-  return cands.length ? Math.min(...cands) : null;
+  const tOld = tsOf(tx);
+  const cands = [tOld, tsOf(tok), tsOf(itx)].filter((t) => t !== null);
+  return { tOld, tNew: cands.length ? Math.min(...cands) : null };
 }
-// txlist-only, kept for the audit comparison
-async function firstTsTxOnly(addr) {
-  const j = await fetch(RS + "?module=account&action=txlist&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=1&sort=asc").then((r) => r.json()).catch(() => null);
-  return tsOf(j);
+async function firstTs(addr) {
+  return (await firstTsBoth(addr)).tNew;
 }
 var HEADERS = {
   "content-type": "application/json",
@@ -112,7 +112,7 @@ var census_default = async (req) => {
     const rows = [];
     for (const addr of sample) {
       if (Date.now() - t0 > 7000) break;
-      const [tOld, tNew] = await Promise.all([firstTsTxOnly(addr), firstTs(addr)]);
+      const { tOld, tNew } = await firstTsBoth(addr);
       const d = (t) => t ? new Date(t).toISOString().slice(0, 10) : null;
       rows.push({
         a: addr.slice(0, 6) + "\u2026" + addr.slice(-4),
@@ -122,6 +122,69 @@ var census_default = async (req) => {
       });
     }
     return new Response(JSON.stringify({ audited: rows.length, poolSize: seen.size, rows }), { headers: HEADERS });
+  }
+  if (body && body.fixeras && typeof body.key === "string") {
+    if (!process.env.CENSUS_KEY || body.key !== process.env.CENSUS_KEY) {
+      return new Response(JSON.stringify({ error: "bad key" }), { status: 403, headers: HEADERS });
+    }
+    // correction pass: walks every counted wallet still in the pnl cache,
+    // recomputes era+rank with the checker method, and differentially moves
+    // any that the txlist-only backfill misfiled. paginated + resumable like
+    // the backfill; self-marks done (re-running would double-shift, so it won't).
+    const t0 = Date.now();
+    const pstore = getStore("pnl");
+    const state = await store.get("fix-state", { type: "json" }).catch(() => null);
+    if (state === "done") {
+      return new Response(JSON.stringify({ done: true, note: "era fix already complete" }), { headers: HEADERS });
+    }
+    const counts = await store.get("counts", { type: "json" }) || EMPTY();
+    let cur = state && state.c || void 0, eraMoved = 0, rankMoved = 0, scanned = 0, unresolved = 0, timedOut = false;
+    const done2 = new Set(state && state.done || []);
+    const movements = [];
+    outer: do {
+      const page = await pstore.list({ prefix: "v", cursor: cur });
+      for (const b of page.blobs || []) {
+        if (Date.now() - t0 > 3200) {
+          timedOut = true;
+          break outer;
+        }
+        const m = /^v\d+\/(0x[0-9a-f]{40})$/.exec(b.key);
+        if (!m) continue;
+        const addr = m[1];
+        if (done2.has(addr)) continue;
+        done2.add(addr);
+        // only wallets actually counted in the census can be moved
+        const h = await sha256hex(addr);
+        if (!await store.get("seen/" + h)) continue;
+        scanned++;
+        const { tOld, tNew } = await firstTsBoth(addr);
+        if (!tOld || !tNew) {
+          unresolved++;
+          continue;
+        }
+        const eo = eraFor(tOld), en = eraFor(tNew);
+        const days = (t) => Math.floor((Date.now() - t) / 864e5);
+        const ro = rankFor(days(tOld)), rn = rankFor(days(tNew));
+        if (eo !== en) {
+          counts.eras[eo] = Math.max(0, (counts.eras[eo] || 0) - 1);
+          counts.eras[en] = (counts.eras[en] || 0) + 1;
+          movements.push(eo + "\u2192" + en);
+          eraMoved++;
+        }
+        if (ro !== rn) {
+          counts.ranks[ro] = Math.max(0, (counts.ranks[ro] || 0) - 1);
+          counts.ranks[rn] = (counts.ranks[rn] || 0) + 1;
+          rankMoved++;
+        }
+      }
+      cur = page.cursor;
+    } while (cur);
+    await store.set("counts", JSON.stringify(counts));
+    if (timedOut) await store.set("fix-state", JSON.stringify({ c: cur || null, done: [...done2] })).catch(() => {
+    });
+    else await store.set("fix-state", JSON.stringify("done")).catch(() => {
+    });
+    return new Response(JSON.stringify({ done: !timedOut, scanned, eraMoved, rankMoved, unresolved, movements, total: counts.total }), { headers: HEADERS });
   }
   if (body && body.backfill && typeof body.key === "string") {
     if (!process.env.CENSUS_KEY || body.key !== process.env.CENSUS_KEY) {

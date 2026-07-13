@@ -41,6 +41,7 @@
   <div class="lbl">census key</div>
   <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="paste CENSUS_KEY">
   <button id="start">run backfill</button>
+  <button id="fixeras" style="background:transparent;border:1px solid var(--red);color:var(--red)">fix eras</button>
   <button id="audit" style="background:transparent;border:1px solid var(--faint);color:var(--dim);margin-left:8px">audit era sample</button>
   <div id="msg"></div>
 </div>
@@ -71,8 +72,38 @@ function set(id,v){ document.getElementById(id).textContent=(v||0).toLocaleStrin
 function logln(t){ var l=document.getElementById("log"); l.textContent+=(l.textContent?"\n":"")+t; l.scrollTop=1e9; }
 
 document.getElementById("start").addEventListener("click",start);
+document.getElementById("fixeras").addEventListener("click",fixeras);
 document.getElementById("audit").addEventListener("click",audit);
 document.getElementById("key").addEventListener("keydown",function(e){ if(e.key==="Enter") start(); });
+
+async function fixeras(){
+  if(RUNNING) return;
+  var k=document.getElementById("key").value.trim();
+  if(!k){ msg.className="err"; msg.textContent="key required."; return; }
+  msg.className=""; msg.textContent="era fix running — recomputes every counted wallet with the checker method. takes a few minutes, keep the tab open.";
+  RUNNING=true;
+  document.getElementById("panel").style.display="block";
+  var moved=0, rmoved=0, scanned2=0, unres=0;
+  for(var i=0;i<400;i++){
+    var r;
+    try{
+      r=await fetch("/api/census",{method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({fixeras:true,key:k})}).then(function(x){return x.json();});
+    }catch(e){ logln("fix batch failed, retrying in 3s…"); await sleep(3000); continue; }
+    if(r.error){ logln("stopped: "+r.error); RUNNING=false; return; }
+    moved+=r.eraMoved||0; rmoved+=r.rankMoved||0; scanned2+=r.scanned||0; unres+=r.unresolved||0;
+    logln("fix · scanned "+(r.scanned||0)+" · era moves "+(r.eraMoved||0)+" · rank moves "+(r.rankMoved||0)
+      +((r.movements&&r.movements.length)?" · "+r.movements.join(", "):""));
+    if(r.done){
+      RUNNING=false;
+      logln("era fix complete · "+scanned2+" wallets rechecked · "+moved+" era corrections · "+rmoved+" rank corrections"+(unres?" · "+unres+" unresolved (routescan didn't answer)":""));
+      msg.textContent="done — reload the homepage to see corrected charts.";
+      return;
+    }
+    await sleep(450);
+  }
+  RUNNING=false;
+}
 
 async function audit(){
   var k=document.getElementById("key").value.trim();
