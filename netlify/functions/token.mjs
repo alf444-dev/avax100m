@@ -1104,7 +1104,7 @@ var token_default = async (req) => {
   const store = storeOr("pnl");
   let rowsIdx = [];
   if (store) try {
-    const cached = await store.get("v23/" + addr, { type: "json" });
+    const cached = await store.get("v24/" + addr, { type: "json" });
     if (cached && cached.rowsIdx) rowsIdx = cached.rowsIdx;
   } catch {
   }
@@ -1115,7 +1115,7 @@ var token_default = async (req) => {
     } catch {
     }
     if (store) try {
-      const cached = await store.get("v23/" + addr, { type: "json" });
+      const cached = await store.get("v24/" + addr, { type: "json" });
       if (cached && cached.rowsIdx) rowsIdx = cached.rowsIdx;
     } catch {
     }
@@ -1213,7 +1213,7 @@ var token_default = async (req) => {
   const infraTok = NO_STORY[contract] || (row && NO_STORY_SYM[(row.s || "").toUpperCase()]);
   if (!infraTok && store && peakPrice && peakTs && balAtPeak !== null) {
     try {
-      const cached = await store.get("v23/" + addr, { type: "json" });
+      const cached = await store.get("v24/" + addr, { type: "json" });
       if (cached && cached.stats) {
         const st2 = cached.stats;
         const avgSell = row && row.st > 0 ? row.so / row.st : synthSold && lp && lp.outSwap > 0 ? synthSold / lp.outSwap : 0;
@@ -1224,12 +1224,19 @@ var token_default = async (req) => {
         const exitRatio = rp0.peakBag > 0 ? balAtPeak / rp0.peakBag : 1;
         if (exitRatio >= 0.2 && balAtPeak > 0) {
           const pBal2 = truePk ? truePk.bal : balAtPeak;
-          const peakValue = truePk ? truePk.usd : balAtPeak * peakPrice;
-          const heldPart = Math.min(rp0.balNow, balAtPeak);
-          const soldAfter = Math.max(0, balAtPeak - heldPart);
+          let peakValue = truePk ? truePk.usd : balAtPeak * peakPrice;
+          const heldPart = Math.min(rp0.balNow, pBal2);
+          let soldAfter = Math.max(0, pBal2 - heldPart);
+          const unpriceable = soldAfter > pBal2 * 0.05 && avgSell <= 0;
+          const soldTkKnown = row && row.st > 0 ? row.st : lp && lp.outSwap > 0 ? lp.outSwap : null;
+          if (soldTkKnown !== null && soldAfter > soldTkKnown) {
+            const exported = soldAfter - soldTkKnown;
+            peakValue = peakValue * ((pBal2 - exported) / pBal2);
+            soldAfter = soldTkKnown;
+          }
           const walked = soldAfter * avgSell + heldPart * cur;
           const rt = peakValue - walked;
-          if (peakValue > 500 && rt > 250 && rt / peakValue > 0.5) {
+          if (!unpriceable && peakValue > 500 && rt > 250 && rt / peakValue > 0.5) {
             const best = st2.roundtrips && st2.roundtrips[0] && st2.roundtrips[0].rtUsd || 0;
             if (rt > best && !(st2.roundtrips || []).some((x) => x.sym === symU)) {
               const tail = soldAfter * avgSell > heldPart * cur ? "walked with ~" + usd2(walked) : usd2(heldPart * cur) + " now";
@@ -1264,7 +1271,7 @@ var token_default = async (req) => {
           }
         }
         if (updated) {
-          await store.set("v23/" + addr, JSON.stringify(cached)).catch(() => {
+          await store.set("v24/" + addr, JSON.stringify(cached)).catch(() => {
           });
           try {
             const bs = storeOr("badges");

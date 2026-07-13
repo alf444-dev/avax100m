@@ -1241,7 +1241,7 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v23/" + addr;
+  const cacheKey = "v24/" + addr;
   const deadline = Date.now() + 6500;
   const debug = url.searchParams.get("debug") === "1";
   const deeper = url.searchParams.get("deeper") === "1";
