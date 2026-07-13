@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>·</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  :root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e84142;--mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;line-height:1.6;padding:44px 20px;max-width:720px;margin:0 auto}
+  h1{font-size:20px;letter-spacing:.02em}h1 b{color:var(--red)}
+  .sub{color:var(--dim);font-size:12px;margin:6px 0 26px}
+  .gate{border:1px solid var(--faint);padding:20px;max-width:440px}
+  .lbl{font-size:11px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;margin-bottom:10px}
+  input{background:transparent;border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:11px 13px;width:100%}
+  input:focus{outline:none;border-color:var(--red)}
+  button{background:var(--red);border:0;color:#0a0a0a;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:12px 22px;cursor:pointer;margin-top:12px}
+  button:disabled{opacity:.4;cursor:default}
+  #msg{color:var(--dim);font-size:12px;margin-top:10px;min-height:18px}
+  #msg.err{color:var(--red)}
+  #panel{display:none;margin-top:8px}
+  .stat{border:1px solid var(--faint);padding:18px 16px;margin-bottom:14px}
+  .stat .k{font-size:10px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
+  .stat .v{font-size:30px;font-weight:700;color:var(--red);margin-top:4px}
+  .bars{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--faint);border:1px solid var(--faint)}
+  .bars .c{background:var(--bg);padding:12px 14px}
+  .bars .c .k{font-size:10px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+  .bars .c .v{font-size:18px;font-weight:700;margin-top:3px}
+  #log{margin-top:16px;border:1px solid var(--faint);padding:12px 14px;max-height:220px;overflow:auto;font-size:12px;color:var(--dim);white-space:pre-wrap}
+  .done{color:var(--red);font-weight:700;margin-top:14px}
+  .warn{border-left:2px solid var(--faint);padding:8px 14px;margin-top:22px;color:var(--dim);font-size:12px}
+</style>
+</head>
+<body>
+<h1>AVAX<b>/</b>100M · census backfill</h1>
+<p class="sub">counts every wallet still in the cache into the census. safe to run more than once — wallets already counted are skipped, never doubled.</p>
+
+<div class="gate" id="gate">
+  <div class="lbl">census key</div>
+  <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="paste CENSUS_KEY">
+  <button id="start">run backfill</button>
+  <div id="msg"></div>
+</div>
+
+<div id="panel">
+  <div class="stat"><div class="k">census total</div><div class="v" id="total">—</div></div>
+  <div class="bars">
+    <div class="c"><div class="k">added this run</div><div class="v" id="added">0</div></div>
+    <div class="c"><div class="k">already counted</div><div class="v" id="skipped">0</div></div>
+    <div class="c"><div class="k">scanned</div><div class="v" id="scanned">0</div></div>
+  </div>
+  <div id="log"></div>
+  <div id="finished" class="done" style="display:none">✓ done. the census is now as full as the cache allows — reload the homepage to see it.</div>
+</div>
+
+<div class="warn">era and rank counts are exact. “first move” for backfilled wallets is bucketed as “other” — that heuristic lives in the checker and can’t be re-derived here. your key stays in this tab only; it’s sent per request, never saved, never put in the address bar.</div>
+
+<script>
+var KEY=null, RUNNING=false;
+var added=0, skipped=0, scanned=0;
+var msg=document.getElementById("msg");
+function set(id,v){ document.getElementById(id).textContent=(v||0).toLocaleString("en-US"); }
+function logln(t){ var l=document.getElementById("log"); l.textContent+=(l.textContent?"\n":"")+t; l.scrollTop=1e9; }
+
+document.getElementById("start").addEventListener("click",start);
+document.getElementById("key").addEventListener("keydown",function(e){ if(e.key==="Enter") start(); });
+
+async function batch(){
+  return fetch("/api/census",{
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({backfill:true,key:KEY})
+  }).then(function(r){ return r.json(); });
+}
+
+async function start(){
+  if(RUNNING) return;
+  KEY=document.getElementById("key").value.trim();
+  if(!KEY){ msg.className="err"; msg.textContent="key required."; return; }
+  msg.className=""; msg.textContent="checking key…";
+
+  // first probe: a bad key returns {error:"bad key"} with 403
+  var first;
+  try { first=await batch(); }
+  catch(e){ msg.className="err"; msg.textContent="network error — try again."; return; }
+  if(first && first.error){ msg.className="err"; msg.textContent="rejected: "+first.error+" (check the key, and that it’s deployed on the server)."; KEY=null; return; }
+
+  document.getElementById("key").value="";
+  document.getElementById("gate").style.display="none";
+  document.getElementById("panel").style.display="block";
+  RUNNING=true;
+
+  apply(first);
+  if(first.done){ finish(); return; }
+
+  for(var i=0;i<400;i++){
+    var r;
+    try { r=await batch(); }
+    catch(e){ logln("batch failed, retrying in 3s…"); await sleep(3000); continue; }
+    if(r.error){ logln("stopped: "+r.error); break; }
+    apply(r);
+    if(r.done){ finish(); return; }
+    await sleep(450);
+  }
+}
+
+function apply(r){
+  if(typeof r.total==="number") set("total",r.total);
+  if(typeof r.added==="number"){ added+=r.added; set("added",added); }
+  if(typeof r.skipped==="number"){ skipped+=r.skipped; set("skipped",skipped); }
+  if(typeof r.scanned==="number"){ scanned+=r.scanned; set("scanned",scanned); }
+  logln("batch · +"+(r.added||0)+" new · "+(r.skipped||0)+" already counted · total "+(r.total||"?"));
+}
+function finish(){
+  RUNNING=false;
+  document.getElementById("finished").style.display="block";
+  logln("complete.");
+}
+function sleep(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
+</script>
+</body>
+</html>
