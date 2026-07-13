@@ -1049,10 +1049,10 @@ async function enrich(rows, balances, ADDR, store, diag, deadline, depth) {
   await pool(cands, 3, async (c) => {
     const d = { sym: c.sym, sold: Math.round(c.sold) };
     if (diag) diag.push(d);
-    const ck = "cand/v2/" + ADDR + "/" + c.tokenAddress;
+    const ck = "cand/v3/" + ADDR + "/" + c.tokenAddress;
     if (store) try {
       const hit = await store.get(ck, { type: "json" });
-      if (hit && Date.now() - hit.t < 7 * 24 * 3600 * 1e3) {
+      if (hit && Date.now() - hit.t < (hit.deg ? 10 * 60 * 1e3 : 7 * 24 * 3600 * 1e3)) {
         d.cached = true;
         applyOut(hit.o);
         return;
@@ -1065,21 +1065,21 @@ async function enrich(rows, balances, ADDR, store, diag, deadline, depth) {
       return;
     }
     const out = { flags: {}, rt: null, ste: null };
-    const done = async () => {
+    const done = async (deg) => {
       applyOut(out);
       if (store) try {
-        await store.set(ck, JSON.stringify({ t: Date.now(), o: out }));
+        await store.set(ck, JSON.stringify({ t: Date.now(), o: out, deg: !!deg }));
       } catch {
       }
     };
     const cg = await cgToken(c.tokenAddress, store);
     if (!cg) {
       d.skip = "no coingecko data";
-      return done();
+      return done(true);
     }
     const heldTk = balances[c.tokenAddress] && balances[c.tokenAddress].tk || 0;
     const wantsSte = c.soldTk > 0 && c.sold > 50;
-    if (heldTk <= 0 && !wantsSte) return done();
+    if (heldTk <= 0 && !wantsSte) return done(false);
     const transfers = await fetchTransfers(ADDR, c.tokenAddress);
     const rp = foldBag(transfers, ADDR, null);
     if (!rp || !rp.firstTs) {
@@ -1094,10 +1094,11 @@ async function enrich(rows, balances, ADDR, store, diag, deadline, depth) {
       return;
     }
     const pk = await peakSince(c.tokenAddress, rp.firstTs, store);
+    const degraded = !pk || !pk.series;
     const peakPrice = pk ? pk.price : cg.ath;
-    const peakTs = pk ? Math.max(pk.ts, rp.firstTs) : cg.athDate;
+    const peakTs = pk ? Math.max(pk.ts, rp.firstTs) : cg.athDate ? Math.max(cg.athDate, rp.firstTs) : null;
     d.peakSinceHeld = peakPrice;
-    if (!peakTs) return done();
+    if (!peakTs) return done(degraded);
     const rp2 = foldBag(transfers, ADDR, peakTs, peakTs - 7 * 864e5);
     if (!rp2 || rp2.balAtAth === null) {
       d.skip = "replay failed";
@@ -1158,7 +1159,7 @@ async function enrich(rows, balances, ADDR, store, diag, deadline, depth) {
         out.rt = { rt, sym: c.sym, line: "-" + usd(rt), sub: "$" + c.sym + " \xB7 " + usd(peakValue) + " at peak \xB7 " + (soldAfter * avgSell > heldPart * cg.cur ? "walked with ~" + usd(walked) : usd(heldPart * cg.cur) + " now") };
       }
     }
-    return done();
+    return done(degraded);
   });
   rts.sort((a, b) => b.rt - a.rt);
   stes.sort((a, b) => b.missed - a.missed);
@@ -1240,7 +1241,7 @@ var pnl_default = async (req) => {
     store = getStore("pnl");
   } catch {
   }
-  const cacheKey = "v22/" + addr;
+  const cacheKey = "v23/" + addr;
   const deadline = Date.now() + 6500;
   const debug = url.searchParams.get("debug") === "1";
   const deeper = url.searchParams.get("deeper") === "1";
