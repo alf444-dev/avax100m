@@ -161,6 +161,11 @@ h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:
 .addrline .a{color:var(--ink)}
 .badges{display:flex;flex-wrap:wrap;gap:10px}
 .brack{position:absolute;top:50%;transform:translateY(-50%);right:0;display:grid;grid-template-columns:repeat(5,38px);gap:8px;justify-content:end;max-width:270px}
+.brack-label{grid-column:1/-1;text-align:right;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
+.brack-label b{color:var(--red);font-weight:700}
+.brack-label .hint{color:var(--faint)}
+@media(hover:none){.brack-label .hint::before{content:"tap"}}
+@media(hover:hover){.brack-label .hint::before{content:"hover"}}
 .btile{position:relative;width:38px;height:38px;border:1px solid var(--faint);display:flex;align-items:center;justify-content:center;cursor:default;outline:none;background:var(--bg)}
 .btile:hover,.btile:focus-visible{border-color:var(--red)}
 .btile svg{width:22px;height:22px;display:block}
@@ -176,7 +181,7 @@ h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:
 .btile .tip .tv{font-size:10px;color:var(--dim);letter-spacing:.05em;line-height:1.55}
 .btile .tip .tv b{color:var(--ink)}
 .btile .tip .tl{color:var(--red);letter-spacing:.2em;font-size:9px;display:block;margin-bottom:3px}
-@media(max-width:760px){.brack{position:static;transform:none;display:flex;flex-wrap:wrap;justify-content:flex-start;max-width:none;margin:22px 0 4px}.btile .tip{right:auto;left:-1px}}
+@media(max-width:760px){.brack{position:static;transform:none;display:flex;flex-wrap:wrap;justify-content:flex-start;max-width:none;margin:22px 0 4px}.btile .tip{right:auto;left:-1px}.brack-label{width:100%;text-align:left}}
 .bdg{position:relative;border:1px solid var(--faint);padding:8px 13px 7px;display:flex;align-items:center;gap:9px;outline:none;cursor:default}
 .bdg:hover,.bdg:focus-visible{border-color:var(--red)}
 .bdg svg{width:16px;height:16px;flex:none;display:block}
@@ -543,7 +548,9 @@ fetch(SITE+"/api/badges?addr="+D.addr).then(function(r){return r.json();}).then(
     });
   }
   var el=document.getElementById("brack");
-  el.innerHTML=p.badges.map(function(b,i){
+  var n=p.badges.length;
+  var lbl='<div class="brack-label"><b>'+n+(n===1?" badge":" badges")+'</b> \\xB7 <span class="hint"></span> for evidence</div>';
+  el.innerHTML=lbl+p.badges.map(function(b,i){
     var nm=BNAMES[b.id]||b.id;
     var tier=b.tier?' <span class="bt">'+ROMAN[b.tier]+'</span>':'';
     var rar=(b.rarity&&b.rarity.total>=20)
