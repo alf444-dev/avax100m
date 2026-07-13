@@ -41,7 +41,13 @@
   <div class="lbl">census key</div>
   <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="paste CENSUS_KEY">
   <button id="start">run backfill</button>
+  <button id="audit" style="background:transparent;border:1px solid var(--faint);color:var(--dim);margin-left:8px">audit era sample</button>
   <div id="msg"></div>
+</div>
+
+<div id="auditbox" style="display:none;margin-top:20px">
+  <div class="lbl">era audit · random cache sample · txlist-only vs checker method</div>
+  <div id="audittbl" style="border:1px solid var(--faint);padding:12px 14px;font-size:12px;white-space:pre;overflow-x:auto"></div>
 </div>
 
 <div id="panel">
@@ -65,7 +71,38 @@ function set(id,v){ document.getElementById(id).textContent=(v||0).toLocaleStrin
 function logln(t){ var l=document.getElementById("log"); l.textContent+=(l.textContent?"\n":"")+t; l.scrollTop=1e9; }
 
 document.getElementById("start").addEventListener("click",start);
+document.getElementById("audit").addEventListener("click",audit);
 document.getElementById("key").addEventListener("keydown",function(e){ if(e.key==="Enter") start(); });
+
+async function audit(){
+  var k=document.getElementById("key").value.trim();
+  if(!k){ msg.className="err"; msg.textContent="key required."; return; }
+  msg.className=""; msg.textContent="sampling cache + hitting routescan… (few seconds)";
+  var r;
+  try{
+    r=await fetch("/api/census",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({audit:true,key:k})}).then(function(x){return x.json();});
+  }catch(e){ msg.className="err"; msg.textContent="network error."; return; }
+  if(r.error){ msg.className="err"; msg.textContent="rejected: "+r.error; return; }
+  msg.textContent="";
+  var box=document.getElementById("auditbox"), tbl=document.getElementById("audittbl");
+  box.style.display="block";
+  var lines=["wallet          txlist-only            checker method         mismatch",
+             "──────          ───────────            ──────────────         ────────"];
+  var mm=0;
+  (r.rows||[]).forEach(function(w){
+    if(w.mismatch) mm++;
+    lines.push(
+      w.a.padEnd(16)+
+      ((w.txlistDate||"—")+" "+(w.txlistEra||"")).padEnd(23)+
+      ((w.trueDate||"—")+" "+(w.trueEra||"")).padEnd(23)+
+      (w.mismatch?"✗ WRONG ERA":"ok")
+    );
+  });
+  lines.push("");
+  lines.push(mm+"/"+(r.rows||[]).length+" sampled wallets were mis-classified by the old txlist-only method. pool: "+r.poolSize+" wallets. click again for a fresh sample.");
+  tbl.textContent=lines.join("\n");
+}
 
 async function batch(){
   return fetch("/api/census",{

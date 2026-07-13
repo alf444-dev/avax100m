@@ -40,10 +40,28 @@ async function sha256hex(s) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+function tsOf(j) {
+  const f = j && Array.isArray(j.result) && j.result[0];
+  const n = f && f.timeStamp ? parseInt(f.timeStamp, 10) : NaN;
+  return Number.isFinite(n) ? n * 1e3 : null;
+}
+// same method as the live checker: earliest of normal tx, token transfer, internal tx.
+// txlist-only misses wallets whose first touch was a token receive/airdrop,
+// stamping them with a much later era (e.g. inscription-era first native tx -> COQ SZN).
 async function firstTs(addr) {
-  const j = await fetch(RS + "?module=account&action=txlist&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=1&sort=asc").then((r) => r.json());
-  const f = j && j.result && j.result[0];
-  return f ? parseInt(f.timeStamp, 10) * 1e3 : null;
+  const base = RS + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=1&sort=asc";
+  const [tx, tok, itx] = await Promise.all([
+    fetch(base + "&action=txlist").then((r) => r.json()).catch(() => null),
+    fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => null),
+    fetch(base + "&action=txlistinternal").then((r) => r.json()).catch(() => null)
+  ]);
+  const cands = [tsOf(tx), tsOf(tok), tsOf(itx)].filter((t) => t !== null);
+  return cands.length ? Math.min(...cands) : null;
+}
+// txlist-only, kept for the audit comparison
+async function firstTsTxOnly(addr) {
+  const j = await fetch(RS + "?module=account&action=txlist&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=1&sort=asc").then((r) => r.json()).catch(() => null);
+  return tsOf(j);
 }
 var HEADERS = {
   "content-type": "application/json",
@@ -65,6 +83,45 @@ var census_default = async (req) => {
     body = await req.json();
   } catch {
     return new Response(JSON.stringify({ error: "bad json" }), { status: 400, headers: HEADERS });
+  }
+  if (body && body.audit && typeof body.key === "string") {
+    if (!process.env.CENSUS_KEY || body.key !== process.env.CENSUS_KEY) {
+      return new Response(JSON.stringify({ error: "bad key" }), { status: 403, headers: HEADERS });
+    }
+    // sample wallets from the pnl cache, compare txlist-only era (old backfill method)
+    // vs 3-source-min era (checker method). transient response only — nothing stored.
+    const t0 = Date.now();
+    const pstore = getStore("pnl");
+    const seen = new Set();
+    let cur;
+    do {
+      const page = await pstore.list({ prefix: "v", cursor: cur });
+      for (const b of page.blobs || []) {
+        const m = /^v\d+\/(0x[0-9a-f]{40})$/.exec(b.key);
+        if (m) seen.add(m[1]);
+      }
+      cur = page.cursor;
+    } while (cur && Date.now() - t0 < 1200);
+    const pool = [...seen];
+    const n = Math.min(8, pool.length);
+    const sample = [];
+    for (let i = 0; i < n; i++) {
+      const k = Math.floor(Math.random() * pool.length);
+      sample.push(pool.splice(k, 1)[0]);
+    }
+    const rows = [];
+    for (const addr of sample) {
+      if (Date.now() - t0 > 7000) break;
+      const [tOld, tNew] = await Promise.all([firstTsTxOnly(addr), firstTs(addr)]);
+      const d = (t) => t ? new Date(t).toISOString().slice(0, 10) : null;
+      rows.push({
+        a: addr.slice(0, 6) + "\u2026" + addr.slice(-4),
+        txlistDate: d(tOld), txlistEra: tOld ? eraFor(tOld) : null,
+        trueDate: d(tNew), trueEra: tNew ? eraFor(tNew) : null,
+        mismatch: !!(tOld && tNew && eraFor(tOld) !== eraFor(tNew))
+      });
+    }
+    return new Response(JSON.stringify({ audited: rows.length, poolSize: seen.size, rows }), { headers: HEADERS });
   }
   if (body && body.backfill && typeof body.key === "string") {
     if (!process.env.CENSUS_KEY || body.key !== process.env.CENSUS_KEY) {
