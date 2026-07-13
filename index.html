@@ -7,7 +7,9 @@
 <meta name="description" content="A live celebration of Avalanche C-Chain approaching block 100,000,000. Check when your wallet joined the network. No connect, no signature.">
 <link rel="canonical" href="https://avax100m.xyz/">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <script type="application/ld+json">
 {"@context":"https://schema.org","@graph":[
@@ -45,8 +47,9 @@
   /* header */
   header{position:sticky;top:0;z-index:50;background:rgba(10,10,10,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--faint)}
   .hbar{display:flex;justify-content:space-between;align-items:center;height:52px}
-  .logo{font-weight:700;letter-spacing:.08em}
+  .logo{font-weight:700;letter-spacing:.08em;display:flex;align-items:center;gap:9px}
   .logo b{color:var(--red)}
+  .logo-mark{width:24px;height:24px;display:block;flex:none}
   #netstatus{font-size:11px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;display:flex;align-items:center;gap:8px}
   #netdot{width:7px;height:7px;background:var(--dim);display:inline-block}
   #netdot.live{background:var(--red);animation:blink 1.6s steps(2) infinite}
@@ -144,7 +147,7 @@
 
 <header>
   <div class="wrap hbar">
-    <div class="logo"><b>AVAX</b>/100M</div>
+    <div class="logo"><img src="/favicon.svg" alt="Milli" class="logo-mark" width="24" height="24" decoding="async"><b>AVAX</b>/100M</div>
     <div id="netstatus"><span id="netdot"></span><span id="netlabel">estimating…</span></div>
   </div>
 </header>
