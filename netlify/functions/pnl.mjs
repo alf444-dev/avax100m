@@ -1,9 +1,23 @@
 import { getStore } from "@netlify/blobs";
+import { fetchPnlData, normalizeSymbol, PnlProviderError } from "./lib/pnl-provider.mjs";
 
 // src/pnl.js
 var HEADERS = { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" };
 var CACHE_MS = 7 * 24 * 3600 * 1e3;
-var MORALIS = "https://deep-index.moralis.io/api/v2.2";
+var RETRY_CACHE_MS = 3 * 60 * 1e3;
+var WORK_LEASE_MS = 30 * 1e3;
+var RECORDS_KEY = "records-v25";
+var NOPE = () => new Response("Not found", { status: 404, headers: { "content-type": "text/plain", "cache-control": "no-store" } });
+function safeEq(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let out = 0;
+  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return out === 0;
+}
+function isAdmin(req) {
+  const key = process.env.ADMIN_KEY;
+  return typeof key === "string" && key.length >= 16 && safeEq(req.headers.get("x-admin-key") || "", key);
+}
 var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
 var RS_KEY = process.env.ROUTESCAN_KEY ? "&apikey=" + process.env.ROUTESCAN_KEY : "";
 var REC_ERAS = [
@@ -38,31 +52,29 @@ async function updateRecords(addr, rows, extra) {
     const rstore = getStore("records");
     const wins = rows.filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit);
     const losses = rows.filter((r) => r.profit < 0).sort((a, b) => a.profit - b.profit);
-    const rt0 = extra && extra.roundtrips && extra.roundtrips[0];
+    const hasRoundtripEvidence = !!(extra && Array.isArray(extra.roundtrips));
+    const rt0 = hasRoundtripEvidence && extra.roundtrips[0];
     const cand = {
-      w: wins[0] && wins[0].profit >= 1e3 ? { v: Math.round(wins[0].profit), sym: wins[0].sym } : null,
-      l: losses[0] && losses[0].profit <= -1e3 ? { v: Math.round(losses[0].profit), sym: losses[0].sym } : null,
-      rt: rt0 && rt0.rtUsd >= 1e3 ? { v: rt0.rtUsd, sym: rt0.sym } : null
+      w: wins[0] && wins[0].profit >= 1e3 ? { v: Math.round(wins[0].profit), sym: normalizeSymbol(wins[0].sym, wins[0].tokenAddress) } : null,
+      l: losses[0] && losses[0].profit <= -1e3 ? { v: Math.round(losses[0].profit), sym: normalizeSymbol(losses[0].sym, losses[0].tokenAddress) } : null,
+      rt: rt0 && rt0.rtUsd >= 1e3 ? { v: rt0.rtUsd, sym: normalizeSymbol(rt0.sym) } : null
     };
-    if (!cand.w && !cand.l && !cand.rt) return null;
-    const rec = await rstore.get("records", { type: "json" }).catch(() => null) || { w: [], l: [], rt: [] };
+    const rec = await rstore.get(RECORDS_KEY, { type: "json" }).catch(() => null) || { w: [], l: [], rt: [] };
     const tag = await walletTag(addr);
     let era = null, dirty = false;
     const hits = [];
-    for (const cat of ["w", "l", "rt"]) {
+    const categories = hasRoundtripEvidence ? ["w", "l", "rt"] : ["w", "l"];
+    for (const cat of categories) {
       const c = cand[cat];
-      if (!c) continue;
-      let board = rec[cat] || [];
+      let board = (rec[cat] || []).map((b) => Object.assign({}, b, { sym: normalizeSymbol(b.sym) }));
       const beats = (a, b) => cat === "l" ? a < b : a > b;
       const mine = tag ? board.findIndex((b) => b.h === tag) : -1;
       if (mine > -1) {
-        if (beats(c.v, board[mine].v)) {
-          board.splice(mine, 1);
-        } else {
-          hits.push({ cat, pos: mine + 1 });
-          continue;
-        }
+        board.splice(mine, 1);
+        dirty = true;
       }
+      rec[cat] = board;
+      if (!c) continue;
       if (board.length >= 5 && !beats(c.v, board[4].v)) continue;
       if (era === null) era = await walletEra(addr);
       board.push({ v: c.v, sym: c.sym, era: era || void 0, h: tag || void 0, t: Date.now() });
@@ -72,7 +84,7 @@ async function updateRecords(addr, rows, extra) {
       const pos = board.findIndex((b) => b.v === c.v && b.sym === c.sym);
       if (pos > -1) hits.push({ cat, pos: pos + 1 });
     }
-    if (dirty) await rstore.set("records", JSON.stringify(rec)).catch(() => {
+    if (dirty) await rstore.set(RECORDS_KEY, JSON.stringify(rec)).catch(() => {
     });
     return hits.length ? hits : null;
   } catch {
@@ -82,11 +94,6 @@ async function updateRecords(addr, rows, extra) {
 
 var usd = (n) => "$" + Math.round(Math.abs(n)).toLocaleString("en-US");
 var signedUsd = (n) => (n < 0 ? "-" : "+") + usd(n);
-async function mfetch(path, key) {
-  const r = await fetch(MORALIS + path, { headers: { "X-API-Key": key, accept: "application/json" } });
-  if (!r.ok) throw new Error("moralis " + r.status);
-  return r.json();
-}
 // ── prices: DeFiLlama primary (on-chain DEX prices, best long-tail coverage,
 // free & keyless), CoinGecko as automatic fallback. Avalanche C-Chain = "avax".
 async function llamaPrice(contract) {
@@ -99,7 +106,7 @@ async function llamaPrice(contract) {
     const coins = j && j.coins || {};
     const k = Object.keys(coins)[0];
     const c = k && coins[k];
-    return c && c.price > 0 ? { cur: c.price, sym: c.symbol ? String(c.symbol).toUpperCase() : null } : null;
+    return c && c.price > 0 ? { cur: c.price, sym: normalizeSymbol(c.symbol, contract) } : null;
   } catch { return null; }
 }
 function llamaChartUrl(contract, fromTs) {
@@ -137,7 +144,7 @@ async function cgTokenCG(addr) {
     const ath = md.ath && md.ath.usd;
     const cur = md.current_price && md.current_price.usd;
     const athDate = md.ath_date && md.ath_date.usd ? Date.parse(md.ath_date.usd) : null;
-    return ath && ath > 0 ? { ath, cur: cur || 0, athDate, src: "cg" } : null;
+    return ath && ath > 0 ? { ath, cur: cur || 0, athDate, sym: normalizeSymbol(j.symbol, addr), src: "cg" } : null;
   } catch { return null; }
 }
 async function cgChartCG(contract, fromTs) {
@@ -172,9 +179,12 @@ async function cgToken(addr, store) {
 }
 async function fetchTransfers(addr, contract) {
   try {
-    const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc" + RS_KEY);
+    const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=10000&sort=asc" + RS_KEY);
+    if (!r.ok) return null;
     const j = await r.json();
-    if (!j.result || !Array.isArray(j.result) || !j.result.length) return null;
+    if (!Array.isArray(j && j.result)) return null;
+    if (j.result.length >= 10000) return null;
+    if (!j.result.length) return null;
     return j.result;
   } catch {
     return null;
@@ -291,63 +301,6 @@ function peakBagOver(series, rows, addr) {
   }
   return best.ts ? best : null;
 }
-async function fetchAllProfitability(addr, key) {
-  let rows = [], cursor = null, pages = 0, capped = false;
-  do {
-    const q = "/wallets/" + addr + "/profitability?chain=avalanche" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : "");
-    const data = await mfetch(q, key);
-    const batch = data && (data.result || data.data) || [];
-    rows = rows.concat(batch);
-    cursor = data && data.cursor;
-    pages++;
-    if (pages >= 3 && cursor) {
-      capped = true;
-      break;
-    }
-  } while (cursor);
-  return { rows, capped };
-}
-async function fetchBalances(addr, key) {
-  try {
-    const data = await mfetch("/wallets/" + addr + "/tokens?chain=avalanche", key);
-    const map = {};
-    for (const t of data && data.result || []) {
-      const a = (t.token_address || "").toLowerCase();
-      const tk = parseFloat(t.balance_formatted) || 0;
-      const usd2 = parseFloat(t.usd_value) || 0;
-      if (a && tk > 0) map[a] = { tk, usd: usd2 };
-    }
-    return map;
-  } catch {
-    return {};
-  }
-}
-function parseRows(tokens) {
-  return (tokens || []).filter((t) => t && typeof t.realized_profit_usd !== "undefined").map((t) => {
-    const invested = parseFloat(t.total_usd_invested) || 0;
-    const sold = parseFloat(t.total_sold_usd) || 0;
-    const avgBuy = parseFloat(t.avg_buy_price_usd) || 0;
-    const avgSell = parseFloat(t.avg_sell_price_usd) || 0;
-    let boughtTk = parseFloat(t.total_tokens_bought) || 0;
-    let soldTk = parseFloat(t.total_tokens_sold) || 0;
-    if (!boughtTk && avgBuy > 0) boughtTk = invested / avgBuy;
-    if (!soldTk && avgSell > 0) soldTk = sold / avgSell;
-    return {
-      sym: (t.symbol || t.token_symbol || "").toUpperCase() || (t.token_address || "").slice(0, 8),
-      profit: parseFloat(t.realized_profit_usd) || 0,
-      invested,
-      sold,
-      boughtTk,
-      soldTk,
-      tokenAddress: (t.token_address || "").toLowerCase() || null
-    };
-  }).filter((r) => {
-    if (!isFinite(r.profit) || !isFinite(r.sold) || !isFinite(r.invested)) return false;
-    if (Math.abs(r.profit) > 1e9 || r.sold > 1e12 || r.invested > 1e12) return false;
-    if (r.profit > 0 && r.profit > r.sold * 1.05 + 100) return false;
-    return true;
-  });
-}
 async function pool(items, n, fn) {
   let i = 0;
   const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
@@ -359,7 +312,7 @@ async function pool(items, n, fn) {
   await Promise.all(workers);
 }
 var INFRA_ADDR = { "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7": 1 };
-var INFRA_SYM = { "WAVAX": 1 };
+var INFRA_SYM = { "WAVAX": 1, "AVAX": 1 };
 var noStory = (r) => INFRA_ADDR[r.tokenAddress] || INFRA_SYM[r.sym] || STABLES[r.sym];
 async function enrich(rows, balances, ADDR, store, diag, deadline, depth) {
   const flags = {};
@@ -397,7 +350,7 @@ async function enrich(rows, balances, ADDR, store, diag, deadline, depth) {
   await pool(cands, 3, async (c) => {
     const d = { sym: c.sym, sold: Math.round(c.sold) };
     if (diag) diag.push(d);
-    const ck = "cand/v3/" + ADDR + "/" + c.tokenAddress;
+    const ck = "cand/v4/" + ADDR + "/" + c.tokenAddress;
     if (store) try {
       const hit = await store.get(ck, { type: "json" });
       if (hit && Date.now() - hit.t < (hit.deg ? 10 * 60 * 1e3 : 7 * 24 * 3600 * 1e3)) {
@@ -556,12 +509,12 @@ function rowFlags(rows, balances) {
   if (grave >= 10) f.graveyard = { n: grave };
   return f;
 }
-function summarize(rows, capped) {
-  const base = { tokens: capped ? rows.length + "+" : rows.length, biggestW: null, biggestL: null, topW: [], topL: [], summary: null };
-  if (!rows.length) return base;
+function summarize(rows, incomplete, aggregate) {
+  const base = { tokens: incomplete ? rows.length + "+" : rows.length, biggestW: null, biggestL: null, topW: [], topL: [], summary: null };
   const wins = rows.filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit);
   const losses = rows.filter((r) => r.profit < 0).sort((a, b) => a.profit - b.profit);
-  const total = rows.reduce((s, r) => s + r.profit, 0);
+  const rowTotal = rows.reduce((s, r) => s + r.profit, 0);
+  const total = aggregate && Number.isFinite(aggregate.realizedGain) ? aggregate.realizedGain : rowTotal;
   const decided = wins.length + losses.length;
   base.biggestW = wins[0] ? { line: signedUsd(wins[0].profit), sub: "$" + wins[0].sym, usd: Math.round(wins[0].profit), sym: wins[0].sym } : null;
   base.biggestL = losses[0] ? { line: signedUsd(losses[0].profit), sub: "$" + losses[0].sym, usd: Math.round(losses[0].profit), sym: losses[0].sym } : null;
@@ -573,42 +526,45 @@ function summarize(rows, capped) {
     wins: wins.length,
     losses: losses.length
   };
+  if (aggregate && Number.isFinite(aggregate.unrealizedGain)) base.summary.unrealized = signedUsd(aggregate.unrealizedGain);
+  if (aggregate && Number.isFinite(aggregate.totalFee)) base.summary.fees = usd(aggregate.totalFee);
+  if (aggregate && Number.isFinite(aggregate.totalGain)) base.summary.totalGain = signedUsd(aggregate.totalGain);
+  if (aggregate && aggregate.accountingMethod) base.summary.accountingMethod = aggregate.accountingMethod;
   base.thin = decided < 3;
   return base;
 }
 var pnl_default = async (req) => {
-  const key = process.env.MORALIS_KEY;
   const url = new URL(req.url);
   if (url.searchParams.get("backfill") === "records") {
+    if (!isAdmin(req)) return NOPE();
     const pstore = getStore("pnl");
     const rstore = getStore("records");
-    const state = await rstore.get("bf2-cursor", { type: "json" }).catch(() => null);
+    const state = await rstore.get("bf25-cursor", { type: "json" }).catch(() => null);
     if (state === "done") return new Response(JSON.stringify({ done: true, note: "full-history backfill already complete" }), { headers: HEADERS });
     const t0 = Date.now();
     let scanned = 0, hits = 0, cur = state && state.c || void 0, timedOut = false;
     const best = /* @__PURE__ */ new Map();
     outer: do {
-      const page = await pstore.list({ prefix: "v", cursor: cur });
+      const page = await pstore.list({ prefix: "v25/", cursor: cur });
       for (const b of page.blobs || []) {
         if (Date.now() - t0 > 3e3) {
           timedOut = true;
           break outer;
         }
-        const m = /^v(\d+)\/(0x[0-9a-f]{40})$/.exec(b.key);
+        const m = /^v25\/(0x[0-9a-f]{40})$/.exec(b.key);
         if (!m) continue;
-        const ver = parseInt(m[1], 10), a2 = m[2];
+        const a2 = m[1];
         const cached = await pstore.get(b.key, { type: "json" }).catch(() => null);
-        if (!cached || !cached.stats) continue;
+        if (!cached || !cached.stats || cached.stats.quality?.aggregateAuthoritative !== true ||
+            cached.stats.quality?.ledgerComplete !== true || cached.stats.quality?.metadataComplete !== true) continue;
         scanned++;
         const e = best.get(a2) || {};
         for (const r of cached.rowsIdx || []) {
           if (r.p >= 1e3 && (!e.w || r.p > e.w.v)) e.w = { v: r.p, sym: r.s };
           if (r.p <= -1e3 && (!e.l || r.p < e.l.v)) e.l = { v: r.p, sym: r.s };
         }
-        if (ver >= 24) {
-          const rt0 = (cached.stats.roundtrips || [])[0];
-          if (rt0 && rt0.rtUsd >= 1e3 && (!e.rt || rt0.rtUsd > e.rt.v)) e.rt = { v: rt0.rtUsd, sym: rt0.sym };
-        }
+        const rt0 = (cached.stats.roundtrips || [])[0];
+        if (rt0 && rt0.rtUsd >= 1e3 && (!e.rt || rt0.rtUsd > e.rt.v)) e.rt = { v: rt0.rtUsd, sym: rt0.sym };
         if (e.w || e.l || e.rt) best.set(a2, e);
       }
       cur = page.cursor;
@@ -632,13 +588,14 @@ var pnl_default = async (req) => {
       const hit = await updateRecords(a2, rows, { roundtrips: e.rt ? [{ rtUsd: e.rt.v, sym: e.rt.sym }] : [] });
       if (hit) hits++;
     }
-    if (timedOut) await rstore.set("bf2-cursor", JSON.stringify({ c: cur || null })).catch(() => {
+    if (timedOut) await rstore.set("bf25-cursor", JSON.stringify({ c: cur || null })).catch(() => {
     });
-    else await rstore.set("bf2-cursor", JSON.stringify("done")).catch(() => {
+    else await rstore.set("bf25-cursor", JSON.stringify("done")).catch(() => {
     });
     return new Response(JSON.stringify({ done: !timedOut, scanned, candidates: uniq.size, boardHits: hits }), { headers: HEADERS });
   }
   if (url.searchParams.get("backfill") === "claimed") {
+    if (!isAdmin(req)) return NOPE();
     try {
       const cstore = getStore("claim");
       const addrs = [];
@@ -660,80 +617,129 @@ var pnl_default = async (req) => {
   if (!/^0x[0-9a-f]{40}$/.test(addr)) {
     return new Response(JSON.stringify({ available: false, error: "bad address" }), { status: 400, headers: HEADERS });
   }
-  if (!key) return new Response(JSON.stringify({ available: false }), { headers: HEADERS });
+  const moralisKey = process.env.MORALIS_KEY;
+  const zerionKey = process.env.ZERION_API_KEY || process.env.ZERION_KEY;
   let store = null;
+  let leaseStore = null;
   try {
     store = getStore("pnl");
+    leaseStore = getStore({ name: "pnl", consistency: "strong" });
   } catch {
   }
-  const cacheKey = "v24/" + addr;
+  const cacheKey = "v25/" + addr;
   const deadline = Date.now() + 6500;
   const debug = url.searchParams.get("debug") === "1";
+  if (debug && !isAdmin(req)) return NOPE();
   const deeper = url.searchParams.get("deeper") === "1";
-  const refresh = url.searchParams.get("refresh") === "1" || deeper;
+  if (deeper) return NOPE();
+  const refresh = url.searchParams.get("refresh") === "1";
   let depth = 15;
   if (store) try {
     const dj = await store.get("depth/" + addr, { type: "json" });
     if (dj && dj.d) depth = dj.d;
   } catch {
   }
-  if (deeper) {
-    let claimed = false;
-    try {
-      const cs = getStore("claim");
-      claimed = !!await cs.get("c/" + addr, { type: "json" });
-    } catch {
-    }
-    if (!claimed) return new Response(JSON.stringify({ available: false, needClaim: true }), { status: 403, headers: HEADERS });
-    depth = Math.min(depth + 15, 90);
-    if (store) try {
-      await store.set("depth/" + addr, JSON.stringify({ d: depth }));
-    } catch {
-    }
-  }
-  if (store && !debug && !refresh) try {
-    const cached = await store.get(cacheKey, { type: "json" });
+  let cached = null;
+  if (store && !debug) try {
+    cached = await store.get(cacheKey, { type: "json" });
     if (cached) {
-      const ttl = cached.stats && cached.stats.partial ? 3 * 60 * 1e3 : CACHE_MS;
+      const retryablePartial = !!(cached.stats && cached.stats.partial && cached.stats.quality && cached.stats.quality.retryable);
+      const ttl = retryablePartial ? RETRY_CACHE_MS : CACHE_MS;
       const fresh = Date.now() - cached.t < ttl;
-      if (fresh || !cached.stats.partial) return new Response(JSON.stringify({ available: true, stats: cached.stats, cached: true, stale: !fresh }), { headers: HEADERS });
+      if (fresh || (!fresh && !refresh && !retryablePartial)) {
+        return new Response(JSON.stringify({ available: true, stats: cached.stats, cached: true, stale: !fresh }), { headers: HEADERS });
+      }
     }
   } catch {
+    cached = null;
+  }
+  if (!moralisKey && !zerionKey) {
+    if (cached && cached.stats) return new Response(JSON.stringify({ available: true, stats: cached.stats, cached: true, stale: true }), { headers: HEADERS });
+    return new Response(JSON.stringify({ available: false, error: "provider unavailable" }), { status: 503, headers: HEADERS });
+  }
+  const workKey = "work/v25/" + addr;
+  if (leaseStore && !debug) {
+    const lease = await leaseStore.get(workKey, { type: "json" }).catch(() => null);
+    if (lease && Number.isFinite(lease.t) && Date.now() - lease.t < WORK_LEASE_MS) {
+      if (cached && cached.stats) {
+        return new Response(JSON.stringify({ available: true, stats: cached.stats, cached: true, stale: true, refreshPending: true }), { headers: HEADERS });
+      }
+      return new Response(JSON.stringify({ available: false, pending: true, retryAfter: 3 }), {
+        status: 202,
+        headers: Object.assign({}, HEADERS, { "retry-after": "3" })
+      });
+    }
+    await leaseStore.set(workKey, JSON.stringify({ t: Date.now() })).catch(() => {});
   }
   try {
     const diag = debug ? [] : null;
-    const [{ rows: raw, capped }, balances] = await Promise.all([fetchAllProfitability(addr, key), fetchBalances(addr, key)]);
-    let rows = parseRows(raw).filter((r) => !INFRA_ADDR[r.tokenAddress] && !INFRA_SYM[r.sym]);
-    const suspects = rows.filter((r) => Math.abs(r.profit) > 25e4 && r.tokenAddress);
-    if (suspects.length) {
-      const verified = {};
-      await pool(suspects, 3, async (r) => {
-        verified[r.tokenAddress] = !!await cgToken(r.tokenAddress, store);
-      });
-      rows = rows.filter((r) => Math.abs(r.profit) <= 25e4 || !r.tokenAddress || verified[r.tokenAddress]);
-      if (diag) suspects.forEach((r) => {
-        if (!verified[r.tokenAddress]) diag.push({ sym: r.sym, skip: "big claim, not cg-listed \u2014 dropped", profit: r.profit });
-      });
+    const source = await fetchPnlData({ addr, zerionKey, moralisKey, store, deadline });
+    const usedFallback = source.quality.fallbackFrom === "zerion";
+    if (usedFallback && cached?.stats?.quality?.aggregateAuthoritative === true) {
+      return new Response(JSON.stringify({
+        available: true,
+        stats: cached.stats,
+        cached: true,
+        stale: true,
+        refreshFailed: true,
+        fallbackPending: true
+      }), { headers: HEADERS });
     }
+    const rows = source.rows;
+    const balances = source.balances || {};
     if (diag) diag.push({ rowsAfterFilters: rows.length, rows: rows.slice(0, 30).map((r) => ({ sym: r.sym, profit: Math.round(r.profit), invested: Math.round(r.invested), sold: Math.round(r.sold) })) });
-    const stats = summarize(rows, capped);
-    const extra = await enrich(rows, balances, addr, store, diag, deadline, depth);
-    stats.flags = Object.assign(rowFlags(rows, balances), extra.flags || {});
-    if (extra.complete === false) stats.partial = true;
+    const stats = summarize(rows, !source.complete, source.aggregate);
+    const extra = source.complete && source.quality.balancesComplete
+      ? await enrich(rows, balances, addr, store, diag, deadline, depth)
+      : { flags: {}, complete: true, roundtrip: null, soldTooEarly: null };
+    stats.flags = source.complete ? Object.assign(rowFlags(rows, balances), extra.flags || {}) : {};
+    const excluded = source.quality.coverage && source.quality.coverage.excludedAssets || {};
+    const excludedAssets = (excluded.fungibleIds || []).length + (excluded.fungibleImplementations || []).length;
+    const stopReason = source.quality.coverage && source.quality.coverage.stopReason;
+    const balanceStopReason = source.quality.coverage && source.quality.coverage.balanceStopReason;
+    const transientReasons = ["deadline", "deadline_exceeded", "network_error", "upstream_http", "fetch_error", "schema_error", "cursor_loop"];
+    const transientWarning = (source.quality.warnings || []).some((warning) => transientReasons.some((reason) => String(warning).includes(reason)));
+    const providerRetryable = usedFallback || transientReasons.includes(stopReason) || transientReasons.includes(balanceStopReason) || transientWarning;
+    stats.quality = {
+      provider: source.provider,
+      accountingMethod: source.quality.accountingMethod,
+      aggregateAuthoritative: source.quality.aggregateAuthoritative === true,
+      ledgerComplete: !!source.complete,
+      balancesComplete: !!source.quality.balancesComplete,
+      metadataComplete: !!source.quality.metadataComplete,
+      excludedAssets,
+      fallbackFrom: source.quality.fallbackFrom || null,
+      warnings: source.quality.warnings || [],
+      retryable: providerRetryable || extra.complete === false
+    };
+    if (usedFallback || !source.complete || !source.quality.balancesComplete || !source.quality.metadataComplete || extra.complete === false) stats.partial = true;
     if (extra.scan) stats.scan = extra.scan;
     stats.roundtrip = extra.roundtrip;
     stats.soldTooEarly = extra.soldTooEarly;
-    stats.roundtrips = extra.roundtrips;
-    stats.soldEarly = extra.soldEarly;
-    stats.records = await updateRecords(addr, rows, extra);
-    const rowsIdx = rows.slice(0, 300).map((r) => ({ s: r.sym, a: r.tokenAddress, p: Math.round(r.profit), i: Math.round(r.invested), so: Math.round(r.sold), bt: r.boughtTk, st: r.soldTk }));
-    if (store && !debug) await store.set(cacheKey, JSON.stringify({ t: Date.now(), stats, rowsIdx })).catch(() => {
+    stats.roundtrips = extra.roundtrips || [];
+    stats.soldEarly = extra.soldEarly || [];
+    const recordSafe = source.complete && source.quality.aggregateAuthoritative === true && source.quality.metadataComplete && extra.complete !== false;
+    stats.records = recordSafe ? await updateRecords(addr, rows, extra) : null;
+    const rowsIdx = rows.map((r) => ({ s: r.sym, a: r.tokenAddress, p: r.profit, i: r.invested, so: r.sold, bt: r.boughtTk, st: r.soldTk }));
+    if (store && !debug) await store.set(cacheKey, JSON.stringify({ t: Date.now(), provider: source.provider, stats, rowsIdx })).catch(() => {
     });
     const out = { available: true, stats };
     if (debug) out.diag = diag;
     return new Response(JSON.stringify(out), { headers: HEADERS });
   } catch (e) {
-    return new Response(JSON.stringify({ available: false }), { headers: HEADERS });
+    if (cached && cached.stats) {
+      return new Response(JSON.stringify({ available: true, stats: cached.stats, cached: true, stale: true, refreshFailed: true }), { headers: HEADERS });
+    }
+    if (e instanceof PnlProviderError && e.code === "bootstrapping") {
+      return new Response(JSON.stringify({ available: false, pending: true, retryAfter: e.retryAfter || 5 }), {
+        status: 202,
+        headers: Object.assign({}, HEADERS, { "retry-after": String(e.retryAfter || 5) })
+      });
+    }
+    const code = e instanceof PnlProviderError ? e.code : "compute_failed";
+    return new Response(JSON.stringify({ available: false, error: code }), { status: 503, headers: HEADERS });
+  } finally {
+    if (leaseStore && !debug && typeof leaseStore.delete === "function") await leaseStore.delete(workKey).catch(() => {});
   }
 };
 var config = { path: "/api/pnl" };

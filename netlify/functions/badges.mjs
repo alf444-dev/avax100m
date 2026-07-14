@@ -137,21 +137,24 @@ var badges_default = async (req) => {
   if (!/^0x[0-9a-f]{40}$/.test(addr)) {
     return new Response(JSON.stringify({ badges: [] }), { status: 400, headers: HEADERS });
   }
-  const debug = url.searchParams.get("debug") === "1";
+  const debugRequested = url.searchParams.get("debug") === "1";
+  const debug = debugRequested && !!process.env.ADMIN_KEY && req.headers.get("x-admin-key") === process.env.ADMIN_KEY;
+  if (debugRequested && !debug) return new Response("Not found", { status: 404, headers: { "content-type": "text/plain" } });
   let store = null;
+  let cachedBadge = null;
   try {
     store = getStore("badges");
   } catch {
   }
   if (store && !debug) try {
-    const c = await store.get("w2/" + addr, { type: "json" });
-    if (c && Date.now() - c.t < CACHE_MS) return new Response(JSON.stringify({ badges: c.b }), { headers: HEADERS });
+    cachedBadge = await store.get("w4/" + addr, { type: "json" });
+    if (cachedBadge && Date.now() - cachedBadge.t < CACHE_MS) return new Response(JSON.stringify({ badges: cachedBadge.b }), { headers: HEADERS });
   } catch {
   }
   const site = (process.env.URL || "https://avax100m.xyz").replace(/\/$/, "");
   const [w, pnlj, resj, tokj] = await Promise.all([
     fetchWallet(addr).catch(() => null),
-    fetch(site + "/api/pnl?addr=" + addr).then((r) => r.json()).catch(() => null),
+    fetch(site + "/api/pnl?addr=" + addr).then(async (r) => ({ status: r.status, body: await r.json() })).catch(() => null),
     fetch(site + "/api/resolve?addr=" + addr).then((r) => r.json()).catch(() => null),
     fetch(RS + "?module=account&action=tokentx&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=100&sort=asc" + RS_KEY).then((r) => r.json()).catch(() => ({ result: [] }))
   ]);
@@ -195,7 +198,9 @@ var badges_default = async (req) => {
     if (n >= 25) push("spammagnet", 0, "<b>" + n + "</b> scam airdrops received. you did nothing. the chain chose you.");
   } catch {
   }
-  const st = pnlj && pnlj.available && pnlj.stats || {};
+  const pnlBody = pnlj && pnlj.body;
+  const st = pnlBody && pnlBody.available && pnlBody.stats || {};
+  const pnlReliable = !!(pnlj && pnlj.status === 200 && pnlBody && pnlBody.available && !pnlBody.refreshFailed && !st.partial);
   const f = st.flags || {};
   const era = w.era && w.era[1] || "";
   if (f.fullCircle) {
@@ -225,23 +230,32 @@ var badges_default = async (req) => {
     if (c) push("homesteader", 0, "claimed at block <b>#" + (c.blk ? c.blk.toLocaleString("en-US") : "?") + "</b> \u2014 before the milestone. settled ground.");
   } catch {
   }
+  // A cold/partial provider response must never erase P&L badges for a week or
+  // alter rarity counts. Retain the last complete snapshot when possible.
+  if (!pnlReliable) {
+    if (cachedBadge && Array.isArray(cachedBadge.b)) {
+      return new Response(JSON.stringify({ badges: cachedBadge.b, stale: true }), { headers: HEADERS });
+    }
+    for (const b of earned) b.rarity = { count: 1, total: 1 };
+    return new Response(JSON.stringify({ badges: earned, partial: true }), { headers: HEADERS });
+  }
   let counts = { total: 0, byId: {} };
   if (store) {
     try {
-      counts = await store.get("counts", { type: "json" }) || counts;
+      counts = await store.get("counts-v4", { type: "json" }) || counts;
     } catch {
     }
     let seen = null;
     try {
-      seen = await store.get("seen/" + addr);
+      seen = await store.get("seen/v4/" + addr);
     } catch {
     }
     if (!seen) {
       counts.total++;
       for (const b of earned) counts.byId[b.id] = (counts.byId[b.id] || 0) + 1;
       try {
-        await store.set("seen/" + addr, "1");
-        await store.set("counts", JSON.stringify(counts));
+        await store.set("seen/v4/" + addr, "1");
+        await store.set("counts-v4", JSON.stringify(counts));
       } catch {
       }
     }
@@ -249,7 +263,7 @@ var badges_default = async (req) => {
   for (const b of earned) b.rarity = { count: counts.byId[b.id] || 1, total: Math.max(counts.total, 1) };
   earned.sort((a, b) => a.rarity.count - b.rarity.count);
   if (store && !debug) try {
-    await store.set("w2/" + addr, JSON.stringify({ t: Date.now(), b: earned }));
+    await store.set("w4/" + addr, JSON.stringify({ t: Date.now(), b: earned }));
   } catch {
   }
   return new Response(JSON.stringify({ badges: earned }), { headers: HEADERS });

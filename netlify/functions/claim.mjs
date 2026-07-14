@@ -111,7 +111,7 @@ var claim_default = async (req) => {
       const msg = action === "profile" ? "avax100m.xyz\nupdate profile for " + addr + "\nstatus: " + clean(body.status) + "\ntheme: " + (THEMES[clean(body.theme)] ? clean(body.theme) : "red") + "\nbadges: " + cleanBadges(body.cardBadges).join(",") + "\ntop8: " + cleanTop8(body.top8).join(",") + "\nnonce: " + nrec.nonce : action === "status" ? "avax100m.xyz\nset status for " + addr + "\nstatus: " + clean(body.status) + "\nnonce: " + nrec.nonce : "avax100m.xyz\nclaim page for " + addr + "\nnonce: " + nrec.nonce;
       let rec = null;
       try {
-        rec = ethers.utils.verifyMessage(msg, sig).toLowerCase();
+        rec = ethers.verifyMessage(msg, sig).toLowerCase();
       } catch {
       }
       if (rec !== addr) return new Response(JSON.stringify({ error: "signature doesn't match this wallet." }), { status: 401, headers: HEADERS });
