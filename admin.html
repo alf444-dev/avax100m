@@ -232,6 +232,7 @@ async function renderWallets(){
     +'<button id="wdBuild">build / refresh</button>'
     +'<button class="ghost" id="wdFull">full rebuild</button>'
     +'<button class="ghost" id="wdCsv">export csv</button>'
+    +'<button class="ghost" id="wdAudit">verify eras</button>'
     +'<span class="stat" id="wdStat">loading…</span></div>'
     +'<div id="wdBreak"></div>'
     +'<div id="wdFiltersWrap"></div>'
@@ -240,6 +241,7 @@ async function renderWallets(){
   document.getElementById("wdBuild").onclick=function(){ wdBuild("refresh"); };
   document.getElementById("wdFull").onclick=function(){ if(confirm("Full rebuild wipes the current index and recomputes every wallet (slow — one Routescan lookup each). Continue?")) wdBuild("fresh"); };
   document.getElementById("wdCsv").onclick=wdExport;
+  document.getElementById("wdAudit").onclick=function(){ wdAudit(false); };
   document.getElementById("wdSearch").addEventListener("input",wdApply);
   await wdLoad();
 }
@@ -379,6 +381,42 @@ function row2(k,val){ return '<tr><td>'+k+'</td><td>'+val+'</td></tr>'; }
 function wdClose(){ document.getElementById("drawerBg").style.display="none"; document.getElementById("drawer").style.display="none"; }
 document.getElementById("drawerX").onclick=wdClose;
 document.getElementById("drawerBg").onclick=wdClose;
+async function wdAudit(fix){
+  if(!WD.all.length){ return; }
+  var era=(document.getElementById("fEra")||{}).value||"";
+  var scope=era?era.toLowerCase():"all eras";
+  var stat=document.getElementById("wdStat");
+  var qs="view=wallets-audit&restart=1"+(fix?"&fix=1":"")+(era?"&era="+encodeURIComponent(era):"");
+  var r;
+  try{
+    for(var i=0;i<8000;i++){
+      r=await callq(qs);
+      qs="view=wallets-audit"+(fix?"&fix=1":"")+(era?"&era="+encodeURIComponent(era):"");
+      stat.textContent=(fix?"fixing ":"auditing ")+scope+" · checked "+(r.checked||0)+" · "+((r.mismatches||[]).length)+" misfiled";
+      if(r.done) break;
+      await new Promise(function(res){setTimeout(res,180);});
+    }
+    if(fix){ await wdLoad(); }
+    wdAuditReport(r,scope,fix);
+  }catch(e){ stat.textContent="audit rejected — re-unlock."; }
+}
+function wdAuditReport(r,scope,fixed){
+  var bg=document.getElementById("drawerBg"),dw=document.getElementById("drawer"),body=document.getElementById("drawerBody");
+  bg.style.display="block"; dw.style.display="block";
+  var m=r.mismatches||[];
+  var head='<h3>era audit — '+scope+'</h3>'
+    +'<p class="sub">checked '+(r.checked||0).toLocaleString("en-US")+' wallets · <b style="color:'+(m.length?"var(--red)":"#4ec9a3")+'">'+m.length+' misfiled</b>'+(fixed?' · '+(r.fixed||0)+' corrected':'')+'</p>'
+    +'<p class="sub">truth = earliest first-tx ever observed (a Routescan hiccup can only push it later, so a fix only ever moves a wallet to an OLDER era).</p>';
+  if(!m.length){ body.innerHTML=head+'<p class="sub" style="color:#4ec9a3;margin-top:10px">every '+scope+' wallet belongs. ✓</p>'; return; }
+  var rows=m.slice(0,500).map(function(x){
+    return '<tr><td class="wd-addr">'+shortA(x.a)+'</td><td>'+(x.was?x.was.toLowerCase():"—")+' → <b class="neg">'+(x.now?x.now.toLowerCase():"—")+'</b></td><td>'+(x.nowTs?new Date(x.nowTs).toISOString().slice(0,10):"—")+'</td></tr>';
+  }).join("");
+  body.innerHTML=head
+    +(fixed?'':'<button id="wdAuditFix" style="margin:6px 0 14px">apply fixes ('+m.length+')</button>')
+    +'<table><tr><td class="sub">wallet</td><td class="sub">was → true era</td><td class="sub">first-tx</td></tr>'+rows+'</table>';
+  var fb=document.getElementById("wdAuditFix");
+  if(fb) fb.onclick=function(){ wdClose(); wdAudit(true); };
+}
 function wdExport(){
   var rows=WD.filtered&&WD.filtered.length?WD.filtered:WD.all;
   if(!rows.length){ return; }

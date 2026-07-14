@@ -289,9 +289,52 @@ var admin_default = async (req) => {
     return new Response(JSON.stringify({ addr, stats: pv && pv.stats || null, rowsIdx: pv && pv.rowsIdx || null, t: pv && pv.t || null, claim: claim || null }), { headers: HEADERS });
   }
 
+  if (view === "wallets-audit") {
+    // Re-verify era classification against a fresh Routescan first-tx. Because an
+    // endpoint hiccup can only ever make the observed first-tx LATER (never earlier),
+    // the truth is the earliest timestamp ever seen (stored vs fresh) — so a
+    // correction can only move a wallet to an OLDER era, never a false demotion.
+    // Resumable + RS-capped like the build. ?era= limits to one stored era,
+    // ?fix=1 writes corrections back to the index, ?restart=1 forces a fresh pass.
+    const t0 = Date.now();
+    const BUDGET = 4200, RS_CAP = 22;
+    const eraFilter = url.searchParams.get("era") || null;
+    const doFix = url.searchParams.get("fix") === "1";
+    const restart = url.searchParams.get("restart") === "1";
+    const index = await astore.get("widx", { type: "json" }).catch(() => null) || [];
+    let st = await astore.get("widx-audit-state", { type: "json" }).catch(() => null);
+    if (restart || !st || st.era !== eraFilter || st.fix !== doFix) st = { era: eraFilter, fix: doFix, ci: 0, checked: 0, fixed: 0, mism: [] };
+    let rsUsed = 0, dirty = false;
+    while (st.ci < index.length) {
+      if (Date.now() - t0 > BUDGET || rsUsed >= RS_CAP) break;
+      const rec = index[st.ci];
+      st.ci++;
+      if (!rec || !/^0x[0-9a-f]{40}$/.test(rec.a)) continue;
+      if (eraFilter && rec.era !== eraFilter) continue;
+      let fresh = await firstTs(rec.a); rsUsed++;
+      if (fresh == null) fresh = await firstTs(rec.a);           // one retry on empty
+      const cand = [rec.ts, fresh].filter((x) => x != null);
+      const truthTs = cand.length ? Math.min(...cand) : null;    // earliest ever seen = truth
+      st.checked++;
+      if (truthTs == null) continue;
+      const truthEra = eraFor(truthTs);
+      if (truthEra !== rec.era) {
+        if (st.mism.length < 500) st.mism.push({ a: rec.a, was: rec.era, now: truthEra, wasTs: rec.ts || null, nowTs: truthTs });
+        if (doFix) { rec.ts = truthTs; rec.era = truthEra; rec.rank = rankFor(Math.floor((Date.now() - truthTs) / 864e5)); dirty = true; st.fixed++; }
+      } else if (doFix && truthTs !== rec.ts) {
+        rec.ts = truthTs; rec.rank = rankFor(Math.floor((Date.now() - truthTs) / 864e5)); dirty = true;
+      }
+    }
+    if (dirty) await astore.set("widx", JSON.stringify(index)).catch(() => {});
+    const done = st.ci >= index.length;
+    if (done) await astore.set("widx-built", JSON.stringify(Date.now())).catch(() => {});
+    await astore.set("widx-audit-state", JSON.stringify(st)).catch(() => {});
+    return new Response(JSON.stringify({ done, checked: st.checked, scanned: st.ci, total: index.length, mismatches: st.mism, fixed: st.fixed, era: eraFilter, fix: doFix }), { headers: HEADERS });
+  }
+
   // default: census aggregates + record snapshot
   const census = await getStore("census").get("counts", { type: "json" }).catch(() => null) || { total: 0, eras: {}, ranks: {}, moves: {} };
-  return new Response(JSON.stringify({ census, hint: "views: uniques, records, claimed, wallets-build, wallets, wallet" }), { headers: HEADERS });
+  return new Response(JSON.stringify({ census, hint: "views: uniques, records, claimed, wallets-build, wallets, wallet, wallets-audit" }), { headers: HEADERS });
 };
 
 async function sha(s) {
