@@ -103,13 +103,14 @@ async function llamaPrice(contract) {
   } catch { return null; }
 }
 function llamaChartUrl(contract, fromTs) {
-  // pick a period so `span` points cover firstTs → now without exceeding ~1000 points
-  const days = (Date.now() - fromTs) / 864e5;
-  const period = days <= 42 ? "1h" : days <= 1000 ? "1d" : "1w";
-  const perMs = period === "1h" ? 3600e3 : period === "1d" ? 864e5 : 7 * 864e5;
-  const span = Math.min(1000, Math.max(2, Math.ceil((Date.now() - fromTs) / perMs)));
-  const sw = period === "1h" ? "3600" : period === "1d" ? "86400" : "604800";
-  return "https://coins.llama.fi/chart/avax:" + contract + "?start=" + Math.floor(fromTs / 1e3) + "&span=" + span + "&period=" + period + "&searchWidth=" + sw;
+  // DeFiLlama caps /chart at 500 points — pick the FINEST period that fits firstTs→now
+  // in ≤500 points (a >500-point request is rejected outright, killing the peak).
+  const periods = [["1h", 3600e3], ["4h", 144e5], ["12h", 432e5], ["1d", 864e5], ["2d", 1728e5], ["3d", 2592e5], ["1w", 6048e5]];
+  const range = Date.now() - fromTs;
+  let sel = periods[periods.length - 1];
+  for (const p of periods) { if (Math.ceil(range / p[1]) <= 500) { sel = p; break; } }
+  const span = Math.min(500, Math.max(2, Math.ceil(range / sel[1])));
+  return "https://coins.llama.fi/chart/avax:" + contract + "?start=" + Math.floor(fromTs / 1e3) + "&span=" + span + "&period=" + sel[0] + "&searchWidth=" + Math.round(sel[1] / 1e3);
 }
 async function llamaChart(contract, fromTs) {
   const u = llamaChartUrl(contract, fromTs);
