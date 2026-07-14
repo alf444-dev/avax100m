@@ -54,6 +54,13 @@
   .wd-addr a:hover{color:var(--red)}
   .chip{display:inline-block;background:#1a1a1a;border:1px solid var(--faint);border-radius:2px;padding:1px 5px;margin:1px;font-size:9px;letter-spacing:.06em;color:var(--dim)}
   .chip.on{color:var(--red);border-color:var(--red)}
+  .wd-break{margin:0 0 14px}
+  .wd-break .bk{display:flex;flex-wrap:wrap;align-items:center;gap:3px;padding:6px 0;border-bottom:1px solid var(--faint)}
+  .wd-break .bl{font-size:9px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;min-width:64px;margin-right:6px}
+  .wd-break .bchip{cursor:pointer;font-size:10px;padding:2px 7px}
+  .wd-break .bchip b{color:var(--ink);font-weight:700}
+  .wd-break .bchip:hover{color:var(--red);border-color:var(--red)}
+  .wd-break .bchip:hover b{color:var(--red)}
   .wd-flags{max-width:260px;white-space:normal}
   .drawer-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:20}
   .drawer{position:fixed;top:0;right:0;height:100%;width:min(560px,94vw);background:var(--bg);border-left:1px solid var(--faint);padding:24px;overflow-y:auto;z-index:21;display:none}
@@ -67,7 +74,7 @@
 </head>
 <body>
 <h1>AVAX<b>/</b>100M · internals</h1>
-<p class="sub">aggregates only. no wallet address is rendered on this page — by design.</p>
+<p class="sub">owner-only internals. the wallet directory is private, key-gated &amp; noindex.</p>
 
 <div class="gate" id="gate">
   <div style="font-size:11px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;margin-bottom:10px">access key</div>
@@ -204,12 +211,29 @@ function sortVal(r,k){
 }
 function ensureOpt(sel,val){ if(!sel) return; var has=Array.prototype.some.call(sel.options,function(o){return o.value===val;}); if(!has){ var o=document.createElement("option"); o.value=val; o.textContent=val.toLowerCase(); sel.appendChild(o); } sel.value=val; }
 function gotoWallets(f){ WD.pending=f; document.querySelectorAll(".tabs .ghost[data-v]").forEach(function(b){ b.classList.toggle("active",b.getAttribute("data-v")==="wallets"); }); render("wallets"); }
+function tally(arr,key){ var m={}; arr.forEach(function(r){ var k=r[key]; if(k==null||k==="") return; m[k]=(m[k]||0)+1; }); return m; }
+function facetChips(obj,facet){ return Object.keys(obj).sort(function(a,b){return obj[b]-obj[a];}).map(function(k){ return '<span class="chip bchip" data-facet="'+facet+'" data-key="'+k.replace(/"/g,"&quot;")+'">'+k.toLowerCase()+' <b>'+obj[k].toLocaleString("en-US")+'</b></span>'; }).join(""); }
+function renderBreak(){
+  var el=document.getElementById("wdBreak"); if(!el) return;
+  if(!WD.all.length){ el.innerHTML=""; return; }
+  var eras=tally(WD.all,"era"), ranks=tally(WD.all,"rank");
+  var claimed=WD.all.filter(function(r){return r.claimed;}).length;
+  el.innerHTML='<div class="wd-break">'
+    +'<div class="bk"><span class="bl">total</span><span class="chip on">'+WD.all.length.toLocaleString("en-US")+'</span><span class="chip">claimed '+claimed.toLocaleString("en-US")+'</span></div>'
+    +'<div class="bk"><span class="bl">by era</span>'+facetChips(eras,"era")+'</div>'
+    +'<div class="bk"><span class="bl">by rank</span>'+facetChips(ranks,"rank")+'</div></div>';
+  el.querySelectorAll(".bchip").forEach(function(c){ c.addEventListener("click",function(){
+    var id=c.getAttribute("data-facet")==="era"?"fEra":"fRank";
+    ensureOpt(document.getElementById(id),c.getAttribute("data-key")); wdApply();
+  }); });
+}
 async function renderWallets(){
   out.innerHTML='<div class="wd-bar">'
     +'<button id="wdBuild">build / refresh</button>'
     +'<button class="ghost" id="wdFull">full rebuild</button>'
     +'<button class="ghost" id="wdCsv">export csv</button>'
     +'<span class="stat" id="wdStat">loading…</span></div>'
+    +'<div id="wdBreak"></div>'
     +'<div id="wdFiltersWrap"></div>'
     +'<input class="wd-search" id="wdSearch" placeholder="search address or token symbol…" autocomplete="off">'
     +'<div class="wd-wrap"><table class="wd" id="wdTable"><thead id="wdHead"></thead><tbody id="wdBody"></tbody></table></div>';
@@ -224,7 +248,7 @@ async function wdLoad(){
     var d=await call("wallets");
     WD.all=d.wallets||[];
     document.getElementById("wdStat").textContent=(d.count||0).toLocaleString("en-US")+" wallets"+(d.built?" · built "+new Date(d.built).toISOString().slice(0,10):"");
-    buildFilters(); buildHead();
+    buildFilters(); buildHead(); renderBreak();
     if(!WD.all.length){ document.getElementById("wdBody").innerHTML='<tr><td colspan="15" style="text-align:left;color:var(--dim);padding:16px">'+(WD.pending?'wanted the '+(WD.pending.era||WD.pending.rank).toLowerCase()+' wallets, but ':'')+'no index yet — hit <b>build / refresh</b> to enumerate every checked wallet (pnl · badges · claim). paginates; leave it running.</td></tr>'; return; }
     if(WD.pending){ // arrived from a summary row click — pre-apply the facet filter
       if(WD.pending.era) ensureOpt(document.getElementById("fEra"),WD.pending.era);
