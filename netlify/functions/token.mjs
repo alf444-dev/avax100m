@@ -27,6 +27,7 @@ function storeOr(name, opts) {
 }
 var HEADERS = { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" };
 var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
+var RS_KEY = process.env.ROUTESCAN_KEY ? "&apikey=" + process.env.ROUTESCAN_KEY : "";
 async function cgToken(addr, store) {
   if (store) try {
     const c = await store.get("cg/" + addr, { type: "json" });
@@ -142,7 +143,7 @@ function peakBagOver(series, rows, addr) {
 }
 async function fetchTokenTx(addr, contract) {
   try {
-    const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
+    const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc" + RS_KEY);
     const j = await r.json();
     if (!j.result || !Array.isArray(j.result) || !j.result.length) return null;
     return j.result;
@@ -152,7 +153,7 @@ async function fetchTokenTx(addr, contract) {
 }
 async function fetchWalletTx(addr) {
   try {
-    const r = await fetch(RS + "?module=account&action=tokentx&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
+    const r = await fetch(RS + "?module=account&action=tokentx&address=" + addr + "&startblock=0&endblock=999999999&sort=asc" + RS_KEY);
     const j = await r.json();
     if (!j.result || !Array.isArray(j.result)) return null;
     return j.result;

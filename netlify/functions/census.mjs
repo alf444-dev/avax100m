@@ -20,6 +20,7 @@ var ERAS = [
 var RANKS = ["PERMAFROST", "OG", "VETERAN", "SURVIVOR", "RESIDENT", "SETTLER", "FRESH SNOW"];
 var EMPTY = () => ({ total: 0, eras: {}, ranks: {}, moves: {} });
 var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
+var RS_KEY = process.env.ROUTESCAN_KEY ? "&apikey=" + process.env.ROUTESCAN_KEY : "";
 var ERA_BOUNDS = [
   [Date.UTC(2021, 1, 9), "GENESIS"], [Date.UTC(2021, 7, 18), "PANGOLIN SPRING"], [Date.UTC(2021, 10, 21), "AVALANCHE RUSH"],
   [Date.UTC(2022, 1, 1), "WONDERLAND"], [Date.UTC(2022, 4, 9), "SUBNET SZN"], [Date.UTC(2023, 0, 1), "THE LONG WINTER"],
@@ -50,7 +51,7 @@ function tsOf(j) {
 // stamping them with a much later era (e.g. inscription-era first native tx -> COQ SZN).
 // returns both so the audit/fix passes can compare in one routescan round.
 async function firstTsBoth(addr) {
-  const base = RS + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=1&sort=asc";
+  const base = RS + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=1&sort=asc" + RS_KEY;
   const [tx, tok, itx] = await Promise.all([
     fetch(base + "&action=txlist").then((r) => r.json()).catch(() => null),
     fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => null),
@@ -61,7 +62,12 @@ async function firstTsBoth(addr) {
   return { tOld, tNew: cands.length ? Math.min(...cands) : null };
 }
 async function firstTs(addr) {
-  return (await firstTsBoth(addr)).tNew;
+  const ft = getStore("firsttx");
+  const c = await ft.get(addr, { type: "json" }).catch(() => null);
+  if (c && typeof c.ts === "number") return c.ts;
+  const ts = (await firstTsBoth(addr)).tNew;
+  if (ts) await ft.set(addr, JSON.stringify({ ts, t: Date.now() })).catch(() => {});
+  return ts;
 }
 var HEADERS = {
   "content-type": "application/json",

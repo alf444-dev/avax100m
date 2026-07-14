@@ -5,6 +5,7 @@ var HEADERS = { "content-type": "application/json", "access-control-allow-origin
 var CACHE_MS = 7 * 24 * 3600 * 1e3;
 var MORALIS = "https://deep-index.moralis.io/api/v2.2";
 var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
+var RS_KEY = process.env.ROUTESCAN_KEY ? "&apikey=" + process.env.ROUTESCAN_KEY : "";
 var REC_ERAS = [
   [Date.UTC(2021, 1, 9), "GENESIS"], [Date.UTC(2021, 7, 18), "PANGOLIN SPRING"], [Date.UTC(2021, 10, 21), "AVALANCHE RUSH"],
   [Date.UTC(2022, 1, 1), "WONDERLAND"], [Date.UTC(2022, 4, 9), "SUBNET SZN"], [Date.UTC(2023, 0, 1), "THE LONG WINTER"],
@@ -14,7 +15,7 @@ var REC_ERAS = [
 ];
 async function walletEra(addr) {
   try {
-    const j = await fetch(RS + "?module=account&action=txlist&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=1&sort=asc").then((r) => r.json());
+    const j = await fetch(RS + "?module=account&action=txlist&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=1&sort=asc" + RS_KEY).then((r) => r.json());
     const f = j && j.result && j.result[0];
     if (!f) return null;
     const ts = parseInt(f.timeStamp, 10) * 1e3;
@@ -117,7 +118,7 @@ async function cgToken(addr, store) {
 }
 async function fetchTransfers(addr, contract) {
   try {
-    const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc");
+    const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&sort=asc" + RS_KEY);
     const j = await r.json();
     if (!j.result || !Array.isArray(j.result) || !j.result.length) return null;
     return j.result;

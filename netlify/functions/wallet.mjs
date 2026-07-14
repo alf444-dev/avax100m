@@ -1,3 +1,4 @@
+import { getStore } from "@netlify/blobs";
 // src/lib.js
 var GENESIS = Date.UTC(2020, 8, 21);
 var ERAS = [
@@ -79,24 +80,43 @@ function firstInteresting(txs, toks, addr) {
   return events[0];
 }
 var API = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
+var RS_KEY = process.env.ROUTESCAN_KEY ? "&apikey=" + process.env.ROUTESCAN_KEY : "";
 async function fetchWallet(addr) {
-  const base = API + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=25&sort=asc";
   const claimedP = fetch("https://avax100m.xyz/api/claim?addr=" + addr + "&info=1").then((r) => r.json()).then((c) => !!(c && c.claimed)).catch(() => false);
-  const [txj, tokj, intj, cntj, blkj] = await Promise.all([
-    fetch(base + "&action=txlist").then((r) => r.json()),
-    fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => ({ result: [] })),
-    fetch(base + "&action=txlistinternal").then((r) => r.json()).catch(() => ({ result: [] })),
-    fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest").then((r) => r.json()).catch(() => null),
-    fetch(API + "?module=proxy&action=eth_blockNumber").then((r) => r.json()).catch(() => null)
+  const ft = getStore("firsttx");
+  const cached = await ft.get(addr, { type: "json" }).catch(() => null);
+  const proxy = () => Promise.all([
+    fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest" + RS_KEY).then((r) => r.json()).catch(() => null),
+    fetch(API + "?module=proxy&action=eth_blockNumber" + RS_KEY).then((r) => r.json()).catch(() => null)
   ]);
-  const heads = [];
-  if (txj.result && txj.result.length) heads.push(txj.result[0]);
-  if (tokj && Array.isArray(tokj.result) && tokj.result.length) heads.push(tokj.result[0]);
-  if (intj && Array.isArray(intj.result) && intj.result.length) heads.push(intj.result[0]);
-  if (!heads.length) return null;
-  const first = heads.reduce((a, b) => parseInt(a.timeStamp, 10) <= parseInt(b.timeStamp, 10) ? a : b);
-  const ts = parseInt(first.timeStamp, 10) * 1e3;
-  const blk = parseInt(first.blockNumber, 10);
+  let ts, blk, mv, dateStr, cntj, blkj;
+  if (cached && typeof cached.ts === "number" && cached.blk != null && cached.mvKey) {
+    // hot path: identity is immutable, cached — only the 2 cheap live calls
+    [cntj, blkj] = await proxy();
+    ts = cached.ts; blk = cached.blk; dateStr = cached.dateStr;
+    mv = { key: cached.mvKey, val: cached.mvVal, contract: cached.mvContract || null };
+  } else {
+    const base = API + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=25&sort=asc" + RS_KEY;
+    let txj, tokj, intj;
+    [txj, tokj, intj, cntj, blkj] = await Promise.all([
+      fetch(base + "&action=txlist").then((r) => r.json()),
+      fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => ({ result: [] })),
+      fetch(base + "&action=txlistinternal").then((r) => r.json()).catch(() => ({ result: [] })),
+      fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest" + RS_KEY).then((r) => r.json()).catch(() => null),
+      fetch(API + "?module=proxy&action=eth_blockNumber" + RS_KEY).then((r) => r.json()).catch(() => null)
+    ]);
+    const heads = [];
+    if (txj.result && txj.result.length) heads.push(txj.result[0]);
+    if (tokj && Array.isArray(tokj.result) && tokj.result.length) heads.push(tokj.result[0]);
+    if (intj && Array.isArray(intj.result) && intj.result.length) heads.push(intj.result[0]);
+    if (!heads.length) return null;
+    const first = heads.reduce((a, b) => parseInt(a.timeStamp, 10) <= parseInt(b.timeStamp, 10) ? a : b);
+    ts = parseInt(first.timeStamp, 10) * 1e3;
+    blk = parseInt(first.blockNumber, 10);
+    mv = firstInteresting(txj && txj.result || [], tokj && tokj.result || [], addr);
+    dateStr = new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).toUpperCase();
+    await ft.set(addr, JSON.stringify({ ts, blk, mvKey: mv.key, mvVal: mv.val, mvContract: mv.contract || null, dateStr, t: Date.now() })).catch(() => {});
+  }
   const now = Date.now();
   const days = Math.floor((now - ts) / 864e5);
   const pct = Math.min(100, (now - ts) / (now - GENESIS) * 100);
@@ -104,8 +124,6 @@ async function fetchWallet(addr) {
   const early = blk / curBlock * 100;
   const earlyStr = (early < 0.01 ? "<0.01" : early < 1 ? early.toFixed(2) : early.toFixed(1)) + "% of all blocks";
   const txc = cntj && cntj.result ? parseInt(cntj.result, 16) : null;
-  const mv = firstInteresting(txj && txj.result || [], tokj && tokj.result || [], addr);
-  const dateStr = new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).toUpperCase();
   return { addr, ts, blk, days, pct, era: eraFor(ts), rank: rankFor(days), mv, txc, earlyStr, dateStr, claimed: await claimedP };
 }
 

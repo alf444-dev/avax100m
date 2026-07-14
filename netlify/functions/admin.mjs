@@ -34,13 +34,14 @@ function rankFor(days) {
 // first-tx lookup, same 3-source-min method as the live checker (normal tx,
 // token transfer, internal tx) — txlist-only misfiles airdrop-first wallets.
 var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
+var RS_KEY = process.env.ROUTESCAN_KEY ? "&apikey=" + process.env.ROUTESCAN_KEY : "";
 function tsOf(j) {
   const f = j && Array.isArray(j.result) && j.result[0];
   const n = f && f.timeStamp ? parseInt(f.timeStamp, 10) : NaN;
   return Number.isFinite(n) ? n * 1e3 : null;
 }
 async function firstTs(addr) {
-  const base = RS + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=1&sort=asc";
+  const base = RS + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=1&sort=asc" + RS_KEY;
   const [tx, tok, itx] = await Promise.all([
     fetch(base + "&action=txlist").then((r) => r.json()).catch(() => null),
     fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => null),
@@ -49,6 +50,30 @@ async function firstTs(addr) {
   const cands = [tsOf(tx), tsOf(tok), tsOf(itx)].filter((t) => t !== null);
   return cands.length ? Math.min(...cands) : null;
 }
+// shared first-tx cache (immutable data, no TTL) — a wallet seen by a profile view,
+// census, or a prior build never costs a Routescan round again. { fetched } lets the
+// caller count only real network hits against its per-pass RS budget.
+async function firstTsCached(addr) {
+  const ft = getStore("firsttx");
+  const c = await ft.get(addr, { type: "json" }).catch(() => null);
+  if (c && typeof c.ts === "number") return { ts: c.ts, fetched: false };
+  const ts = await firstTs(addr);
+  if (ts) await ft.set(addr, JSON.stringify({ ts, t: Date.now() })).catch(() => {});
+  return { ts: ts || null, fetched: true };
+}
+// bounded-concurrency map (verbatim from pnl.mjs) — lets a build/audit pass fan out
+// Routescan lookups now that an API key gives real rate headroom.
+async function pool(items, n, fn) {
+  let i = 0;
+  const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (i < items.length) {
+      const k = i++;
+      await fn(items[k], k);
+    }
+  });
+  await Promise.all(workers);
+}
+var CONC = parseInt(process.env.ROUTESCAN_CONC, 10) || 3;
 
 // parse a "+$1,234" / "-$5.6k" / "$1.2m" signed-usd string into a number
 function parseUsd(s) {
@@ -239,11 +264,7 @@ var admin_default = async (req) => {
       const list = state.list || [];
       const added = [];
       let rsUsed = 0;
-      while (state.ci < list.length) {
-        if (Date.now() - t0 > BUDGET || rsUsed >= RS_CAP) break;
-        const addr = list[state.ci];
-        state.ci++;
-        if (have.has(addr)) continue;                    // classified in a prior pass
+      const classifyOne = async (addr) => {
         const ver = state.addrs[addr] || 0;
         let stats = null, rowsIdx = null, lastT = null;
         if (ver) {
@@ -251,16 +272,25 @@ var admin_default = async (req) => {
           if (pv) { stats = pv.stats; rowsIdx = pv.rowsIdx; lastT = pv.t || null; }
         }
         const claim = await cstore.get("c/" + addr, { type: "json" }).catch(() => null);
-        const ts = await firstTs(addr); rsUsed++;
-        const rec = Object.assign(
+        const ftr = await firstTsCached(addr); if (ftr.fetched) rsUsed++;
+        const ts = ftr.ts;
+        added.push(Object.assign(
           { a: addr, ver, ts: ts || null, era: ts ? eraFor(ts) : null, rank: ts ? rankFor(Math.floor((Date.now() - ts) / 864e5)) : null,
             t: lastT, claimed: !!claim, theme: claim && claim.theme || null,
             hasTop8: !!(claim && claim.top8 && claim.top8.length), hasStatus: !!(claim && claim.status),
             src: { pnl: !!stats, claim: !!claim } },
           classifyStats(stats, rowsIdx)
-        );
-        added.push(rec);
-        have.add(addr);
+        ));
+      };
+      while (state.ci < list.length) {
+        if (Date.now() - t0 > BUDGET || rsUsed >= RS_CAP) break;
+        const batch = [];
+        while (batch.length < CONC && state.ci < list.length) {
+          const a = list[state.ci]; state.ci++;
+          if (have.has(a)) continue;                     // classified in a prior pass
+          have.add(a); batch.push(a);                    // reserve to avoid dupes within the batch
+        }
+        if (batch.length) await pool(batch, CONC, classifyOne);
       }
       if (added.length) { index.push(...added); await astore.set("widx", JSON.stringify(index)).catch(() => {}); }
       const done = state.ci >= list.length;
@@ -305,18 +335,16 @@ var admin_default = async (req) => {
     let st = await astore.get("widx-audit-state", { type: "json" }).catch(() => null);
     if (restart || !st || st.era !== eraFilter || st.fix !== doFix) st = { era: eraFilter, fix: doFix, ci: 0, checked: 0, fixed: 0, mism: [] };
     let rsUsed = 0, dirty = false;
-    while (st.ci < index.length) {
-      if (Date.now() - t0 > BUDGET || rsUsed >= RS_CAP) break;
-      const rec = index[st.ci];
-      st.ci++;
-      if (!rec || !/^0x[0-9a-f]{40}$/.test(rec.a)) continue;
-      if (eraFilter && rec.era !== eraFilter) continue;
-      let fresh = await firstTs(rec.a); rsUsed++;
+    const ftStore = getStore("firsttx");
+    const auditOne = async (rec) => {
+      const cachedFt = await ftStore.get(rec.a, { type: "json" }).catch(() => null);
+      let fresh = await firstTs(rec.a); rsUsed++;                 // force-fresh (bypass cache) to catch build hiccups
       if (fresh == null) fresh = await firstTs(rec.a);           // one retry on empty
-      const cand = [rec.ts, fresh].filter((x) => x != null);
+      const cand = [rec.ts, cachedFt && cachedFt.ts, fresh].filter((x) => x != null);
       const truthTs = cand.length ? Math.min(...cand) : null;    // earliest ever seen = truth
       st.checked++;
-      if (truthTs == null) continue;
+      if (truthTs == null) return;
+      if (!cachedFt || cachedFt.ts !== truthTs) await ftStore.set(rec.a, JSON.stringify({ ts: truthTs, t: Date.now() })).catch(() => {});
       const truthEra = eraFor(truthTs);
       if (truthEra !== rec.era) {
         if (st.mism.length < 500) st.mism.push({ a: rec.a, was: rec.era, now: truthEra, wasTs: rec.ts || null, nowTs: truthTs });
@@ -324,6 +352,17 @@ var admin_default = async (req) => {
       } else if (doFix && truthTs !== rec.ts) {
         rec.ts = truthTs; rec.rank = rankFor(Math.floor((Date.now() - truthTs) / 864e5)); dirty = true;
       }
+    };
+    while (st.ci < index.length) {
+      if (Date.now() - t0 > BUDGET || rsUsed >= RS_CAP) break;
+      const batch = [];
+      while (batch.length < CONC && st.ci < index.length) {
+        const rec = index[st.ci]; st.ci++;
+        if (!rec || !/^0x[0-9a-f]{40}$/.test(rec.a)) continue;
+        if (eraFilter && rec.era !== eraFilter) continue;
+        batch.push(rec);
+      }
+      if (batch.length) await pool(batch, CONC, auditOne);
     }
     if (dirty) await astore.set("widx", JSON.stringify(index)).catch(() => {});
     const done = st.ci >= index.length;

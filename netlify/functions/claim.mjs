@@ -5,6 +5,7 @@ import { ethers } from "ethers";
 // src/claim.js
 var HEADERS = { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" };
 var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
+var RS_KEY = process.env.ROUTESCAN_KEY ? "&apikey=" + process.env.ROUTESCAN_KEY : "";
 var NONCE_MS = 10 * 60 * 1e3;
 var mem = /* @__PURE__ */ new Map();
 var memStore = {
@@ -44,7 +45,7 @@ function statusProblem(st) {
 }
 async function currentBlock() {
   try {
-    const j = await fetch(RS + "?module=proxy&action=eth_blockNumber").then((r) => r.json());
+    const j = await fetch(RS + "?module=proxy&action=eth_blockNumber" + RS_KEY).then((r) => r.json());
     return j && j.result ? parseInt(j.result, 16) : null;
   } catch {
     return null;
@@ -97,7 +98,7 @@ var claim_default = async (req) => {
     const action = body.action === "profile" ? "profile" : body.action === "status" ? "status" : "claim";
     if (body.method === "tx") {
       try {
-        const j = await fetch(RS + "?module=account&action=txlist&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=10&sort=desc").then((r) => r.json());
+        const j = await fetch(RS + "?module=account&action=txlist&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=10&sort=desc" + RS_KEY).then((r) => r.json());
         const hexNonce = nrec.nonce;
         const hit = (j.result || []).find((t) => (t.from || "").toLowerCase() === addr && (t.to || "").toLowerCase() === addr && (t.input || "").toLowerCase().includes(hexNonce) && Date.now() / 1e3 - parseInt(t.timeStamp, 10) < 3600);
         if (!hit) return new Response(JSON.stringify({ error: "no matching self-transaction found yet. it can take a minute to index." }), { status: 400, headers: HEADERS });

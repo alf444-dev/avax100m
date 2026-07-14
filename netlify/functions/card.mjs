@@ -85,14 +85,15 @@ function firstInteresting(txs, toks, addr) {
   return events[0];
 }
 var API = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
+var RS_KEY = process.env.ROUTESCAN_KEY ? "&apikey=" + process.env.ROUTESCAN_KEY : "";
 async function fetchWallet(addr) {
-  const base = API + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=25&sort=asc";
+  const base = API + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=25&sort=asc" + RS_KEY;
   const [txj, tokj, intj, cntj, blkj] = await Promise.all([
     fetch(base + "&action=txlist").then((r) => r.json()),
     fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => ({ result: [] })),
     fetch(base + "&action=txlistinternal").then((r) => r.json()).catch(() => ({ result: [] })),
-    fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest").then((r) => r.json()).catch(() => null),
-    fetch(API + "?module=proxy&action=eth_blockNumber").then((r) => r.json()).catch(() => null)
+    fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest" + RS_KEY).then((r) => r.json()).catch(() => null),
+    fetch(API + "?module=proxy&action=eth_blockNumber" + RS_KEY).then((r) => r.json()).catch(() => null)
   ]);
   const heads = [];
   if (txj.result && txj.result.length) heads.push(txj.result[0]);
