@@ -822,7 +822,11 @@ function tokLookup(){
     if(t.recvUsd) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">most of this bag arrived by transfer, already worth \u2248$'+t.recvUsd.toLocaleString("en-US")+'. the p&l measures what happened to it after \u2014 not what was paid for it.</div>';
     else if(t.recvTk||t.lp&&t.lp.removes) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">p&l values transferred-in tokens at their arrival price. sold \u2212 invested is just the swaps.</div>';
     if(t.updated) rows+=tokRow("discovery",'<b style="color:var(--red)">this beat your tracked '+t.updated+' \u2014 your p&l has been updated</b>');
-    out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:16px;font-weight:700;letter-spacing:.06em;margin-bottom:10px">$'+t.sym+'</div>'+rows+'</div>';
+    var srcName=function(s){return s==="llama"?"defillama":s==="cg"?"coingecko":null;};
+    var ps=srcName(t.priceSrc), qs2=srcName(t.peakSrc);
+    var srcTxt=ps?("priced via "+ps+(qs2&&qs2!==ps?" \xB7 peak via "+qs2:"")):"";
+    var srcFoot=srcTxt?'<div style="font-size:9px;color:var(--faint);letter-spacing:.1em;text-transform:uppercase;padding-top:9px">'+srcTxt+'</div>':"";
+    out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:16px;font-weight:700;letter-spacing:.06em;margin-bottom:10px">$'+t.sym+'</div>'+rows+srcFoot+'</div>';
     if(t.updated){ fetch(SITE+"/api/pnl?addr="+D.addr).then(function(r){return r.json();}).then(function(p){ if(p&&p.available) renderPnl(p.stats); }).catch(function(){}); }
   }).catch(function(){ out.innerHTML='<span style="font-size:11px;color:var(--red)">lookup failed. try again.</span>'; });
 }
