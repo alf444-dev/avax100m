@@ -796,8 +796,13 @@ function tokLookup(){
       out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:14px;color:var(--ink)">no history with '+pnlEsc(q.startsWith("0x")?q.slice(0,10)+"\u2026":q.toLowerCase())+'.</div><div style="font-size:11px;color:var(--dim);margin-top:6px">clean hands. the chain confirms you dodged this one.</div></div>';
       return;
     }
+    if(t.incomplete){
+      out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:14px;color:var(--ink)">history source is incomplete.</div><div style="font-size:11px;color:var(--dim);margin-top:6px">nothing was calculated from a capped ledger. try again in a minute.</div></div>';
+      return;
+    }
     var rows="";
     if(t.realized!==null) rows+=tokRow("realized p&l",(t.realized<0?"\u2212":"+")+"$"+Math.abs(t.realized).toLocaleString("en-US"));
+    else if(t.pnlUnavailable) rows+=tokRow("realized p&l","unavailable");
     var syn=t.synth?"\u2248":"";
     if(t.invested!==null) rows+=tokRow("invested",syn+"$"+Math.round(t.invested).toLocaleString("en-US"));
     if(t.soldUsd!==null) rows+=tokRow("sold for",syn+"$"+Math.round(t.soldUsd).toLocaleString("en-US"));
@@ -815,9 +820,10 @@ function tokLookup(){
       if(t.lp.putUsd||t.lp.gotUsd) lv+=" \xB7 $"+(t.lp.putUsd||0).toLocaleString("en-US")+" in \u2192 $"+(t.lp.gotUsd||0).toLocaleString("en-US")+" back";
       rows+=tokRow("via lp",lv);
     }
-    rows+=tokRow("holding now",t.holdingNow?("yes"+(t.holdingUsd!==null?" \xB7 $"+t.holdingUsd.toLocaleString("en-US"):"")):"no");
+    rows+=tokRow("holding now",t.holdingDust?"dust \xB7 &lt;$0.01":t.holdingNow?("yes"+(t.holdingUsd!==null?" \xB7 $"+Math.round(t.holdingUsd).toLocaleString("en-US"):"")):"no");
     if(t.verdict) rows+=tokRow("verdict",'<b style="color:var(--red)">'+t.verdict+'</b>');
     if(t.synth) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">trade totals reconstructed from on-chain legs \u2014 this token\u2019s venue isn\u2019t covered by standard indexers'+(t.synthPartial?'. swaps settled in native avax may be missing':'')+'.</div>';
+    if(t.pnlUnavailable) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">'+t.pnlUnavailable+'. the app will not invent realized p&l from transfer values or write an estimate into your records.</div>';
     if(t.recvUsd) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">most of this bag arrived by transfer, already worth \u2248$'+t.recvUsd.toLocaleString("en-US")+'. the p&l measures what happened to it after \u2014 not what was paid for it.</div>';
     else if(t.recvTk||t.lp&&t.lp.removes) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">p&l values transferred-in tokens at their arrival price. sold \u2212 invested is just the swaps.</div>';
     var srcName=function(s){return s==="llama"?"defillama":s==="cg"?"coingecko":null;};

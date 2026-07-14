@@ -82,10 +82,11 @@ test("Moralis fallback keeps complete realized P&L but skips stories when balanc
     assert.equal(body.stats.roundtrip, null);
     assert.match(body.stats.biggestW.sym, /^[A-Z0-9._+\-]{1,16}$/);
     assert.ok(!body.stats.biggestW.sym.includes("<"));
-    assert.deepEqual(calls, [
+    assert.deepEqual(calls.filter((path) => path !== "/ext/bc/C/rpc"), [
       `/api/v2.2/wallets/${ADDR}/profitability`,
       `/api/v2.2/wallets/${ADDR}/tokens`
     ]);
+    assert.equal(calls.filter((path) => path === "/ext/bc/C/rpc").length, 3);
   });
 });
 
