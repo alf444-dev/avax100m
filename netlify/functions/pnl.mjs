@@ -87,18 +87,48 @@ async function mfetch(path, key) {
   if (!r.ok) throw new Error("moralis " + r.status);
   return r.json();
 }
-async function cgToken(addr, store) {
-  if (store) try {
-    const c = await store.get("cg/" + addr, { type: "json" });
-    if (c && Date.now() - c.t < 24 * 3600 * 1e3) return c.v;
-  } catch {
-  }
+// ── prices: DeFiLlama primary (on-chain DEX prices, best long-tail coverage,
+// free & keyless), CoinGecko as automatic fallback. Avalanche C-Chain = "avax".
+async function llamaPrice(contract) {
+  const u = "https://coins.llama.fi/prices/current/avax:" + contract;
+  try {
+    let r = await fetch(u);
+    if (r.status === 429) { await new Promise((res) => setTimeout(res, 1500)); r = await fetch(u); }
+    if (!r.ok) return null;
+    const j = await r.json();
+    const coins = j && j.coins || {};
+    const k = Object.keys(coins)[0];
+    const c = k && coins[k];
+    return c && c.price > 0 ? { cur: c.price, sym: c.symbol ? String(c.symbol).toUpperCase() : null } : null;
+  } catch { return null; }
+}
+function llamaChartUrl(contract, fromTs) {
+  // pick a period so `span` points cover firstTs → now without exceeding ~1000 points
+  const days = (Date.now() - fromTs) / 864e5;
+  const period = days <= 42 ? "1h" : days <= 1000 ? "1d" : "1w";
+  const perMs = period === "1h" ? 3600e3 : period === "1d" ? 864e5 : 7 * 864e5;
+  const span = Math.min(1000, Math.max(2, Math.ceil((Date.now() - fromTs) / perMs)));
+  const sw = period === "1h" ? "3600" : period === "1d" ? "86400" : "604800";
+  return "https://coins.llama.fi/chart/avax:" + contract + "?start=" + Math.floor(fromTs / 1e3) + "&span=" + span + "&period=" + period + "&searchWidth=" + sw;
+}
+async function llamaChart(contract, fromTs) {
+  const u = llamaChartUrl(contract, fromTs);
+  try {
+    let r = await fetch(u);
+    if (r.status === 429) { await new Promise((res) => setTimeout(res, 1500)); r = await fetch(u); }
+    if (!r.ok) return null;
+    const j = await r.json();
+    const coins = j && j.coins || {};
+    const k = Object.keys(coins)[0];
+    const arr = k && coins[k] && coins[k].prices || [];
+    const out = arr.map((p) => [p.timestamp * 1e3, p.price]).filter((p) => p[1] > 0);
+    return out.length ? out : null;
+  } catch { return null; }
+}
+async function cgTokenCG(addr) {
   try {
     let r = await fetch("https://api.coingecko.com/api/v3/coins/avalanche/contract/" + addr);
-    if (r.status === 429) {
-      await new Promise((res) => setTimeout(res, 2200));
-      r = await fetch("https://api.coingecko.com/api/v3/coins/avalanche/contract/" + addr);
-    }
+    if (r.status === 429) { await new Promise((res) => setTimeout(res, 2200)); r = await fetch("https://api.coingecko.com/api/v3/coins/avalanche/contract/" + addr); }
     if (!r.ok) return null;
     const j = await r.json();
     const md = j && j.market_data;
@@ -106,15 +136,38 @@ async function cgToken(addr, store) {
     const ath = md.ath && md.ath.usd;
     const cur = md.current_price && md.current_price.usd;
     const athDate = md.ath_date && md.ath_date.usd ? Date.parse(md.ath_date.usd) : null;
-    const v = ath && ath > 0 ? { ath, cur: cur || 0, athDate } : null;
-    if (store && v) try {
-      await store.set("cg/" + addr, JSON.stringify({ t: Date.now(), v }));
-    } catch {
-    }
-    return v;
+    return ath && ath > 0 ? { ath, cur: cur || 0, athDate, src: "cg" } : null;
+  } catch { return null; }
+}
+async function cgChartCG(contract, fromTs) {
+  const u = "https://api.coingecko.com/api/v3/coins/avalanche/contract/" + contract + "/market_chart/range?vs_currency=usd&from=" + Math.floor(fromTs / 1e3) + "&to=" + Math.floor(Date.now() / 1e3);
+  try {
+    let r = await fetch(u);
+    for (let a = 0; a < 2 && r.status === 429; a++) { await new Promise((res) => setTimeout(res, 2200)); r = await fetch(u); }
+    if (!r.ok) return null;
+    const j = await r.json();
+    const prices = j && j.prices || [];
+    return prices.length ? prices : null;
+  } catch { return null; }
+}
+async function cgToken(addr, store) {
+  if (store) try {
+    const c = await store.get("px/" + addr, { type: "json" });
+    if (c && Date.now() - c.t < 24 * 3600 * 1e3) return c.v;
   } catch {
-    return null;
   }
+  // primary: DeFiLlama current price. ath is a conservative floor (=cur) — the real
+  // peak comes from peakSince's price series; cg.ath only matters when peakSince is
+  // null, and understating peak there is the safe direction (never fabricates an STE).
+  let v = null;
+  const dl = await llamaPrice(addr);
+  if (dl && dl.cur > 0) v = { ath: dl.cur, cur: dl.cur, athDate: null, src: "llama" };
+  else v = await cgTokenCG(addr);
+  if (store && v) try {
+    await store.set("px/" + addr, JSON.stringify({ t: Date.now(), v }));
+  } catch {
+  }
+  return v;
 }
 async function fetchTransfers(addr, contract) {
   try {
@@ -162,23 +215,17 @@ async function replayBag(addr, contract, athTs, athTs2) {
 }
 async function peakSince(contract, fromTs, store) {
   const bucket = Math.floor(fromTs / (30 * 864e5));
-  const ck = "peak2/" + contract + "/" + bucket;
+  const ck = "peak3/" + contract + "/" + bucket;
   if (store) try {
     const c = await store.get(ck, { type: "json" });
     if (c && Date.now() - c.t < 7 * 24 * 3600 * 1e3) return c.v;
   } catch {
   }
   try {
-    const u = "https://api.coingecko.com/api/v3/coins/avalanche/contract/" + contract + "/market_chart/range?vs_currency=usd&from=" + Math.floor(fromTs / 1e3) + "&to=" + Math.floor(Date.now() / 1e3);
-    let r = await fetch(u);
-    if (r.status === 429) {
-      await new Promise((res) => setTimeout(res, 2200));
-      r = await fetch(u);
-    }
-    if (!r.ok) return null;
-    const j = await r.json();
-    const prices = j && j.prices || [];
-    if (!prices.length) return null;
+    let prices = await llamaChart(contract, fromTs);   // DeFiLlama series [[ms,price],…]
+    let src = "llama";
+    if (!prices) { prices = await cgChartCG(contract, fromTs); src = "cg"; }   // CoinGecko fallback
+    if (!prices || !prices.length) return null;
     let maxP = 0, maxTs = null, maxI = 0;
     for (let i = 0; i < prices.length; i++) {
       if (prices[i][1] > maxP) {
@@ -193,7 +240,7 @@ async function peakSince(contract, fromTs, store) {
       series = prices.filter((_, i) => i % stride === 0 || i === maxI || i === prices.length - 1);
     }
     series = series.map((p) => [Math.round(p[0]), +p[1].toPrecision(6)]);
-    const v = { price: maxP, ts: maxTs, series };
+    const v = { price: maxP, ts: maxTs, series, src };
     if (store) try {
       await store.set(ck, JSON.stringify({ t: Date.now(), v }));
     } catch {

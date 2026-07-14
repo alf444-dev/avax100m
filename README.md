@@ -23,8 +23,10 @@ anything up.
 
 PRs welcome. Run any function locally with mocked `fetch` (see git history for
 test patterns), keep the brutalist voice, and note that P&L/dossier cache keys
-(`v24/`, `tok7/`, `cand/v3/`, `peak2/`, `cg2/`) must be bumped in lockstep across
-`pnl.mjs` and `token.mjs` whenever cached shapes change.
+(`v24/`, `tok7/`, `cand/v3/`, `peak3/`, `px/`) must be bumped in lockstep across
+`pnl.mjs` and `token.mjs` whenever cached shapes change. Token prices come from
+DeFiLlama (on-chain, keyless) with CoinGecko as automatic fallback; the shared
+first-tx cache lives in the `firsttx` blob store.
 
 Deploys happen on push to `main` via Netlify. Never deploy with Netlify Drop or
 the CLI — it resets Blob storage.
