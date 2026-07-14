@@ -1,5 +1,10 @@
 import { getStore } from "@netlify/blobs";
 import { fetchPnlData, normalizeSymbol, PnlProviderError } from "./lib/pnl-provider.mjs";
+import {
+  appendRegisteredBalanceRows,
+  fetchRegisteredBalances,
+  fetchRoutescanRows
+} from "./lib/token-history.mjs";
 
 // src/pnl.js
 var HEADERS = { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" };
@@ -178,17 +183,13 @@ async function cgToken(addr, store) {
   return v;
 }
 async function fetchTransfers(addr, contract) {
-  try {
-    const r = await fetch(RS + "?module=account&action=tokentx&contractaddress=" + contract + "&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=10000&sort=asc" + RS_KEY);
-    if (!r.ok) return null;
-    const j = await r.json();
-    if (!Array.isArray(j && j.result)) return null;
-    if (j.result.length >= 10000) return null;
-    if (!j.result.length) return null;
-    return j.result;
-  } catch {
-    return null;
-  }
+  const result = await fetchRoutescanRows({
+    address: addr,
+    contract,
+    routescanBase: RS,
+    routescanKey: process.env.ROUTESCAN_KEY || ""
+  });
+  return result.complete && result.rows.length ? result.rows : null;
 }
 function foldBag(rows, addr, athTs, athTs2) {
   if (!rows || !rows.length) return null;
@@ -226,7 +227,7 @@ async function replayBag(addr, contract, athTs, athTs2) {
 }
 async function peakSince(contract, fromTs, store) {
   const bucket = Math.floor(fromTs / (30 * 864e5));
-  const ck = "peak3/" + contract + "/" + bucket;
+  const ck = "peak4/" + contract + "/" + bucket;
   if (store) try {
     const c = await store.get(ck, { type: "json" });
     if (c && Date.now() - c.t < 7 * 24 * 3600 * 1e3) return c.v;
@@ -673,7 +674,10 @@ var pnl_default = async (req) => {
   }
   try {
     const diag = debug ? [] : null;
-    const source = await fetchPnlData({ addr, zerionKey, moralisKey, store, deadline });
+    const [source, registeredBalances] = await Promise.all([
+      fetchPnlData({ addr, zerionKey, moralisKey, store, deadline }),
+      fetchRegisteredBalances({ address: addr })
+    ]);
     const usedFallback = source.quality.fallbackFrom === "zerion";
     if (usedFallback && cached?.stats?.quality?.aggregateAuthoritative === true) {
       return new Response(JSON.stringify({
@@ -687,6 +691,9 @@ var pnl_default = async (req) => {
     }
     const rows = source.rows;
     const balances = source.balances || {};
+    for (const [contract, balance] of Object.entries(registeredBalances)) {
+      if (!balances[contract]) balances[contract] = { tk: balance, usd: 0 };
+    }
     if (diag) diag.push({ rowsAfterFilters: rows.length, rows: rows.slice(0, 30).map((r) => ({ sym: r.sym, profit: Math.round(r.profit), invested: Math.round(r.invested), sold: Math.round(r.sold) })) });
     const stats = summarize(rows, !source.complete, source.aggregate);
     const extra = source.complete && source.quality.balancesComplete
@@ -720,7 +727,8 @@ var pnl_default = async (req) => {
     stats.soldEarly = extra.soldEarly || [];
     const recordSafe = source.complete && source.quality.aggregateAuthoritative === true && source.quality.metadataComplete && extra.complete !== false;
     stats.records = recordSafe ? await updateRecords(addr, rows, extra) : null;
-    const rowsIdx = rows.map((r) => ({ s: r.sym, a: r.tokenAddress, p: r.profit, i: r.invested, so: r.sold, bt: r.boughtTk, st: r.soldTk }));
+    let rowsIdx = rows.map((r) => ({ s: r.sym, a: r.tokenAddress, p: r.profit, i: r.invested, so: r.sold, bt: r.boughtTk, st: r.soldTk }));
+    rowsIdx = appendRegisteredBalanceRows(rowsIdx, registeredBalances);
     if (store && !debug) await store.set(cacheKey, JSON.stringify({ t: Date.now(), provider: source.provider, stats, rowsIdx })).catch(() => {
     });
     const out = { available: true, stats };
