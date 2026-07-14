@@ -29,6 +29,10 @@
   .cell .v.red{color:var(--red)}
   .rows>div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--faint)}
   .rows .n{color:var(--dim)}
+  .rows .crow{cursor:pointer}
+  .rows .crow:hover{color:var(--red)}
+  .rows .crow:hover .n{color:var(--red)}
+  button.ghost.active{color:var(--red);border-color:var(--red)}
   pre{white-space:pre-wrap;color:var(--dim);font-size:12px}
   .warn{border-left:2px solid var(--red);padding:8px 14px;margin:22px 0;color:var(--dim);font-size:12px}
   /* wallet directory */
@@ -121,6 +125,8 @@ document.querySelectorAll(".tabs .ghost[data-v]").forEach(function(b){
 });
 function kv(k,v,red){ return '<div class="cell"><div class="k">'+k+'</div><div class="v'+(red?" red":"")+'">'+v+'</div></div>'; }
 function rowsOf(obj){ return '<div class="rows">'+Object.keys(obj||{}).sort(function(a,b){return obj[b]-obj[a];}).map(function(k){ return '<div><span>'+k.toLowerCase()+'</span><span class="n">'+obj[k].toLocaleString("en-US")+'</span></div>'; }).join("")+'</div>'; }
+function clickRows(obj,facet){ return '<div class="rows">'+Object.keys(obj||{}).sort(function(a,b){return obj[b]-obj[a];}).map(function(k){ return '<div class="crow" data-facet="'+facet+'" data-key="'+k.replace(/"/g,"&quot;")+'" title="see these wallets"><span>'+k.toLowerCase()+' →</span><span class="n">'+obj[k].toLocaleString("en-US")+'</span></div>'; }).join("")+'</div>'; }
+function wireSummaryClicks(){ document.querySelectorAll("#out .crow").forEach(function(el){ el.addEventListener("click",function(){ var f={}; f[el.getAttribute("data-facet")]=el.getAttribute("data-key"); gotoWallets(f); }); }); }
 async function render(view){
   out.innerHTML='<p class="sub">loading…</p>';
   try{
@@ -129,7 +135,9 @@ async function render(view){
     } else if(view==="summary"){
       var d=await call("summary"); var c=d.census||{};
       out.innerHTML='<div class="grid">'+kv("counted in census",(c.total||0).toLocaleString("en-US"),true)+'</div>'
-        +'<h2>by era</h2>'+rowsOf(c.eras)+'<h2>by rank</h2>'+rowsOf(c.ranks)+'<h2>first moves</h2>'+rowsOf(c.moves);
+        +'<p class="sub" style="margin:12px 0 0">click an era or rank to open its wallets in the directory. census counts include hash-only checks; the directory lists the recoverable subset.</p>'
+        +'<h2>by era</h2>'+clickRows(c.eras,"era")+'<h2>by rank</h2>'+clickRows(c.ranks,"rank")+'<h2>first moves</h2>'+rowsOf(c.moves);
+      wireSummaryClicks();
     } else if(view==="uniques"){
       out.innerHTML='<p class="sub">walking every cache version… this paginates, leave it.</p>';
       var last=null;
@@ -194,6 +202,8 @@ function sortVal(r,k){
     default: return 0;
   }
 }
+function ensureOpt(sel,val){ if(!sel) return; var has=Array.prototype.some.call(sel.options,function(o){return o.value===val;}); if(!has){ var o=document.createElement("option"); o.value=val; o.textContent=val.toLowerCase(); sel.appendChild(o); } sel.value=val; }
+function gotoWallets(f){ WD.pending=f; document.querySelectorAll(".tabs .ghost[data-v]").forEach(function(b){ b.classList.toggle("active",b.getAttribute("data-v")==="wallets"); }); render("wallets"); }
 async function renderWallets(){
   out.innerHTML='<div class="wd-bar">'
     +'<button id="wdBuild">build / refresh</button>'
@@ -215,7 +225,12 @@ async function wdLoad(){
     WD.all=d.wallets||[];
     document.getElementById("wdStat").textContent=(d.count||0).toLocaleString("en-US")+" wallets"+(d.built?" · built "+new Date(d.built).toISOString().slice(0,10):"");
     buildFilters(); buildHead();
-    if(!WD.all.length){ document.getElementById("wdBody").innerHTML='<tr><td colspan="15" style="text-align:left;color:var(--dim);padding:16px">no index yet — hit <b>build / refresh</b> to enumerate every checked wallet (pnl · badges · claim). paginates; leave it running.</td></tr>'; return; }
+    if(!WD.all.length){ document.getElementById("wdBody").innerHTML='<tr><td colspan="15" style="text-align:left;color:var(--dim);padding:16px">'+(WD.pending?'wanted the '+(WD.pending.era||WD.pending.rank).toLowerCase()+' wallets, but ':'')+'no index yet — hit <b>build / refresh</b> to enumerate every checked wallet (pnl · badges · claim). paginates; leave it running.</td></tr>'; return; }
+    if(WD.pending){ // arrived from a summary row click — pre-apply the facet filter
+      if(WD.pending.era) ensureOpt(document.getElementById("fEra"),WD.pending.era);
+      if(WD.pending.rank) ensureOpt(document.getElementById("fRank"),WD.pending.rank);
+      WD.pending=null;
+    }
     wdApply();
   }catch(e){ document.getElementById("wdStat").textContent="rejected"; }
 }
