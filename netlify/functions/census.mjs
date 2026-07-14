@@ -74,11 +74,26 @@ var HEADERS = {
   "access-control-allow-origin": "*",
   "cache-control": "no-store"
 };
+function publicSymbol(value) {
+  const clean = String(value || "").toUpperCase().replace(/[^A-Z0-9._-]/g, "").slice(0, 24);
+  return clean || "?";
+}
+function publicRecords(records) {
+  if (!records || typeof records !== "object") return null;
+  const clean = (rows) => (Array.isArray(rows) ? rows : []).filter((row) => Number.isFinite(row && row.v)).slice(0, 5).map((row) => ({
+    v: row.v,
+    sym: publicSymbol(row && row.sym),
+    era: ERAS.includes(row && row.era) ? row.era : void 0,
+    t: Number.isFinite(row && row.t) ? row.t : void 0
+  }));
+  return { w: clean(records.w), l: clean(records.l), rt: clean(records.rt) };
+}
 var census_default = async (req) => {
   const store = getStore("census");
   if (req.method === "GET") {
     const counts2 = await store.get("counts", { type: "json" }) || EMPTY();
-    counts2.records = await getStore("records").get("records", { type: "json" }).catch(() => null) || null;
+    const records = await getStore("records").get("records-v25", { type: "json" }).catch(() => null);
+    counts2.records = publicRecords(records);
     return new Response(JSON.stringify(counts2), { headers: HEADERS });
   }
   if (req.method !== "POST") {

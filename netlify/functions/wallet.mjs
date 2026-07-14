@@ -448,30 +448,31 @@ if(D.firstContract && D.firstToken){
 }
 
 /* realized p&l via /api/pnl */
-var pnlTries=0;
+var pnlTries=0, pnlBootTries=0;
 var LAST_STATS=null;
+function pnlEsc(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
 function updDeeper(s){
   var db=document.getElementById("pnl-deeper"); if(!db) return;
-  s=s||LAST_STATS; if(!s) return;
-  LAST_STATS=s;
-  var sc=s.scan;
-  if(!sc || s.partial){ db.style.display="none"; return; }
-  var left=sc.total-sc.depth;
-  if(left<=0 || sc.depth>=90){ db.style.display="none"; return; }
-  if(!CLAIMED){ db.textContent="claim this page to dig deeper ("+left+" tokens unscanned)"; db.disabled=true; db.style.opacity="0.55"; db.style.display="inline-block"; return; }
-  db.textContent="dig deeper \u2014 scan "+Math.min(15,left)+" more of "+left+" unscanned";
-  db.style.opacity="1";
-  db.style.display="inline-block"; db.disabled=false;
+  db.style.display="none";
 }
 function pnlDash(){ ["pnl-w","pnl-l","pnl-rt","pnl-ste"].forEach(function(id){ document.getElementById(id).textContent="\u2014"; }); }
 function loadPnl(force){
  fetch(SITE+"/api/pnl?addr="+D.addr+(force?"&refresh=1":"")).then(function(r){return r.json();}).then(function(p){
   var note=document.getElementById("pnl-note");
+  if(p && p.pending && pnlBootTries<4){
+    pnlBootTries++; note.textContent="building your fifo ledger\u2026";
+    setTimeout(function(){loadPnl(false);},Math.max(2000,Math.min(15000,(p.retryAfter||5)*1000)));
+    return;
+  }
   if(!p || !p.available){ note.textContent="trade history sync coming soon."; pnlDash(); return; }
   var s=p.stats||{};
   renderPnl(s);
-  if(s.partial && pnlTries<3){ pnlTries++; note.textContent="still digging through your history\u2026"; setTimeout(function(){loadPnl(true);},3000); return; }
-  if(s.partial){ note.textContent="partial scan \u2014 look up a token below to fill the gaps."; return; }
+  if(s.partial && s.quality && s.quality.retryable && pnlTries<3){
+    note.textContent="still digging through your history\u2026";
+    if(!p.cached){ pnlTries++; setTimeout(function(){loadPnl(true);},3000); }
+    return;
+  }
+  if(s.partial){ note.textContent=s.quality&&s.quality.ledgerComplete===false?"partial provider coverage \u2014 excluded or unpriced assets are not counted.":"core p&l is ready; optional token stories are still syncing."; return; }
   updDeeper(s);
   if(p.stale){
     fetch(SITE+"/api/pnl?addr="+D.addr+"&refresh=1").then(function(r){return r.json();})
@@ -482,23 +483,14 @@ function loadPnl(force){
 loadPnl(false);
 (function(){
   var db=document.getElementById("pnl-deeper"); if(!db) return;
-  db.addEventListener("click",function(){
-    if(!CLAIMED) return;
-    db.disabled=true; db.textContent="digging\u2026";
-    fetch(SITE+"/api/pnl?addr="+D.addr+"&deeper=1").then(function(r){return r.json();}).then(function(p){
-      if(!p || !p.available){ db.textContent="dig deeper"; db.disabled=false; return; }
-      renderPnl(p.stats);
-      if(p.stats.partial){ pnlTries=0; loadPnl(true); db.style.display="none"; return; }
-      updDeeper(p.stats);
-    }).catch(function(){ db.textContent="dig deeper"; db.disabled=false; });
-  });
+  db.style.display="none";
 })();
 
 function renderPnl(s){
   LAST_PNL = s;
   function set(id,o){ var el=document.getElementById(id);
     if(!o){ el.textContent="\u2014"; return; }
-    el.innerHTML=o.line+(o.sub?' <small>'+o.sub+'</small>':""); }
+    el.innerHTML=pnlEsc(o.line)+(o.sub?' <small>'+pnlEsc(o.sub)+'</small>':""); }
   function feed(pre,o){ if(o&&o.line) tickAdd(pre+": "+o.line+(o.sub?" \u00b7 "+o.sub:"")); }
   feed("biggest w",s.biggestW);
   feed("biggest l",s.biggestL);
@@ -520,16 +512,21 @@ function renderPnl(s){
   if(s.summary && s.summary.total){
     var sm=document.getElementById("pnl-summary");
     sm.innerHTML="total realized: <b style='color:var(--red)'>"+s.summary.total+"</b>"
+      +(s.summary.unrealized?" \xB7 unrealized "+pnlEsc(s.summary.unrealized):"")
+      +(s.summary.fees?" \xB7 fees "+pnlEsc(s.summary.fees):"")
       +(s.summary.winrate?" \xB7 "+s.summary.winrate+" winrate ("+s.summary.wins+"w / "+s.summary.losses+"l)":"");
     sm.style.display=(s.thin && s.summary.wins+s.summary.losses<=1)?"none":"block";
   }
-  document.getElementById("pnl-note").textContent = s.thin
-    ? "thin dex history \u2014 we track dex swaps only. arena launchpad, perps and cex trades don't show here."
-    : "realized dex trades only \xB7 "+(s.tokens||0)+" tokens traded";
+  var quality=s.quality||{};
+  document.getElementById("pnl-note").textContent = quality.provider==="zerion"
+    ? "fifo accounting \xB7 avalanche only \xB7 "+(s.tokens||0)+" priced assets"+(quality.excludedAssets?" \xB7 "+quality.excludedAssets+" unpriced excluded":"")
+    : (s.thin
+      ? "thin dex history \u2014 provider coverage is incomplete; values are estimates."
+      : "weighted-average dex estimate \xB7 "+(s.tokens||0)+" tokens tracked");
   function list(id, arr){
     var el=document.getElementById(id);
     if(!arr || !arr.length){ el.innerHTML='<span style="color:var(--faint)">\u2014</span>'; return; }
-    el.innerHTML=arr.map(function(o){return '<div style="padding:3px 0;border-bottom:1px solid var(--faint)"><b>'+o.line+'</b> <span style="color:var(--dim)">'+o.sub+'</span></div>';}).join("");
+    el.innerHTML=arr.map(function(o){return '<div style="padding:3px 0;border-bottom:1px solid var(--faint)"><b>'+pnlEsc(o.line)+'</b> <span style="color:var(--dim)">'+pnlEsc(o.sub)+'</span></div>';}).join("");
   }
   var nLists=((s.topW||[]).length)+((s.topL||[]).length)+((s.roundtrips||[]).length)+((s.soldEarly||[]).length);
   if(nLists>=3){
@@ -788,13 +785,15 @@ function tokLookup(){
   out.innerHTML='<span style="font-size:11px;color:var(--dim)">interrogating the chain\u2026</span>';
   fetch(SITE+"/api/token?addr="+D.addr+"&q="+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(t){
     if(t.locked){ out.innerHTML='<span style="font-size:11px;color:var(--dim)">claim the page to use the lookup.</span>'; return; }
+    if(t.pending){ out.innerHTML='<span style="font-size:11px;color:var(--dim)">this token is already being indexed\u2026</span>'; setTimeout(tokLookup,Math.max(2000,(t.retryAfter||3)*1000)); return; }
+    if(t.partial){ out.innerHTML='<span style="font-size:11px;color:var(--dim)">token history is temporarily incomplete. try again shortly.</span>'; return; }
     if(t.ambiguous){
       out.innerHTML='<div style="font-size:11px;color:var(--dim);margin-bottom:8px">several tokens wear that symbol \u2014 pick the contract:</div>'
-        +t.ambiguous.map(function(m){return '<button class="btn" style="margin:0 6px 6px 0" onclick="document.getElementById(&quot;tok-q&quot;).value=&quot;'+m.contract+'&quot;;tokLookup()">$'+m.sym+' \xB7 '+m.contract.slice(0,10)+'\u2026</button>';}).join("");
+        +t.ambiguous.map(function(m){return '<button class="btn" style="margin:0 6px 6px 0" onclick="document.getElementById(&quot;tok-q&quot;).value=&quot;'+m.contract+'&quot;;tokLookup()">$'+pnlEsc(m.sym)+' \xB7 '+m.contract.slice(0,10)+'\u2026</button>';}).join("");
       return;
     }
     if(t.none){
-      out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:14px;color:var(--ink)">no history with '+(q.startsWith("0x")?q.slice(0,10)+"\u2026":q.toLowerCase())+'.</div><div style="font-size:11px;color:var(--dim);margin-top:6px">clean hands. the chain confirms you dodged this one.</div></div>';
+      out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:14px;color:var(--ink)">no history with '+pnlEsc(q.startsWith("0x")?q.slice(0,10)+"\u2026":q.toLowerCase())+'.</div><div style="font-size:11px;color:var(--dim);margin-top:6px">clean hands. the chain confirms you dodged this one.</div></div>';
       return;
     }
     var rows="";
@@ -821,13 +820,11 @@ function tokLookup(){
     if(t.synth) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">trade totals reconstructed from on-chain legs \u2014 this token\u2019s venue isn\u2019t covered by standard indexers'+(t.synthPartial?'. swaps settled in native avax may be missing':'')+'.</div>';
     if(t.recvUsd) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">most of this bag arrived by transfer, already worth \u2248$'+t.recvUsd.toLocaleString("en-US")+'. the p&l measures what happened to it after \u2014 not what was paid for it.</div>';
     else if(t.recvTk||t.lp&&t.lp.removes) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">p&l values transferred-in tokens at their arrival price. sold \u2212 invested is just the swaps.</div>';
-    if(t.updated) rows+=tokRow("discovery",'<b style="color:var(--red)">this beat your tracked '+t.updated+' \u2014 your p&l has been updated</b>');
     var srcName=function(s){return s==="llama"?"defillama":s==="cg"?"coingecko":null;};
     var ps=srcName(t.priceSrc), qs2=srcName(t.peakSrc);
     var srcTxt=ps?("priced via "+ps+(qs2&&qs2!==ps?" \xB7 peak via "+qs2:"")):"";
     var srcFoot=srcTxt?'<div style="font-size:9px;color:var(--faint);letter-spacing:.1em;text-transform:uppercase;padding-top:9px">'+srcTxt+'</div>':"";
-    out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:16px;font-weight:700;letter-spacing:.06em;margin-bottom:10px">$'+t.sym+'</div>'+rows+srcFoot+'</div>';
-    if(t.updated){ fetch(SITE+"/api/pnl?addr="+D.addr).then(function(r){return r.json();}).then(function(p){ if(p&&p.available) renderPnl(p.stats); }).catch(function(){}); }
+    out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:16px;font-weight:700;letter-spacing:.06em;margin-bottom:10px">$'+pnlEsc(t.sym)+'</div>'+rows+srcFoot+'</div>';
   }).catch(function(){ out.innerHTML='<span style="font-size:11px;color:var(--red)">lookup failed. try again.</span>'; });
 }
 document.getElementById("tok-go").addEventListener("click",tokLookup);

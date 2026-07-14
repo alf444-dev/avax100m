@@ -160,7 +160,7 @@ var admin_default = async (req) => {
   }
 
   if (view === "records") {
-    const rec = await getStore("records").get("records", { type: "json" }).catch(() => null) || { w: [], l: [], rt: [] };
+    const rec = await getStore("records").get("records-v25", { type: "json" }).catch(() => null) || { w: [], l: [], rt: [] };
     // strip the hashed tag before returning — value/token/era only
     const clean = (arr) => (arr || []).map((e) => ({ v: e.v, sym: e.sym, era: e.era || null, t: e.t || null }));
     return new Response(JSON.stringify({ w: clean(rec.w), l: clean(rec.l), rt: clean(rec.rt) }), { headers: HEADERS });
@@ -205,15 +205,15 @@ var admin_default = async (req) => {
     const BUDGET = 4200;              // soft per-invocation wall-clock budget (ms)
     const RS_CAP = 22;               // max routescan-costing classifications per pass
     const fresh = url.searchParams.get("fresh") === "1";     // full rebuild, wipe index
-    const refresh = url.searchParams.get("refresh") === "1"; // re-enumerate, keep index
+    const refresh = url.searchParams.get("refresh") === "1"; // re-enumerate and reclassify current data
     const NEW_ENUM = () => ({ stage: "enum", addrs: {}, cur: {}, ci: 0, list: null });
     let state = await astore.get("widx-state", { type: "json" }).catch(() => null);
-    if (fresh) await astore.set("widx", JSON.stringify([])).catch(() => {});
-    if (fresh || !state) state = NEW_ENUM();
-    else if (state.stage === "done" && refresh) state = NEW_ENUM();  // incremental top-up
+    const rebuild = fresh || !!(state && state.stage === "done" && refresh);
+    if (rebuild) await astore.set("widx", JSON.stringify([])).catch(() => {});
+    if (rebuild || !state) state = NEW_ENUM();
 
     // load the current index once (also gives us the already-classified set)
-    const index = fresh ? [] : (await astore.get("widx", { type: "json" }).catch(() => null) || []);
+    const index = rebuild ? [] : (await astore.get("widx", { type: "json" }).catch(() => null) || []);
     const have = new Set(index.map((r) => r.a));
 
     if (state.stage === "enum") {
@@ -221,8 +221,8 @@ var admin_default = async (req) => {
       const cstore = getStore("claim");
       const sources = [
         { store: pstore, prefix: "v", ck: "pnl", re: /^v(\d+)\/(0x[0-9a-f]{40})$/ },
-        { store: bstore, prefix: "w2/", ck: "bw2", re: /^w2\/(0x[0-9a-f]{40})$/ },
-        { store: bstore, prefix: "seen/0x", ck: "bseen", re: /^seen\/(0x[0-9a-f]{40})$/ },
+        { store: bstore, prefix: "w4/", ck: "bw4", re: /^w4\/(0x[0-9a-f]{40})$/ },
+        { store: bstore, prefix: "seen/v4/0x", ck: "bseen4", re: /^seen\/v4\/(0x[0-9a-f]{40})$/ },
         { store: cstore, prefix: "c/", ck: "claim", re: /^c\/(0x[0-9a-f]{40})$/ }
       ];
       let timedOut = false;
@@ -312,9 +312,9 @@ var admin_default = async (req) => {
     // full drill-down for one address: uncompacted stats + top-token ledger
     const addr = (url.searchParams.get("addr") || "").toLowerCase();
     if (!/^0x[0-9a-f]{40}$/.test(addr)) return new Response(JSON.stringify({ error: "bad addr" }), { status: 400, headers: HEADERS });
-    const ver = parseInt(url.searchParams.get("ver") || "24", 10) || 24;
+    const ver = parseInt(url.searchParams.get("ver") || "25", 10) || 25;
     let pv = await pstore.get("v" + ver + "/" + addr, { type: "json" }).catch(() => null);
-    if (!pv && ver !== 24) pv = await pstore.get("v24/" + addr, { type: "json" }).catch(() => null);
+    if (!pv && ver !== 25) pv = await pstore.get("v25/" + addr, { type: "json" }).catch(() => null);
     const claim = await getStore("claim").get("c/" + addr, { type: "json" }).catch(() => null);
     return new Response(JSON.stringify({ addr, stats: pv && pv.stats || null, rowsIdx: pv && pv.rowsIdx || null, t: pv && pv.t || null, claim: claim || null }), { headers: HEADERS });
   }
