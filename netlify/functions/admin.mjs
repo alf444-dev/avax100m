@@ -21,6 +21,71 @@ var ERAS = [
   [Date.UTC(2024, 10, 16), "DURANGO"], [Date.UTC(2025, 0, 25), "AVALANCHE9000"], [Date.UTC(2025, 5, 1), "PRESALE SZN"],
   [Date.UTC(2025, 10, 19), "ARENA SUMMER"], [Infinity, "GRANITE"]
 ];
+var RANK_BOUNDS = [[2000, "PERMAFROST"], [1600, "OG"], [1200, "VETERAN"], [800, "SURVIVOR"], [400, "RESIDENT"], [120, "SETTLER"], [0, "FRESH SNOW"]];
+function eraFor(ts) {
+  for (const e of ERAS) if (ts < e[0]) return e[1];
+  return "GRANITE";
+}
+function rankFor(days) {
+  for (const r of RANK_BOUNDS) if (days >= r[0]) return r[1];
+  return "FRESH SNOW";
+}
+
+// first-tx lookup, same 3-source-min method as the live checker (normal tx,
+// token transfer, internal tx) — txlist-only misfiles airdrop-first wallets.
+var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
+function tsOf(j) {
+  const f = j && Array.isArray(j.result) && j.result[0];
+  const n = f && f.timeStamp ? parseInt(f.timeStamp, 10) : NaN;
+  return Number.isFinite(n) ? n * 1e3 : null;
+}
+async function firstTs(addr) {
+  const base = RS + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=1&sort=asc";
+  const [tx, tok, itx] = await Promise.all([
+    fetch(base + "&action=txlist").then((r) => r.json()).catch(() => null),
+    fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => null),
+    fetch(base + "&action=txlistinternal").then((r) => r.json()).catch(() => null)
+  ]);
+  const cands = [tsOf(tx), tsOf(tok), tsOf(itx)].filter((t) => t !== null);
+  return cands.length ? Math.min(...cands) : null;
+}
+
+// parse a "+$1,234" / "-$5.6k" / "$1.2m" signed-usd string into a number
+function parseUsd(s) {
+  if (typeof s === "number") return s;
+  if (typeof s !== "string") return null;
+  const m = /(-?)\$?([\d.,]+)\s*([kmb])?/i.exec(s.replace(/,/g, ""));
+  if (!m) return null;
+  let v = parseFloat(m[2]);
+  if (!Number.isFinite(v)) return null;
+  const mul = { k: 1e3, m: 1e6, b: 1e9 }[(m[3] || "").toLowerCase()] || 1;
+  return (m[1] === "-" ? -1 : 1) * v * mul;
+}
+
+// project a full pnl `stats` object into one compact directory record field-set
+function classifyStats(stats, rowsIdx) {
+  const out = { netUsd: null, wins: null, losses: null, winrate: null, tokens: null, bw: null, bl: null, rt: null, ste: null, flags: [], quality: {} };
+  if (!stats) return out;
+  const su = stats.summary || {};
+  // prefer an exact sum of the token ledger; fall back to the summary string
+  let net = null;
+  if (Array.isArray(rowsIdx) && rowsIdx.length) net = rowsIdx.reduce((s, r) => s + (r.p || 0), 0);
+  else net = parseUsd(su.total);
+  out.netUsd = net === null ? null : Math.round(net);
+  out.wins = typeof su.wins === "number" ? su.wins : null;
+  out.losses = typeof su.losses === "number" ? su.losses : null;
+  out.winrate = su.winrate ? parseInt(su.winrate, 10) : null;
+  out.tokens = stats.tokens != null ? parseInt(stats.tokens, 10) : null;
+  if (stats.biggestW) out.bw = { usd: stats.biggestW.usd, sym: stats.biggestW.sym };
+  if (stats.biggestL) out.bl = { usd: stats.biggestL.usd, sym: stats.biggestL.sym };
+  const rt0 = (stats.roundtrips || [])[0];
+  if (rt0) out.rt = { usd: rt0.rtUsd != null ? rt0.rtUsd : null, sym: rt0.sym };
+  const ste0 = (stats.soldEarly || [])[0];
+  if (ste0) out.ste = { usd: ste0.missedUsd != null ? ste0.missedUsd : null, sym: ste0.sym };
+  out.flags = Object.keys(stats.flags || {});
+  out.quality = { partial: !!stats.partial, thin: !!stats.thin };
+  return out;
+}
 
 var admin_default = async (req) => {
   const key = process.env.ADMIN_KEY;
@@ -99,9 +164,134 @@ var admin_default = async (req) => {
     return new Response(JSON.stringify({ claimed: total, themes, withTop8, withStatus }), { headers: HEADERS });
   }
 
+  // ── WALLET DIRECTORY ──────────────────────────────────────────────────────
+  // Owner-only, key-gated, noindex. Reverses the public "aggregates only" covenant
+  // for this private surface: lists every recoverable checked address (pnl ∪ badges
+  // ∪ claim key-spaces), classified. Public census/records stay hashed & anonymous.
+  const astore = getStore("admin");
+
+  if (view === "wallets-build") {
+    // Resumable build. Two stages inside one persisted state blob (admin-widx-state):
+    //   stage "enum"     — cursor-walk pnl/badges/claim key names, union addresses
+    //   stage "classify" — per new address: pnl stats + claim + routescan era/rank
+    // Client drives it by calling repeatedly until { done:true }. Idempotent: a
+    // finished build re-runs enum to pick up new wallets, classifies only the unseen.
+    const t0 = Date.now();
+    const BUDGET = 4200;              // soft per-invocation wall-clock budget (ms)
+    const RS_CAP = 22;               // max routescan-costing classifications per pass
+    const fresh = url.searchParams.get("fresh") === "1";     // full rebuild, wipe index
+    const refresh = url.searchParams.get("refresh") === "1"; // re-enumerate, keep index
+    const NEW_ENUM = () => ({ stage: "enum", addrs: {}, cur: {}, ci: 0, list: null });
+    let state = await astore.get("widx-state", { type: "json" }).catch(() => null);
+    if (fresh) await astore.set("widx", JSON.stringify([])).catch(() => {});
+    if (fresh || !state) state = NEW_ENUM();
+    else if (state.stage === "done" && refresh) state = NEW_ENUM();  // incremental top-up
+
+    // load the current index once (also gives us the already-classified set)
+    const index = fresh ? [] : (await astore.get("widx", { type: "json" }).catch(() => null) || []);
+    const have = new Set(index.map((r) => r.a));
+
+    if (state.stage === "enum") {
+      const bstore = getStore("badges");
+      const cstore = getStore("claim");
+      const sources = [
+        { store: pstore, prefix: "v", ck: "pnl", re: /^v(\d+)\/(0x[0-9a-f]{40})$/ },
+        { store: bstore, prefix: "w2/", ck: "bw2", re: /^w2\/(0x[0-9a-f]{40})$/ },
+        { store: bstore, prefix: "seen/0x", ck: "bseen", re: /^seen\/(0x[0-9a-f]{40})$/ },
+        { store: cstore, prefix: "c/", ck: "claim", re: /^c\/(0x[0-9a-f]{40})$/ }
+      ];
+      let timedOut = false;
+      for (const s of sources) {
+        if (state.cur[s.ck] === "done") continue;
+        let cur = state.cur[s.ck] || void 0;
+        do {
+          if (Date.now() - t0 > BUDGET) { timedOut = true; break; }
+          const page = await s.store.list({ prefix: s.prefix, cursor: cur });
+          for (const b of page.blobs || []) {
+            const m = s.re.exec(b.key);
+            if (!m) continue;
+            // pnl keys carry a version group; badges/claim don't
+            const addr = (m[2] || m[1]).toLowerCase();
+            const ver = m[2] ? parseInt(m[1], 10) : 0;
+            const cur2 = state.addrs[addr] || 0;
+            if (ver > cur2) state.addrs[addr] = ver;      // keep newest pnl version
+            else if (!(addr in state.addrs)) state.addrs[addr] = ver;
+          }
+          cur = page.cursor;
+          state.cur[s.ck] = cur || "done";
+        } while (cur);
+        if (timedOut) break;
+      }
+      if (timedOut) {
+        await astore.set("widx-state", JSON.stringify(state)).catch(() => {});
+        return new Response(JSON.stringify({ done: false, stage: "enum", discovered: Object.keys(state.addrs).length }), { headers: HEADERS });
+      }
+      // enumeration complete → freeze the work list, move to classify
+      state.list = Object.keys(state.addrs).filter((a) => !have.has(a));
+      state.ci = 0;
+      state.stage = "classify";
+      await astore.set("widx-state", JSON.stringify(state)).catch(() => {});
+      return new Response(JSON.stringify({ done: false, stage: "classify", discovered: Object.keys(state.addrs).length, toClassify: state.list.length }), { headers: HEADERS });
+    }
+
+    if (state.stage === "classify") {
+      const cstore = getStore("claim");
+      const list = state.list || [];
+      const added = [];
+      let rsUsed = 0;
+      while (state.ci < list.length) {
+        if (Date.now() - t0 > BUDGET || rsUsed >= RS_CAP) break;
+        const addr = list[state.ci];
+        state.ci++;
+        if (have.has(addr)) continue;                    // classified in a prior pass
+        const ver = state.addrs[addr] || 0;
+        let stats = null, rowsIdx = null, lastT = null;
+        if (ver) {
+          const pv = await pstore.get("v" + ver + "/" + addr, { type: "json" }).catch(() => null);
+          if (pv) { stats = pv.stats; rowsIdx = pv.rowsIdx; lastT = pv.t || null; }
+        }
+        const claim = await cstore.get("c/" + addr, { type: "json" }).catch(() => null);
+        const ts = await firstTs(addr); rsUsed++;
+        const rec = Object.assign(
+          { a: addr, ver, ts: ts || null, era: ts ? eraFor(ts) : null, rank: ts ? rankFor(Math.floor((Date.now() - ts) / 864e5)) : null,
+            t: lastT, claimed: !!claim, theme: claim && claim.theme || null,
+            hasTop8: !!(claim && claim.top8 && claim.top8.length), hasStatus: !!(claim && claim.status),
+            src: { pnl: !!stats, claim: !!claim } },
+          classifyStats(stats, rowsIdx)
+        );
+        added.push(rec);
+        have.add(addr);
+      }
+      if (added.length) { index.push(...added); await astore.set("widx", JSON.stringify(index)).catch(() => {}); }
+      const done = state.ci >= list.length;
+      if (done) { state.stage = "done"; await astore.set("widx-built", JSON.stringify(Date.now())).catch(() => {}); }
+      await astore.set("widx-state", JSON.stringify(state)).catch(() => {});
+      return new Response(JSON.stringify({ done, stage: state.stage, classified: state.ci, toClassify: list.length, indexed: index.length }), { headers: HEADERS });
+    }
+
+    return new Response(JSON.stringify({ done: true, stage: "done", indexed: index.length }), { headers: HEADERS });
+  }
+
+  if (view === "wallets") {
+    const index = await astore.get("widx", { type: "json" }).catch(() => null) || [];
+    const built = await astore.get("widx-built", { type: "json" }).catch(() => null);
+    return new Response(JSON.stringify({ built, count: index.length, wallets: index }), { headers: HEADERS });
+  }
+
+  if (view === "wallet") {
+    // full drill-down for one address: uncompacted stats + top-token ledger
+    const addr = (url.searchParams.get("addr") || "").toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(addr)) return new Response(JSON.stringify({ error: "bad addr" }), { status: 400, headers: HEADERS });
+    const ver = parseInt(url.searchParams.get("ver") || "24", 10) || 24;
+    let pv = await pstore.get("v" + ver + "/" + addr, { type: "json" }).catch(() => null);
+    if (!pv && ver !== 24) pv = await pstore.get("v24/" + addr, { type: "json" }).catch(() => null);
+    const claim = await getStore("claim").get("c/" + addr, { type: "json" }).catch(() => null);
+    return new Response(JSON.stringify({ addr, stats: pv && pv.stats || null, rowsIdx: pv && pv.rowsIdx || null, t: pv && pv.t || null, claim: claim || null }), { headers: HEADERS });
+  }
+
   // default: census aggregates + record snapshot
   const census = await getStore("census").get("counts", { type: "json" }).catch(() => null) || { total: 0, eras: {}, ranks: {}, moves: {} };
-  return new Response(JSON.stringify({ census, hint: "views: uniques (paginate until done:true), records, claimed" }), { headers: HEADERS });
+  return new Response(JSON.stringify({ census, hint: "views: uniques, records, claimed, wallets-build, wallets, wallet" }), { headers: HEADERS });
 };
 
 async function sha(s) {

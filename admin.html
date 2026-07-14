@@ -31,6 +31,34 @@
   .rows .n{color:var(--dim)}
   pre{white-space:pre-wrap;color:var(--dim);font-size:12px}
   .warn{border-left:2px solid var(--red);padding:8px 14px;margin:22px 0;color:var(--dim);font-size:12px}
+  /* wallet directory */
+  .wd-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+  .wd-bar .stat{color:var(--dim);font-size:12px;margin-left:auto}
+  .wd-filters{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:0 0 14px;padding:12px;border:1px solid var(--faint)}
+  .wd-filters label{display:block;font-size:9px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;margin-bottom:4px}
+  .wd-filters input,.wd-filters select{padding:7px 9px;font-size:12px;width:100%}
+  .wd-search{width:100%;padding:9px 11px;margin-bottom:10px}
+  .wd-wrap{overflow-x:auto;border:1px solid var(--faint)}
+  table.wd{width:100%;border-collapse:collapse;font-size:11.5px;min-width:900px}
+  table.wd th{position:sticky;top:0;background:#111;text-align:right;padding:8px 9px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--faint);cursor:pointer;white-space:nowrap;user-select:none}
+  table.wd th:first-child,table.wd td:first-child{text-align:left}
+  table.wd th.on{color:var(--red)}
+  table.wd td{text-align:right;padding:7px 9px;border-bottom:1px solid var(--faint);white-space:nowrap}
+  table.wd tr:hover td{background:#141414;cursor:pointer}
+  table.wd td.pos{color:#4ec9a3}table.wd td.neg{color:var(--red)}
+  .wd-addr{font-size:11px}.wd-addr a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--faint)}
+  .wd-addr a:hover{color:var(--red)}
+  .chip{display:inline-block;background:#1a1a1a;border:1px solid var(--faint);border-radius:2px;padding:1px 5px;margin:1px;font-size:9px;letter-spacing:.06em;color:var(--dim)}
+  .chip.on{color:var(--red);border-color:var(--red)}
+  .wd-flags{max-width:260px;white-space:normal}
+  .drawer-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:20}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:min(560px,94vw);background:var(--bg);border-left:1px solid var(--faint);padding:24px;overflow-y:auto;z-index:21;display:none}
+  .drawer h3{font-size:13px;word-break:break-all;margin-bottom:4px}
+  .drawer .x{position:absolute;top:16px;right:18px;cursor:pointer;color:var(--dim);font-size:18px}
+  .drawer table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
+  .drawer td{padding:4px 6px;border-bottom:1px solid var(--faint)}
+  .drawer td:last-child{text-align:right}
+  .drawer td.pos{color:#4ec9a3}.drawer td.neg{color:var(--red)}
 </style>
 </head>
 <body>
@@ -47,6 +75,7 @@
 <div id="panel">
   <div class="tabs">
     <button class="ghost" data-v="summary">summary</button>
+    <button class="ghost" data-v="wallets">wallet directory</button>
     <button class="ghost" data-v="uniques">unique wallets</button>
     <button class="ghost" data-v="records">record books</button>
     <button class="ghost" data-v="claimed">claimed pages</button>
@@ -55,7 +84,10 @@
   <div id="out"><p class="sub">pick a view.</p></div>
 </div>
 
-<div class="warn">this page can’t see individuals and never will — that’s the point. to reward people, use the claim rail: claimers signed a wallet signature, so gating rewards to claimed wallets is consent-based and provable. ask me to build that next.</div>
+<div class="warn">the <b>wallet directory</b> is owner-only, key-gated and noindex. it surfaces every recoverable checked address (pnl · badges · claim) with full classification. the public census/records stay hashed &amp; anonymous — the covenant is scoped to what ships publicly.</div>
+
+<div class="drawer-bg" id="drawerBg"></div>
+<div class="drawer" id="drawer"><span class="x" id="drawerX">×</span><div id="drawerBody"></div></div>
 
 <script>
 var KEY=null;
@@ -92,7 +124,9 @@ function rowsOf(obj){ return '<div class="rows">'+Object.keys(obj||{}).sort(func
 async function render(view){
   out.innerHTML='<p class="sub">loading…</p>';
   try{
-    if(view==="summary"){
+    if(view==="wallets"){
+      await renderWallets(); return;
+    } else if(view==="summary"){
       var d=await call("summary"); var c=d.census||{};
       out.innerHTML='<div class="grid">'+kv("counted in census",(c.total||0).toLocaleString("en-US"),true)+'</div>'
         +'<h2>by era</h2>'+rowsOf(c.eras)+'<h2>by rank</h2>'+rowsOf(c.ranks)+'<h2>first moves</h2>'+rowsOf(c.moves);
@@ -122,6 +156,205 @@ async function render(view){
         +'<h2>themes chosen</h2>'+rowsOf(d.themes);
     }
   }catch(e){ out.innerHTML='<p class="sub" style="color:var(--red)">rejected — re-unlock.</p>'; }
+}
+
+/* ── wallet directory ─────────────────────────────────────────────────────── */
+var WD={all:[],filtered:[],sort:{key:"netUsd",dir:-1}};
+var WCOLS=[
+  {k:"a",l:"address"},{k:"era",l:"era"},{k:"rank",l:"rank"},{k:"netUsd",l:"net p&l"},
+  {k:"wl",l:"w/l"},{k:"winrate",l:"win%"},{k:"tokens",l:"toks"},{k:"bwv",l:"biggest w"},
+  {k:"blv",l:"biggest l"},{k:"rtv",l:"roundtrip"},{k:"stev",l:"sold early"},{k:"flags",l:"flags"},
+  {k:"claimed",l:"claim"},{k:"t",l:"checked"},{k:"src",l:"src"}
+];
+async function callq(qs){ var r=await fetch("/api/admin?"+qs,{headers:{"x-admin-key":KEY}}); if(r.status===404) throw new Error("rejected"); return r.json(); }
+function usd(n){ if(n==null) return "—"; return (n<0?"-":"+")+"$"+Math.abs(Math.round(n)).toLocaleString("en-US"); }
+function tok(o){ if(!o||!o.sym) return "—"; return "$"+o.sym+(o.usd!=null?" "+usd(o.usd):""); }
+function cls(n){ return n==null?"":(n>=0?"pos":"neg"); }
+function shortA(a){ return '<a href="/w/'+a+'" target="_blank" rel="noopener">'+a.slice(0,10)+"…"+a.slice(-6)+'</a>'; }
+function srcStr(s){ if(!s) return "—"; var o=[]; if(s.pnl)o.push("pnl"); if(s.claim)o.push("claim"); return o.join("·")||"—"; }
+function v(id){ var e=document.getElementById(id); return e?e.value:""; }
+function numOr(s,d){ if(s===""||s==null) return d; var n=parseFloat(s); return isNaN(n)?d:n; }
+function distinct(a){ return a.filter(function(x){return x!=null&&x!=="";}).filter(function(x,i,s){return s.indexOf(x)===i;}).sort(); }
+function fld(l,inner){ return '<div><label>'+l+'</label>'+inner+'</div>'; }
+function sortVal(r,k){
+  switch(k){
+    case "a": return r.a; case "era": return r.era||""; case "rank": return r.rank||"";
+    case "netUsd": return r.netUsd==null?-Infinity:r.netUsd;
+    case "wl": return (r.wins||0)+(r.losses||0);
+    case "winrate": return r.winrate==null?-1:r.winrate;
+    case "tokens": return r.tokens==null?-1:r.tokens;
+    case "bwv": return r.bw&&r.bw.usd!=null?r.bw.usd:-Infinity;
+    case "blv": return r.bl&&r.bl.usd!=null?r.bl.usd:Infinity;
+    case "rtv": return r.rt&&r.rt.usd!=null?r.rt.usd:-Infinity;
+    case "stev": return r.ste&&r.ste.usd!=null?r.ste.usd:-Infinity;
+    case "flags": return (r.flags||[]).length;
+    case "claimed": return r.claimed?1:0;
+    case "t": return r.t||0;
+    case "src": return (r.src&&r.src.pnl?2:0)+(r.src&&r.src.claim?1:0);
+    default: return 0;
+  }
+}
+async function renderWallets(){
+  out.innerHTML='<div class="wd-bar">'
+    +'<button id="wdBuild">build / refresh</button>'
+    +'<button class="ghost" id="wdFull">full rebuild</button>'
+    +'<button class="ghost" id="wdCsv">export csv</button>'
+    +'<span class="stat" id="wdStat">loading…</span></div>'
+    +'<div id="wdFiltersWrap"></div>'
+    +'<input class="wd-search" id="wdSearch" placeholder="search address or token symbol…" autocomplete="off">'
+    +'<div class="wd-wrap"><table class="wd" id="wdTable"><thead id="wdHead"></thead><tbody id="wdBody"></tbody></table></div>';
+  document.getElementById("wdBuild").onclick=function(){ wdBuild("refresh"); };
+  document.getElementById("wdFull").onclick=function(){ if(confirm("Full rebuild wipes the current index and recomputes every wallet (slow — one Routescan lookup each). Continue?")) wdBuild("fresh"); };
+  document.getElementById("wdCsv").onclick=wdExport;
+  document.getElementById("wdSearch").addEventListener("input",wdApply);
+  await wdLoad();
+}
+async function wdLoad(){
+  try{
+    var d=await call("wallets");
+    WD.all=d.wallets||[];
+    document.getElementById("wdStat").textContent=(d.count||0).toLocaleString("en-US")+" wallets"+(d.built?" · built "+new Date(d.built).toISOString().slice(0,10):"");
+    buildFilters(); buildHead();
+    if(!WD.all.length){ document.getElementById("wdBody").innerHTML='<tr><td colspan="15" style="text-align:left;color:var(--dim);padding:16px">no index yet — hit <b>build / refresh</b> to enumerate every checked wallet (pnl · badges · claim). paginates; leave it running.</td></tr>'; return; }
+    wdApply();
+  }catch(e){ document.getElementById("wdStat").textContent="rejected"; }
+}
+async function wdBuild(mode){
+  var stat=document.getElementById("wdStat");
+  var qs="view=wallets-build"+(mode==="fresh"?"&fresh=1":"&refresh=1");
+  try{
+    for(var i=0;i<8000;i++){
+      var r=await callq(qs);
+      qs="view=wallets-build"; // subsequent calls resume the persisted build state
+      stat.textContent=(r.stage||"")+" · "+(r.stage==="enum"?("discovered "+(r.discovered||0)):("classified "+(r.classified||0)+"/"+(r.toClassify||0)))+(r.indexed!=null?(" · indexed "+r.indexed):"");
+      if(r.done) break;
+      await new Promise(function(res){setTimeout(res,220);});
+    }
+    await wdLoad();
+  }catch(e){ stat.textContent="build rejected — re-unlock."; }
+}
+function buildFilters(){
+  var eras=distinct(WD.all.map(function(r){return r.era;}));
+  var ranks=distinct(WD.all.map(function(r){return r.rank;}));
+  var flags=distinct([].concat.apply([],WD.all.map(function(r){return r.flags||[];})));
+  function opts(arr){ return '<option value="">any</option>'+arr.map(function(x){return '<option>'+x+'</option>';}).join(""); }
+  document.getElementById("wdFiltersWrap").innerHTML='<div class="wd-filters">'
+    +fld("net ≥","<input id=fNetMin type=number placeholder=min>")
+    +fld("net ≤","<input id=fNetMax type=number placeholder=max>")
+    +fld("tokens ≥","<input id=fTok type=number placeholder=0>")
+    +fld("winrate ≥ %","<input id=fWr type=number placeholder=0>")
+    +fld("era","<select id=fEra>"+opts(eras)+"</select>")
+    +fld("rank","<select id=fRank>"+opts(ranks)+"</select>")
+    +fld("flag","<select id=fFlag>"+opts(flags)+"</select>")
+    +fld("claimed","<select id=fClaim><option value=''>any</option><option value='1'>claimed</option><option value='0'>unclaimed</option></select>")
+    +'</div>';
+  ["fNetMin","fNetMax","fTok","fWr","fEra","fRank","fFlag","fClaim"].forEach(function(id){
+    var el=document.getElementById(id); el.addEventListener("input",wdApply); el.addEventListener("change",wdApply);
+  });
+}
+function buildHead(){
+  document.getElementById("wdHead").innerHTML='<tr>'+WCOLS.map(function(c){
+    var on=WD.sort.key===c.k?"on":"";
+    var ar=WD.sort.key===c.k?(WD.sort.dir<0?" ↓":" ↑"):"";
+    return '<th class="'+on+'" data-k="'+c.k+'">'+c.l+ar+'</th>';
+  }).join("")+'</tr>';
+  document.querySelectorAll("#wdHead th").forEach(function(th){
+    th.addEventListener("click",function(){
+      var k=th.getAttribute("data-k");
+      if(WD.sort.key===k) WD.sort.dir=-WD.sort.dir; else { WD.sort.key=k; WD.sort.dir=-1; }
+      buildHead(); wdApply();
+    });
+  });
+}
+function wdApply(){
+  var f={ net0:numOr(v("fNetMin"),null), net1:numOr(v("fNetMax"),null), tok:numOr(v("fTok"),null),
+    wr:numOr(v("fWr"),null), era:v("fEra"), rank:v("fRank"), flag:v("fFlag"), claim:v("fClaim"),
+    q:(document.getElementById("wdSearch").value||"").trim().toLowerCase() };
+  var rows=WD.all.filter(function(r){
+    if(f.net0!=null && (r.netUsd==null||r.netUsd<f.net0)) return false;
+    if(f.net1!=null && (r.netUsd==null||r.netUsd>f.net1)) return false;
+    if(f.tok!=null && (r.tokens==null||r.tokens<f.tok)) return false;
+    if(f.wr!=null && (r.winrate==null||r.winrate<f.wr)) return false;
+    if(f.era && r.era!==f.era) return false;
+    if(f.rank && r.rank!==f.rank) return false;
+    if(f.flag && (r.flags||[]).indexOf(f.flag)<0) return false;
+    if(f.claim==="1" && !r.claimed) return false;
+    if(f.claim==="0" && r.claimed) return false;
+    if(f.q){ var hay=(r.a+" "+[r.bw,r.bl,r.rt,r.ste].map(function(o){return o&&o.sym||"";}).join(" ")).toLowerCase(); if(hay.indexOf(f.q)<0) return false; }
+    return true;
+  });
+  var k=WD.sort.key,dir=WD.sort.dir;
+  rows.sort(function(a,b){
+    var x=sortVal(a,k),y=sortVal(b,k);
+    if(typeof x==="string"||typeof y==="string"){ return dir*(""+x).localeCompare(""+y); }
+    return dir*(x<y?-1:x>y?1:0);
+  });
+  WD.filtered=rows;
+  document.getElementById("wdStat").textContent=rows.length.toLocaleString("en-US")+" / "+WD.all.length.toLocaleString("en-US")+" wallets";
+  renderBody(rows);
+}
+function renderBody(rows){
+  var cap=1500, shown=rows.slice(0,cap);
+  document.getElementById("wdBody").innerHTML=shown.map(function(r){
+    return '<tr data-a="'+r.a+'" data-ver="'+(r.ver||24)+'">'
+      +'<td class="wd-addr">'+shortA(r.a)+'</td>'
+      +'<td>'+(r.era?r.era.toLowerCase():"—")+'</td>'
+      +'<td>'+(r.rank?r.rank.toLowerCase():"—")+'</td>'
+      +'<td class="'+cls(r.netUsd)+'">'+usd(r.netUsd)+'</td>'
+      +'<td>'+(r.wins!=null?r.wins:"—")+'/'+(r.losses!=null?r.losses:"—")+'</td>'
+      +'<td>'+(r.winrate!=null?r.winrate+"%":"—")+'</td>'
+      +'<td>'+(r.tokens!=null?r.tokens:"—")+'</td>'
+      +'<td class="pos">'+tok(r.bw)+'</td>'
+      +'<td class="neg">'+tok(r.bl)+'</td>'
+      +'<td>'+tok(r.rt)+'</td>'
+      +'<td>'+tok(r.ste)+'</td>'
+      +'<td class="wd-flags">'+((r.flags||[]).map(function(fl){return '<span class="chip">'+fl+'</span>';}).join("")||"—")+'</td>'
+      +'<td>'+(r.claimed?'<span class="chip on">'+(r.theme||"claimed")+'</span>':"—")+'</td>'
+      +'<td>'+(r.t?new Date(r.t).toISOString().slice(0,10):"—")+'</td>'
+      +'<td>'+srcStr(r.src)+'</td></tr>';
+  }).join("")+(rows.length>cap?'<tr><td colspan="15" style="text-align:left;color:var(--dim)">showing first '+cap+' of '+rows.length.toLocaleString("en-US")+' — narrow the filters.</td></tr>':"");
+  document.querySelectorAll("#wdBody tr[data-a]").forEach(function(tr){
+    tr.addEventListener("click",function(e){ if(e.target.tagName==="A") return; wdOpen(tr.getAttribute("data-a"),tr.getAttribute("data-ver")); });
+  });
+}
+async function wdOpen(a,ver){
+  var bg=document.getElementById("drawerBg"),dw=document.getElementById("drawer"),body=document.getElementById("drawerBody");
+  bg.style.display="block"; dw.style.display="block"; body.innerHTML='<p class="sub">loading '+a+'…</p>';
+  try{
+    var d=await callq("view=wallet&addr="+a+"&ver="+(ver||24));
+    var s=d.stats||{}, su=s.summary||{}, rows=(d.rowsIdx||[]).slice(0,50);
+    body.innerHTML='<h3>'+a+'</h3>'
+      +'<p class="sub"><a href="/w/'+a+'" target="_blank" rel="noopener" style="color:var(--red)">profile</a> · <a href="https://snowtrace.io/address/'+a+'" target="_blank" rel="noopener" style="color:var(--red)">snowtrace</a>'+(d.t?" · checked "+new Date(d.t).toISOString().slice(0,10):"")+'</p>'
+      +'<h2>summary</h2><table>'
+        +row2("net realized",su.total||"—")+row2("win / loss",(su.wins!=null?su.wins:"—")+" / "+(su.losses!=null?su.losses:"—"))
+        +row2("winrate",su.winrate||"—")+row2("tokens",s.tokens!=null?s.tokens:"—")
+        +row2("claimed",d.claim?("yes"+(d.claim.theme?" · "+d.claim.theme:"")+(d.claim.method?" · "+d.claim.method:"")):"no")
+      +'</table>'
+      +(s.flags?'<h2>flags</h2><div>'+Object.keys(s.flags).map(function(fl){return '<span class="chip">'+fl+'</span>';}).join("")+'</div>':"")
+      +'<h2>token ledger ('+((d.rowsIdx||[]).length)+')</h2><table>'
+        +(rows.map(function(rr){ return '<tr><td>$'+rr.s+'</td><td class="'+(rr.p>=0?"pos":"neg")+'">'+usd(rr.p)+'</td></tr>'; }).join("")||'<tr><td class="sub">no ledger cached</td></tr>')
+      +'</table>';
+  }catch(e){ body.innerHTML='<p class="sub" style="color:var(--red)">failed to load.</p>'; }
+}
+function row2(k,val){ return '<tr><td>'+k+'</td><td>'+val+'</td></tr>'; }
+function wdClose(){ document.getElementById("drawerBg").style.display="none"; document.getElementById("drawer").style.display="none"; }
+document.getElementById("drawerX").onclick=wdClose;
+document.getElementById("drawerBg").onclick=wdClose;
+function wdExport(){
+  var rows=WD.filtered&&WD.filtered.length?WD.filtered:WD.all;
+  if(!rows.length){ return; }
+  var head=["address","era","rank","net_usd","wins","losses","winrate","tokens","biggest_w","biggest_w_usd","biggest_l","biggest_l_usd","roundtrip_sym","roundtrip_usd","sold_early_sym","sold_early_usd","flags","claimed","theme","last_checked","src"];
+  var lines=[head.join(",")];
+  rows.forEach(function(r){
+    lines.push([r.a,r.era||"",r.rank||"",r.netUsd==null?"":r.netUsd,r.wins==null?"":r.wins,r.losses==null?"":r.losses,
+      r.winrate==null?"":r.winrate,r.tokens==null?"":r.tokens,r.bw&&r.bw.sym||"",r.bw&&r.bw.usd!=null?r.bw.usd:"",
+      r.bl&&r.bl.sym||"",r.bl&&r.bl.usd!=null?r.bl.usd:"",r.rt&&r.rt.sym||"",r.rt&&r.rt.usd!=null?r.rt.usd:"",
+      r.ste&&r.ste.sym||"",r.ste&&r.ste.usd!=null?r.ste.usd:"",'"'+(r.flags||[]).join("|")+'"',r.claimed?1:0,
+      r.theme||"",r.t?new Date(r.t).toISOString():"",(r.src?((r.src.pnl?"pnl":"")+(r.src.claim?(r.src.pnl?"|claim":"claim"):"")):"")].join(","));
+  });
+  var blob=new Blob([lines.join("\n")],{type:"text/csv"});
+  var url=URL.createObjectURL(blob); var a=document.createElement("a");
+  a.href=url; a.download="avax100m-wallets-"+rows.length+".csv"; a.click(); URL.revokeObjectURL(url);
 }
 </script>
 </body>
