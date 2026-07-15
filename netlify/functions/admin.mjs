@@ -35,6 +35,34 @@ function rankFor(days) {
 // token transfer, internal tx) — txlist-only misfiles airdrop-first wallets.
 var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
 var RS_KEY = process.env.ROUTESCAN_KEY ? "&apikey=" + process.env.ROUTESCAN_KEY : "";
+
+// ── Robinhood Chain (chain 4663) bridge detection ─────────────────────────────
+// RH Chain is an Arbitrum Orbit L2 settling to Ethereum. It exposes an
+// Etherscan-compatible Blockscout API (same {message,result,status} shape as
+// Routescan), and Ethereum mainnet is reachable via Routescan's chain-1 network.
+var RH_API = "https://robinhoodchain.blockscout.com/api";                        // keyless
+var ETH_API = "https://api.routescan.io/v2/network/mainnet/evm/1/etherscan/api"; // + RS_KEY
+// L1 (Ethereum) canonical-bridge deposit entrypoints — a wallet's tx TO one of
+// these is a bridge-in to RH Chain. From docs.robinhood.com/chain/protocol-contracts.
+var RH_L1_DEPOSIT = [
+  "0x1a07cc4bd17e0118bdb54d70990d2158abad7a2d", // Delayed Inbox (ETH deposits)
+  "0x6a2e3a1e16fc29f27ce61429746d558d656975bb", // L1 Gateway Router (ERC-20 deposits)
+  "0x85001cc4867c5e1c22da4b79bb8852b9e2a06da0"  // L1 ERC20 Gateway
+];
+var RH_WINDOW_S = 10 * 86400; // "last 10 days"
+
+// generic Etherscan-compatible GET — works against Routescan (any chain) and the
+// RH Blockscout API alike. `key` is a pre-formatted "&apikey=..." suffix (or "").
+// Returns the parsed JSON on success, or null on any transport/throttle error
+// (non-2xx, network, bad body). A genuine "no rows" answer comes back as a real
+// object ({status:"0",result:[]}) — callers rely on null≠empty to avoid counting
+// a throttled 403 as "no activity". Browser-ish UA: Blockscout 403s bare clients.
+function esGet(base, params, key) {
+  const qs = Object.entries(params).map(([k, v]) => k + "=" + encodeURIComponent(v)).join("&");
+  return fetch(base + "?" + qs + (key || ""), { headers: { "user-agent": "Mozilla/5.0 (compatible; avax100m-admin/1.0)" } })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+}
+var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function tsOf(j) {
   const f = j && Array.isArray(j.result) && j.result[0];
   const n = f && f.timeStamp ? parseInt(f.timeStamp, 10) : NaN;
@@ -74,6 +102,7 @@ async function pool(items, n, fn) {
   await Promise.all(workers);
 }
 var CONC = parseInt(process.env.ROUTESCAN_CONC, 10) || 3;
+var RH_CONC = parseInt(process.env.RH_CONC, 10) || 2; // RH Blockscout throttles harder than Routescan
 
 // parse a "+$1,234" / "-$5.6k" / "$1.2m" signed-usd string into a number
 function parseUsd(s) {
@@ -371,9 +400,134 @@ var admin_default = async (req) => {
     return new Response(JSON.stringify({ done, checked: st.checked, scanned: st.ci, total: index.length, mismatches: st.mism, fixed: st.fixed, era: eraFilter, fix: doFix }), { headers: HEADERS });
   }
 
+  if (view === "rh-bridge") {
+    // How many of our scanned wallets are active on / bridged into Robinhood Chain
+    // in the last 10 days. Two passes, unioned, resumable across invocations like
+    // the audit (client calls until { done:true }):
+    //   phase "l1"   — one-shot: walk each L1 deposit contract's Ethereum txs (desc)
+    //                  back to the cutoff, keep senders that are ours (source-side)
+    //   phase "dest" — per-wallet: does the address have an RH-chain tx in-window
+    //                  (destination-side presence). ?restart=1 forces a fresh run.
+    const t0 = Date.now();
+    const BUDGET = 4200;
+    const CUTOFF = Math.floor(Date.now() / 1e3) - RH_WINDOW_S; // unix seconds
+    const restart = url.searchParams.get("restart") === "1";
+    const index = await astore.get("widx", { type: "json" }).catch(() => null) || [];
+    if (!index.length) return new Response(JSON.stringify({ error: "widx empty — run view=wallets-build first" }), { status: 409, headers: HEADERS });
+    const our = new Set(index.map((r) => r.a));
+
+    let st = await astore.get("rh-state", { type: "json" }).catch(() => null);
+    if (restart || !st) st = { phase: "l1", l1cur: {}, l1: [], present: [], ci: 0, checked: 0 };
+
+    if (st.phase === "l1") {
+      const l1 = new Set(st.l1);
+      let timedOut = false;
+      for (const c of RH_L1_DEPOSIT) {
+        if (st.l1cur[c] === "done") continue;
+        let page = (st.l1cur[c] && st.l1cur[c].page) || 1;
+        for (;;) {
+          if (Date.now() - t0 > BUDGET) { timedOut = true; break; }
+          let j = null;
+          for (let attempt = 0; attempt < 3 && j == null; attempt++) {
+            if (attempt) await sleep(350 * attempt);
+            j = await esGet(ETH_API, { module: "account", action: "txlist", address: c, sort: "desc", page, offset: 100 }, RS_KEY);
+          }
+          // null after retries = throttle/error, NOT end-of-data: pause this
+          // contract at the current page and resume next invocation (never mark done).
+          if (!j || !Array.isArray(j.result)) { st.l1cur[c] = { page }; timedOut = true; break; }
+          const rows = j.result;
+          let stop = !rows.length;
+          for (const r of rows) {
+            const ts = parseInt(r.timeStamp, 10);
+            if (Number.isFinite(ts) && ts < CUTOFF) { stop = true; break; }
+            const from = (r.from || "").toLowerCase();
+            if (our.has(from)) l1.add(from);
+          }
+          if (stop || rows.length < 100) { st.l1cur[c] = "done"; break; }
+          page++; st.l1cur[c] = { page };
+        }
+        if (timedOut) break;
+      }
+      st.l1 = [...l1];
+      if (timedOut) {
+        await astore.set("rh-state", JSON.stringify(st)).catch(() => {});
+        return new Response(JSON.stringify({ done: false, phase: "l1", l1Found: st.l1.length }), { headers: HEADERS });
+      }
+      st.phase = "dest"; st.ci = 0;
+      await astore.set("rh-state", JSON.stringify(st)).catch(() => {});
+      return new Response(JSON.stringify({ done: false, phase: "dest", l1Found: st.l1.length, toCheck: index.length }), { headers: HEADERS });
+    }
+
+    // phase "dest" — per-wallet RH-chain presence. A throttled (403/429) call
+    // returns null and MUST NOT be read as "absent": such addresses go to
+    // `deferred` and are retried on later passes. We only finish once the index
+    // is fully walked AND deferred is drained (or it stops shrinking → report
+    // `unresolved` rather than silently undercount).
+    const present = new Set(st.present);
+    const deferred = new Set(st.deferred || []);
+    // → true (in-window tx), false (genuine no in-window activity), null (throttled)
+    const rhInWindow = async (addr) => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const j = await esGet(RH_API, { module: "account", action: "txlist", address: addr, sort: "desc", page: 1, offset: 1 }, "");
+        if (j && Array.isArray(j.result)) {
+          if (!j.result.length) return false;
+          const ts = parseInt(j.result[0].timeStamp, 10);
+          return Number.isFinite(ts) && ts >= CUTOFF;
+        }
+        await sleep(350 * (attempt + 1)); // throttled — back off, then retry
+      }
+      return null;
+    };
+    const checkOne = async (addr) => {
+      const r = await rhInWindow(addr);
+      st.checked++;
+      if (r === null) { deferred.add(addr); return; }
+      deferred.delete(addr);
+      if (r === true) present.add(addr);
+    };
+    // first the forward walk of never-checked wallets…
+    while (st.ci < index.length) {
+      if (Date.now() - t0 > BUDGET) break;
+      const batch = [];
+      while (batch.length < RH_CONC && st.ci < index.length) {
+        const rec = index[st.ci]; st.ci++;
+        if (rec && /^0x[0-9a-f]{40}$/.test(rec.a)) batch.push(rec.a);
+      }
+      if (batch.length) await pool(batch, RH_CONC, checkOne);
+    }
+    // …then, once the index is walked, retry the throttled leftovers
+    const before = deferred.size;
+    if (st.ci >= index.length && deferred.size) {
+      for (const addr of [...deferred]) {
+        if (Date.now() - t0 > BUDGET) break;
+        await checkOne(addr);
+      }
+    }
+    st.present = [...present];
+    st.deferred = [...deferred];
+    // stall guard: if a full retry pass resolved nothing, don't loop forever
+    if (st.ci >= index.length) st.stall = (deferred.size && deferred.size >= before) ? (st.stall || 0) + 1 : 0;
+    const done = st.ci >= index.length && (deferred.size === 0 || st.stall >= 3);
+    if (!done) {
+      await astore.set("rh-state", JSON.stringify(st)).catch(() => {});
+      return new Response(JSON.stringify({ done: false, phase: "dest", checked: st.checked, scanned: st.ci, total: index.length, presentSoFar: present.size, deferred: deferred.size, l1Found: st.l1.length }), { headers: HEADERS });
+    }
+    const l1Set = new Set(st.l1);
+    const active = new Set([...present, ...l1Set]);
+    const viaBoth = [...present].filter((a) => l1Set.has(a)).length;
+    const result = {
+      done: true, scanned: index.length, active: active.size,
+      viaPresence: present.size, viaL1Deposit: l1Set.size, viaBoth,
+      unresolved: deferred.size, builtAt: Date.now(), addresses: [...active]
+    };
+    await astore.set("rh-result", JSON.stringify(result)).catch(() => {});
+    await astore.set("rh-state", JSON.stringify(st)).catch(() => {});
+    return new Response(JSON.stringify(result), { headers: HEADERS });
+  }
+
   // default: census aggregates + record snapshot
   const census = await getStore("census").get("counts", { type: "json" }).catch(() => null) || { total: 0, eras: {}, ranks: {}, moves: {} };
-  return new Response(JSON.stringify({ census, hint: "views: uniques, records, claimed, wallets-build, wallets, wallet, wallets-audit" }), { headers: HEADERS });
+  return new Response(JSON.stringify({ census, hint: "views: uniques, records, claimed, wallets-build, wallets, wallet, wallets-audit, rh-bridge" }), { headers: HEADERS });
 };
 
 async function sha(s) {

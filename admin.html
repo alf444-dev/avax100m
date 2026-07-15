@@ -90,6 +90,7 @@
     <button class="ghost" data-v="uniques">unique wallets</button>
     <button class="ghost" data-v="records">record books</button>
     <button class="ghost" data-v="claimed">claimed pages</button>
+    <button class="ghost" data-v="rh-bridge">robinhood chain</button>
     <button class="ghost" id="lock" style="float:right">lock</button>
   </div>
   <div id="out"><p class="sub">pick a view.</p></div>
@@ -169,6 +170,31 @@ async function render(view){
         +kv("with a top 8",(d.withTop8&&d.withTop8.yes||0).toLocaleString("en-US"))
         +kv("with a status",(d.withStatus&&d.withStatus.yes||0).toLocaleString("en-US"))+'</div>'
         +'<h2>themes chosen</h2>'+rowsOf(d.themes);
+    } else if(view==="rh-bridge"){
+      out.innerHTML='<p class="sub">sweeping every scanned wallet against robinhood chain (last 10 days)… this paginates, leave it.</p>';
+      var last=null, qs="view=rh-bridge&restart=1";
+      for(var i=0;i<600;i++){
+        last=await callq(qs);
+        if(last.error){ out.innerHTML='<p class="sub" style="color:var(--red)">'+last.error+'</p>'; break; }
+        qs="view=rh-bridge"; // subsequent calls resume the persisted sweep state
+        if(last.done){
+          out.innerHTML='<div class="grid">'
+            +kv("scanned wallets",(last.scanned||0).toLocaleString("en-US"))
+            +kv("active on robinhood chain",(last.active||0).toLocaleString("en-US"),true)+'</div>'
+            +'<p class="sub" style="margin:12px 0 0">"active" = bridged in via the L1 canonical bridge <b>or</b> has an on-chain tx on robinhood chain in the last 10 days.'
+              +(last.unresolved?' <b style="color:var(--red)">'+last.unresolved+' wallets could not be checked (rate-limited)</b> — the count is a lower bound; re-run to resolve them.':'')+'</p>'
+            +'<h2>how detected</h2><div class="rows">'
+              +'<div><span>via robinhood-chain presence</span><span class="n">'+(last.viaPresence||0).toLocaleString("en-US")+'</span></div>'
+              +'<div><span>via L1 bridge deposit</span><span class="n">'+(last.viaL1Deposit||0).toLocaleString("en-US")+'</span></div>'
+              +'<div><span>seen by both</span><span class="n">'+(last.viaBoth||0).toLocaleString("en-US")+'</span></div>'
+            +'</div>';
+          break;
+        }
+        var prog=last.phase==="l1"?("scanning L1 bridge deposits · "+(last.l1Found||0)+" of ours so far")
+          :("checking wallets · "+(last.scanned||0)+"/"+(last.total||0)+" · "+(last.presentSoFar||0)+" active");
+        out.innerHTML='<p class="sub">'+prog+'…</p>';
+        await new Promise(function(r){setTimeout(r,300);});
+      }
     }
   }catch(e){ out.innerHTML='<p class="sub" style="color:var(--red)">rejected — re-unlock.</p>'; }
 }
