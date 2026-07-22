@@ -167,7 +167,7 @@ var validators_default = async (req) => {
 
 function page(site) {
   const title = "validators \xB7 avax100m.xyz";
-  const desc = "Live Avalanche P-Chain validators — network staking stats, the full validator directory, single-node lookup, and per-validator rewards. No connect, just a read.";
+  const desc = "Live Avalanche P-Chain validators — network staking stats, the full validator directory, and a card per validator with badges, uptime, delegations, and lifetime history & rewards. No connect, just a read.";
   const pageUrl = site + "/p-chain";
   return `<!DOCTYPE html>
 <html lang="en">
@@ -322,7 +322,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
 
   <section>
     <h2>validator lookup</h2>
-    <p class="sub">Paste a NodeID to pull its live stake, delegations, uptime and rewards.</p>
+    <p class="sub">Paste a NodeID for its full card — stake, delegations, uptime, badges, and lifetime history &amp; rewards.</p>
     <div class="check-row">
       <input id="nid" type="text" spellcheck="false" autocomplete="off" placeholder="NodeID-…" aria-label="Validator NodeID">
       <button class="btn" id="lookup">Look up</button>
@@ -358,7 +358,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
 
 <footer><div class="wrap frow">
   <span>avax100m \xB7 p-chain validators</span>
-  <span><a href="${site}">home</a> \xB7 data: avalanche p-chain rpc</span>
+  <span><a href="${site}">home</a> \xB7 data: avalanche p-chain rpc + data api</span>
 </div></footer>
 
 <script>
@@ -525,7 +525,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     h+='<div class="vc-strip">'+
       '<div class="s"><div class="k">uptime</div><div class="v">'+(d.uptime!=null?pct(d.uptime,2):"—")+'</div></div>'+
       '<div class="s"><div class="k">delegation fee</div><div class="v">'+(d.feePct!=null?nf(d.feePct,2)+"%":"—")+'</div></div>'+
-      '<div class="s"><div class="k">delegated stake</div><div class="v">'+nf(d.delegated)+' <small>AVAX '+dim("· "+nf(d.delegatorCount))+'</small></div></div>'+
+      '<div class="s"><div class="k">delegated stake</div><div class="v">'+nf(d.delegated)+' <small>AVAX '+dim("· "+nf(d.delegatorCount)+" delegators")+'</small></div></div>'+
       '</div>';
 
     if(p&&p.socials){ var sc=p.socials, parts=[];
@@ -549,7 +549,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     r+=drow("reward rate", nf(perDay,2)+" AVAX/day");
     r+=drow("earned so far (est.)", "<b>"+nf(earned,2)+" AVAX</b>"+(earnedUsd?" \xB7 "+earnedUsd:""));
     if(hist && hist.lifetimeRewards>0){ var lifeUsd=usd(hist.lifetimeRewards);
-      r+=drow("lifetime rewards", "<b>"+nf(hist.lifetimeRewards,2)+" AVAX</b>"+(lifeUsd?" \xB7 "+lifeUsd:"")+" "+dim("· "+nf(hist.completedCount)+" paid"));
+      r+=drow("lifetime rewards", "<b>"+nf(hist.lifetimeRewards,2)+" AVAX</b>"+(lifeUsd?" \xB7 "+lifeUsd:"")+" "+dim("· across "+nf(hist.completedCount)+(hist.completedCount===1?" season":" seasons")));
     }
     r+=drow("potential reward \xB7 full period", nf(d.potentialReward,2)+" AVAX"+(rewUsd?" \xB7 "+rewUsd:""));
     r+=drow("est. apr", d.estApr?pct(d.estApr,2):"—");
