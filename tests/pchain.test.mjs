@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { foldValidators, queryDirectory, navaxToAvax } from "../netlify/functions/lib/pchain.mjs";
+import { badgesFor } from "../netlify/functions/lib/vbadges.mjs";
 
 const YEAR = 365.25 * 24 * 3600;
 const NOW = 3_000_000_000; // fixed clock (ms) so remainingDays is deterministic
@@ -86,6 +87,44 @@ test("foldValidators is safe on empty input", () => {
   assert.equal(stats.stakingRatio, null);
   assert.equal(stats.estApr, null);
   assert.equal(directory.length, 0);
+});
+
+test("badgesFor derives on-chain badges by tier", () => {
+  const ids = (row, ctx) => badgesFor(row, ctx).map((b) => b.id + b.tier);
+  // top-10 stake, 99.9% uptime, min fee, 320-day commitment, 200 delegators
+  const strong = badgesFor(
+    { stake: 2_000_000, delegated: 6_400_000, delegatorCount: 200, uptime: 0.996, feePct: 2,
+      startTime: 0, endTime: 320 * 86400, remainingDays: 10 },
+    { stakeRank: 3, total: 600 }
+  ).reduce((m, b) => (m[b.id] = b.tier, m), {});
+  assert.equal(strong.flawless, 2);       // 99.6% -> >=99.5% tier 2
+  assert.equal(strong.heavyweight, 3);    // top 10
+  assert.equal(strong.magnet, 2);         // >=100 delegators
+  assert.equal(strong.trusted, 2);        // 6.4M / (2M*4) = 80% of cap -> tier 2
+  assert.equal(strong.generous, 0);
+  assert.equal(strong.committed, 0);
+
+  // solo validator: no delegators, low uptime, short period
+  assert.deepEqual(
+    ids({ stake: 2000, delegated: 0, delegatorCount: 0, uptime: 0.9, feePct: 4,
+          startTime: 0, endTime: 100 * 86400, remainingDays: 50 }, { stakeRank: 400, total: 600 }),
+    ["solo0"]
+  );
+});
+
+test("foldValidators attaches badges, stake rank and rarity counts", () => {
+  const { stats, byNode } = foldValidators(VALIDATORS, SUPPLY_NAVAX, NOW);
+  const a = byNode["NodeID-AAA"], b = byNode["NodeID-BBB"];
+  assert.equal(a.stakeRank, 1);
+  assert.equal(b.stakeRank, 2);
+  const aIds = a.badges.map((x) => x.id);
+  assert.ok(aIds.includes("flawless") && aIds.includes("heavyweight") && aIds.includes("generous"));
+  const bIds = b.badges.map((x) => x.id);
+  assert.ok(bIds.includes("solo") && bIds.includes("heavyweight"));
+  assert.equal(stats.badgeTotal, 2);
+  assert.equal(stats.badgeCounts.heavyweight, 2); // both are top-10 in a 2-validator set
+  assert.equal(stats.badgeCounts.flawless, 1);    // only AAA has >=99% uptime
+  assert.equal(stats.badgeCounts.solo, 1);        // only BBB has 0 delegators
 });
 
 test("queryDirectory sorts, filters and paginates", () => {

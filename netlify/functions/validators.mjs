@@ -5,6 +5,7 @@ import {
   foldValidators,
   queryDirectory
 } from "./lib/pchain.mjs";
+import { VNAMES, VGLYPH, VGRANTED } from "./lib/vbadges.mjs";
 
 // /validators — P-chain validator section: network staking stats, a sortable
 // directory, single-validator lookup, and per-validator reward/APR. One Netlify
@@ -84,6 +85,14 @@ async function getSnapshot() {
   }
 }
 
+// Per-validator identity/tier/granted-badges. Written in Stage 2 (self-claim +
+// portal sync); read-only merge here. Returns null when a node has no record yet.
+async function readProfile(nodeID) {
+  const store = storeOr("vprofile");
+  if (!store) return null;
+  return await store.get("v/" + nodeID, { type: "json" }).catch(() => null);
+}
+
 var validators_default = async (req) => {
   const url = new URL(req.url);
   const site = (process.env.URL || "https://avax100m.xyz").replace(/\/$/, "");
@@ -99,10 +108,23 @@ var validators_default = async (req) => {
 
   const node = url.searchParams.get("node");
   if (node) {
-    const detail = snap.byNode[node] || snap.byNode[node.trim()] || null;
+    const key = snap.byNode[node] ? node : node.trim();
+    const detail = snap.byNode[key] || null;
     if (!detail) return json({ none: true, node });
-    const rank = snap.directory.reduce((n, r) => n + (r.stake > detail.stake ? 1 : 0), 0) + 1;
-    return json({ node: detail, rank, count: snap.stats.validatorCount, avaxUsd: snap.avaxUsd, asOf: snap.asOf });
+    const total = snap.stats.badgeTotal || snap.stats.validatorCount;
+    const badges = (detail.badges || [])
+      .map((b) => Object.assign({}, b, { rarity: { count: (snap.stats.badgeCounts || {})[b.id] || 0, total } }))
+      .sort((a, b) => (a.rarity.count - b.rarity.count) || (b.tier - a.tier));
+    const profile = await readProfile(key);
+    return json({
+      node: detail,
+      rank: detail.stakeRank || null,
+      count: snap.stats.validatorCount,
+      badges,
+      profile,
+      avaxUsd: snap.avaxUsd,
+      asOf: snap.asOf
+    });
   }
 
   const p = queryDirectory(snap.directory, {
@@ -187,7 +209,47 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .btn.ghost{background:transparent;color:var(--dim);border-color:var(--faint);font-weight:400}
 .btn.ghost:hover{color:var(--red);border-color:var(--red)}
 .msg{margin-top:14px;font-size:12px;color:var(--dim);min-height:18px;letter-spacing:.04em}
-.detail{margin-top:18px;border:1px solid var(--faint);display:none}
+.detail{margin-top:18px;display:none}
+.vcard{border:1px solid var(--faint)}
+.vc-head{display:flex;gap:16px;align-items:center;padding:16px 14px;border-bottom:1px solid var(--faint)}
+.vc-pfp{width:56px;height:56px;flex:none;border:1px solid var(--faint);overflow:hidden;background:#141414}
+.vc-pfp svg,.vc-pfp img{display:block;width:100%;height:100%;object-fit:cover}
+.vc-id{min-width:0}
+.vc-handle{font-size:18px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap;word-break:break-all}
+.vc-node{margin-top:5px;font-size:11px;color:var(--dim);display:flex;align-items:center;gap:9px;flex-wrap:wrap;word-break:break-all}
+.vc-node .mono{color:var(--ink)}
+.tier{font-size:10px;font-weight:700;letter-spacing:.1em;padding:2px 8px;border:1px solid;text-transform:uppercase;flex:none}
+.tier.A{color:#e8b341;border-color:#e8b341}
+.tier.B{color:#c9c9c9;border-color:#c9c9c9}
+.tier.C{color:#c8813f;border-color:#c8813f}
+.copy{background:transparent;border:1px solid var(--faint);color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:3px 9px;cursor:pointer}
+.copy:hover{border-color:var(--red);color:var(--red)}
+.vc-badges{display:flex;flex-wrap:wrap;gap:8px;padding:14px;border-bottom:1px solid var(--faint)}
+.vc-badges .empty{color:var(--dim);font-size:11px;letter-spacing:.08em}
+.btile{position:relative;width:40px;height:40px;border:1px solid var(--faint);display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--ink);cursor:default;outline:none}
+.btile:hover,.btile:focus-visible{border-color:var(--red)}
+.btile svg{width:22px;height:22px;display:block}
+.btile .emo{font-size:20px;line-height:1}
+.btile .rn{position:absolute;bottom:1px;right:3px;font-size:8px;color:var(--dim);letter-spacing:.04em}
+.btile.medal{background:var(--red);border-color:var(--red);color:#0a0a0a}
+.btile.medal .rn{color:#0a0a0a}
+.btile .tip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:220px;z-index:9;background:var(--bg);border:1px solid var(--red);padding:9px 11px;text-align:left;white-space:normal}
+.btile:hover .tip,.btile:focus-visible .tip{display:block}
+.btile .tl{color:var(--red);letter-spacing:.2em;font-size:9px;display:block;margin-bottom:3px;text-transform:uppercase}
+.btile .tn{font-size:11px;font-weight:700;color:var(--ink);display:block}
+.btile .tr{font-size:9px;color:var(--dim);letter-spacing:.06em;display:block;margin:2px 0 5px}
+.btile .tv{font-size:10px;color:var(--dim);line-height:1.5;display:block}
+.btile .tv b{color:var(--ink)}
+.vc-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--faint)}
+.vc-strip .s{background:var(--bg);padding:12px 14px}
+.vc-strip .s .k{font-size:9px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
+.vc-strip .s .v{font-size:16px;font-weight:700;margin-top:3px;word-break:break-word}
+.vc-strip .s .v small{font-size:10px;color:var(--dim);font-weight:400}
+.vc-socials{display:flex;gap:16px;padding:12px 14px;flex-wrap:wrap;font-size:11px;border-top:1px solid var(--faint)}
+.vc-socials a,.vc-socials span{color:var(--dim)}
+.vc-socials a{border-bottom:1px solid var(--faint);text-decoration:none}
+.vc-socials a:hover{color:var(--red);border-color:var(--red)}
+.vc-rows{border-top:1px solid var(--faint)}
 .r-row{display:flex;justify-content:space-between;gap:16px;padding:10px 14px;border-bottom:1px solid var(--faint)}
 .r-row:last-child{border-bottom:none}
 .r-row .k{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
@@ -283,6 +345,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
   var px=null, asOf=null;
   var state={sort:"stake",dir:"desc",q:"",limit:50,offset:0};
   var $=function(id){return document.getElementById(id);};
+  var VNAMES=${JSON.stringify(VNAMES)}, VGLYPH=${JSON.stringify(VGLYPH)}, VGRANTED=${JSON.stringify(VGRANTED)};
 
   function nf(n,d){ if(n==null||!isFinite(n)) return "—"; return Number(n).toLocaleString("en-US",{maximumFractionDigits:d==null?0:d}); }
   function usd(avax){ if(px==null||avax==null||!isFinite(avax)) return ""; var v=avax*px;
@@ -387,42 +450,90 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     return '<span style="display:inline-block;width:104px;height:6px;background:var(--faint);vertical-align:middle;margin-left:10px"><span style="display:block;height:100%;width:'+(f*100).toFixed(1)+'%;background:var(--red)"></span></span>'; }
   var dim=function(s){ return '<span style="color:var(--dim)">'+s+"</span>"; };
 
+  function hashStr(s){ var h=2166136261>>>0; for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+  function identicon(id,size){
+    size=size||56; var h=hashStr(id), cells=5, cs=size/cells, rects="", ce=Math.ceil(cs);
+    for(var y=0;y<cells;y++){ for(var x=0;x<3;x++){
+      if((h>>>((y*3+x)%29))&1){ var m=cells-1-x;
+        rects+='<rect x="'+(x*cs)+'" y="'+(y*cs)+'" width="'+ce+'" height="'+ce+'"/>';
+        if(m!==x) rects+='<rect x="'+(m*cs)+'" y="'+(y*cs)+'" width="'+ce+'" height="'+ce+'"/>';
+      }
+    }}
+    return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'"><rect width="'+size+'" height="'+size+'" fill="#141414"/><g fill="var(--red)">'+rects+'</g></svg>';
+  }
+  function badgeTile(b,i){
+    var name=VNAMES[b.id]||b.id, glyph=VGLYPH[b.id]||"", roman=["","i","ii","iii"][b.tier]||"";
+    var rar=b.rarity? ('<span class="tr">'+nf(b.rarity.count)+" of "+nf(b.rarity.total)+" validators</span>") : "";
+    return '<span class="btile'+(i===0?" medal":"")+'" tabindex="0">'+glyph+(roman?'<span class="rn">'+roman+'</span>':'')+
+      '<span class="tip"><span class="tl">badge</span><span class="tn">'+esc(name)+'</span>'+rar+'<span class="tv">'+b.ev+'</span></span></span>';
+  }
+  function grantTile(id){
+    var g=VGRANTED[id]; if(!g) return "";
+    return '<span class="btile grant" tabindex="0"><span class="emo">'+g.emoji+'</span>'+
+      '<span class="tip"><span class="tl">awarded</span><span class="tn">'+esc(g.name)+'</span><span class="tv">'+esc(g.ev)+'</span></span></span>';
+  }
+
   function renderDetail(d, meta){
-    var rewUsd=usd(d.potentialReward), stakeUsd=usd(d.stake);
+    var p = (meta && meta.profile) || null;
+    var badges = (meta && meta.badges) || d.badges || [];
+    var granted = (p && p.grantedBadges) || [];
+    var stakeUsd=usd(d.stake), rewUsd=usd(d.potentialReward);
     var day=function(sec){ return sec? new Date(sec*1000).toISOString().slice(0,10):"—"; };
     var periodDays=(d.endTime-d.startTime)/86400;
     var elapsed=Math.max(0, periodDays-d.remainingDays);
     var pElapsed=periodDays>0? elapsed/periodDays : 0;
-    var earned=d.potentialReward*Math.max(0,Math.min(1,pElapsed));
+    var earned=d.potentialReward*Math.max(0,Math.min(1,pElapsed)), earnedUsd=usd(earned);
     var perDay=periodDays>0? d.potentialReward/periodDays : 0;
-    var maxDeleg=d.stake*4;                       // Avalanche caps total stake at 5× own → delegations ≤ 4× own
-    var capFree=Math.max(0, maxDeleg-d.delegated);
-    var pCap=maxDeleg>0? d.delegated/maxDeleg : 0;
-    var earnedUsd=usd(earned);
+    var maxDeleg=d.stake*4, capFree=Math.max(0,maxDeleg-d.delegated), pCap=maxDeleg>0?d.delegated/maxDeleg:0;
 
-    var h="";
-    h+=drow("node id","<b>"+esc(d.nodeID)+"</b>");
-    h+=drow("status", d.connected?"connected":"not connected");
-    h+=drow("validating since", day(d.startTime)+" "+dim("· "+dur(elapsed)+" so far"));
-    if(meta&&meta.rank) h+=drow("stake rank", "#"+nf(meta.rank)+" "+dim("of "+nf(meta.count)));
-    h+=drow("own stake", nf(d.stake)+" AVAX"+(stakeUsd?" \xB7 "+stakeUsd:""));
-    h+=drow("delegated", nf(d.delegated)+" AVAX "+dim("("+nf(d.delegatorCount)+" delegators)"));
-    h+=drow("delegation space", nf(d.delegated)+" / "+nf(maxDeleg)+" AVAX "+dim("· "+nf(capFree)+" free")+bar(pCap));
-    h+=drow("total stake", nf(d.stake+d.delegated)+" AVAX");
-    h+=drow("uptime", d.uptime!=null?pct(d.uptime,2):"—");
-    h+=drow("delegation fee", d.feePct!=null?nf(d.feePct,2)+"%":"—");
-    h+=drow("reward rate", nf(perDay,2)+" AVAX/day");
-    h+=drow("earned so far (est.)", "<b>"+nf(earned,2)+" AVAX</b>"+(earnedUsd?" \xB7 "+earnedUsd:""));
-    h+=drow("potential reward \xB7 full period", nf(d.potentialReward,2)+" AVAX"+(rewUsd?" \xB7 "+rewUsd:""));
-    h+=drow("est. apr", d.estApr?pct(d.estApr,2):"—");
-    h+=drow("stake period", day(d.startTime)+" → "+day(d.endTime)+" "+dim("· "+nf(periodDays)+"d"));
-    h+=drow("period progress", nf(elapsed)+" / "+nf(periodDays)+" days"+bar(pElapsed));
-    h+=drow("ends in", nf(d.remainingDays)+" days");
+    var handle=(p&&p.handle)||shortNode(d.nodeID);
+    var tier=(p&&p.tier)? String(p.tier).toUpperCase():null;
+    var tierPill=(tier&&/^[ABC]$/.test(tier))? '<span class="tier '+tier+'">tier '+tier+'</span>':"";
+    var pfp=(p&&p.pfp)? '<img src="'+esc(p.pfp)+'" alt="">' : identicon(d.nodeID,56);
+
+    var h='<div class="vcard"><div class="vc-head"><div class="vc-pfp">'+pfp+'</div><div class="vc-id">'+
+      '<div class="vc-handle">'+esc(handle)+tierPill+'</div>'+
+      '<div class="vc-node"><span class="dot'+(d.connected?" on":"")+'"></span>'+
+      '<span class="mono" id="vc-nodeid">'+esc(d.nodeID)+'</span>'+
+      '<button class="copy" id="vcopy">copy</button></div></div></div>';
+
+    var tiles=badges.map(badgeTile).join("")+granted.map(grantTile).join("");
+    h+='<div class="vc-badges">'+(tiles||'<span class="empty">no badges yet</span>')+'</div>';
+
+    h+='<div class="vc-strip">'+
+      '<div class="s"><div class="k">uptime</div><div class="v">'+(d.uptime!=null?pct(d.uptime,2):"—")+'</div></div>'+
+      '<div class="s"><div class="k">delegation fee</div><div class="v">'+(d.feePct!=null?nf(d.feePct,2)+"%":"—")+'</div></div>'+
+      '<div class="s"><div class="k">delegated stake</div><div class="v">'+nf(d.delegated)+' <small>AVAX '+dim("· "+nf(d.delegatorCount))+'</small></div></div>'+
+      '</div>';
+
+    if(p&&p.socials){ var sc=p.socials, parts=[];
+      if(sc.x) parts.push('<a href="'+esc(sc.x)+'" target="_blank" rel="noopener nofollow">x/twitter</a>');
+      if(sc.discord) parts.push('<span>'+esc(sc.discord)+'</span>');
+      if(sc.site) parts.push('<a href="'+esc(sc.site)+'" target="_blank" rel="noopener nofollow">website</a>');
+      if(parts.length) h+='<div class="vc-socials">'+parts.join("")+'</div>';
+    }
+
+    var r="";
+    r+=drow("validating since", day(d.startTime)+" "+dim("· "+dur(elapsed)+" so far"));
+    if(meta&&meta.rank) r+=drow("stake rank", "#"+nf(meta.rank)+" "+dim("of "+nf(meta.count)));
+    r+=drow("own stake", nf(d.stake)+" AVAX"+(stakeUsd?" \xB7 "+stakeUsd:""));
+    r+=drow("total stake", nf(d.stake+d.delegated)+" AVAX");
+    r+=drow("delegation space", nf(d.delegated)+" / "+nf(maxDeleg)+" AVAX "+dim("· "+nf(capFree)+" free")+bar(pCap));
+    r+=drow("reward rate", nf(perDay,2)+" AVAX/day");
+    r+=drow("earned so far (est.)", "<b>"+nf(earned,2)+" AVAX</b>"+(earnedUsd?" \xB7 "+earnedUsd:""));
+    r+=drow("potential reward \xB7 full period", nf(d.potentialReward,2)+" AVAX"+(rewUsd?" \xB7 "+rewUsd:""));
+    r+=drow("est. apr", d.estApr?pct(d.estApr,2):"—");
+    r+=drow("stake period", day(d.startTime)+" → "+day(d.endTime)+" "+dim("· "+nf(periodDays)+"d"));
+    r+=drow("period progress", nf(elapsed)+" / "+nf(periodDays)+" days"+bar(pElapsed));
     if(d.delegators && d.delegators.length){
       var top=d.delegators.slice().sort(function(a,b){return b.stake-a.stake;}).slice(0,5);
-      h+=drow("top delegations", top.map(function(x){return nf(x.stake)+" AVAX";}).join(" \xB7 "));
+      r+=drow("top delegations", top.map(function(x){return nf(x.stake)+" AVAX";}).join(" \xB7 "));
     }
+    h+='<div class="vc-rows">'+r+'</div></div>';
+
     $("detail").innerHTML=h; $("detail").style.display="block";
+    var cb=$("vcopy"); if(cb) cb.onclick=function(){ var t=$("vc-nodeid").textContent;
+      if(navigator.clipboard) navigator.clipboard.writeText(t).then(function(){ cb.textContent="copied"; setTimeout(function(){cb.textContent="copy";},1200); }); };
   }
 
   function lookup(){

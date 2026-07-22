@@ -3,6 +3,8 @@
 // same host the C-chain calls already use. Fold logic is pure + injectable so the
 // tests can exercise it without a network.
 
+import { badgesFor } from "./vbadges.mjs";
+
 export const P_RPC = process.env.AVAX_P_RPC || "https://api.avax.network/ext/bc/P";
 const YEAR_SECONDS = 365.25 * 24 * 3600;
 const NAVAX = 1e9; // 1 AVAX = 1e9 nAVAX
@@ -127,6 +129,22 @@ export function foldValidators(validators, supplyNavax = null, now = Date.now())
     minStake: Number.isFinite(minStake) ? minStake : 0,
     maxStake
   };
+
+  // Stake rank + auto-derived badges. We have the whole set in one pass, so
+  // per-badge rarity across every validator is free.
+  const byStake = directory.slice().sort((a, b) => b.stake - a.stake);
+  const rankOf = {};
+  byStake.forEach((r, i) => { rankOf[r.nodeID] = i + 1; });
+  const badgeCounts = {};
+  for (const r of directory) {
+    const stakeRank = rankOf[r.nodeID];
+    r.stakeRank = stakeRank;
+    const badges = badgesFor(r, { stakeRank, total: directory.length });
+    if (byNode[r.nodeID]) { byNode[r.nodeID].stakeRank = stakeRank; byNode[r.nodeID].badges = badges; }
+    for (const b of badges) badgeCounts[b.id] = (badgeCounts[b.id] || 0) + 1;
+  }
+  stats.badgeCounts = badgeCounts;
+  stats.badgeTotal = directory.length;
 
   return { stats, directory, byNode, asOf: now };
 }
