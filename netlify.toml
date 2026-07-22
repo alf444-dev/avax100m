@@ -5,3 +5,9 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
   included_files = ["netlify/functions/assets/*"]
+
+# Serve the C-Chain homepage at a clean /c-chain path (root is the C/P split chooser).
+[[redirects]]
+  from = "/c-chain"
+  to = "/c-chain.html"
+  status = 200
