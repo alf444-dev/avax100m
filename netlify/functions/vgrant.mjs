@@ -8,9 +8,16 @@ import { VGRANTED } from "./lib/vbadges.mjs";
 // without the correct PORTAL_KEY, so the endpoint is invisible otherwise.
 //
 // Contract: POST /api/vgrant  header x-portal-key: <PORTAL_KEY>
-//   body { node: "NodeID-…", tier?: "A"|"B"|"C"|null, grantedBadges?: string[]|null }
+//   body {
+//     node: "NodeID-…",
+//     tier?:          "A"|"B"|"C"|null,        // A=Core, B=Active, C=Reliable
+//     grantedBadges?: string[]|null,           // builder, educator, pillar, streaker, founding
+//     score?:         number|null,             // program points
+//     scoreDelta?:    number|null,             // change this cycle (Rising Star)
+//     rank?:          number|null,             // program rank
+//     categories?:    { builder?, educator?, support?, events?, technical? }|null  // point subtotals
+//   }
 //   - omit a field to leave it unchanged; null/"" to clear it.
-//   - valid grantedBadges ids: builder, educator, pillar, streaker, founding.
 
 var mems = {};
 var _mem = mems;
@@ -65,10 +72,31 @@ var vgrant_default = async (req) => {
     const ids = [...new Set(list.map((s) => String(s || "").toLowerCase()).filter((s) => VGRANTED[s]))].slice(0, 8);
     if (ids.length) rec.grantedBadges = ids; else delete rec.grantedBadges;
   }
+  if (body.score !== undefined) {
+    const n = Number(body.score);
+    if (Number.isFinite(n)) rec.score = Math.max(0, Math.round(n)); else delete rec.score;
+  }
+  if (body.scoreDelta !== undefined) {
+    const n = Number(body.scoreDelta);
+    if (Number.isFinite(n)) rec.scoreDelta = Math.round(n); else delete rec.scoreDelta;
+  }
+  if (body.rank !== undefined) {
+    const n = Number(body.rank);
+    if (Number.isFinite(n) && n > 0) rec.rank = Math.round(n); else delete rec.rank;
+  }
+  if (body.categories !== undefined) {
+    const c = (body.categories && typeof body.categories === "object") ? body.categories : {};
+    const out = {};
+    for (const k of ["builder", "educator", "support", "events", "technical"]) {
+      const v = Number(c[k]);
+      if (Number.isFinite(v) && v > 0) out[k] = Math.round(v);
+    }
+    if (Object.keys(out).length) rec.categories = out; else delete rec.categories;
+  }
   rec.tierSource = "portal";
   rec.t = Date.now();
   if (store) await store.set("v/" + node, JSON.stringify(rec)).catch(() => {});
-  return json({ ok: true, node, tier: rec.tier || null, grantedBadges: rec.grantedBadges || [] });
+  return json({ ok: true, node, tier: rec.tier || null, score: rec.score ?? null, grantedBadges: rec.grantedBadges || [] });
 };
 var config = { path: "/api/vgrant" };
 export {

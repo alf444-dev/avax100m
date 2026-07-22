@@ -75,12 +75,19 @@ test("vgrant: key-gated, sets tier + granted badges, preserves self fields", asy
   // with key: preserves a self-claimed handle, sets tier + valid badges only
   gmem.vprofile = new Map();
   gmem.vprofile.set("v/" + NODE, JSON.stringify({ handle: "Frosty Node", owner: "avax1x", socials: { x: "https://x.com/frosty" } }));
-  const r = await greq({ "x-portal-key": process.env.PORTAL_KEY }, { node: NODE, tier: "a", grantedBadges: ["builder", "educator", "not-a-badge"] });
+  const r = await greq({ "x-portal-key": process.env.PORTAL_KEY }, {
+    node: NODE, tier: "a", grantedBadges: ["builder", "educator", "not-a-badge"],
+    score: 412.7, scoreDelta: 30, rank: 3, categories: { builder: 300, bogus: 5 }
+  });
   const j = await r.json();
   assert.equal(r.status, 200);
   assert.equal(j.tier, "A");
+  assert.equal(j.score, 413);
   assert.deepEqual(j.grantedBadges, ["builder", "educator"]);
   const rec = JSON.parse(gmem.vprofile.get("v/" + NODE));
   assert.equal(rec.handle, "Frosty Node", "self-set handle preserved");
   assert.equal(rec.socials.x, "https://x.com/frosty", "socials preserved");
+  assert.equal(rec.score, 413);
+  assert.equal(rec.rank, 3);
+  assert.deepEqual(rec.categories, { builder: 300 }, "only allowlisted categories kept");
 });

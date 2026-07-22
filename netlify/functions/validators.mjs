@@ -7,6 +7,7 @@ import {
 } from "./lib/pchain.mjs";
 import { VNAMES, VGLYPH, VGRANTED, historyBadges } from "./lib/vbadges.mjs";
 import { fetchCompletedValidations, foldHistory } from "./lib/pchain-history.mjs";
+import { foldCohort, TIER_LABEL, UPTIME_GATE } from "./lib/cohort.mjs";
 
 // /validators — P-chain validator section: network staking stats, a sortable
 // directory, single-validator lookup, and per-validator reward/APR. One Netlify
@@ -109,6 +110,33 @@ async function getHistory(nodeID, detail) {
     if (store) await store.set("h/" + nodeID, JSON.stringify({ t: Date.now(), v: completed })).catch(() => {});
   }
   return foldHistory(completed, { startTime: detail.startTime, endTime: detail.endTime });
+}
+
+var COHORT_TTL = 5 * 60 * 1e3;
+// Cohort leaderboards: list all profile records, merge live snapshot stats, fold.
+// Cached in the validators store since listing + reading every record is heavy.
+async function getCohort() {
+  const store = storeOr("vprofile");
+  if (!store || typeof store.list !== "function") return foldCohort([], {});
+  const cache = storeOr("validators");
+  if (cache) {
+    const c = await cache.get("cohort/v1", { type: "json" }).catch(() => null);
+    if (c && Number.isFinite(c.t) && Date.now() - c.t < COHORT_TTL) return c.data;
+  }
+  let listed = { blobs: [] };
+  try { listed = await store.list({ prefix: "v/" }); } catch {}
+  const records = [];
+  for (const b of (listed.blobs || [])) {
+    const rec = await store.get(b.key, { type: "json" }).catch(() => null);
+    if (rec) records.push(Object.assign({ nodeID: b.key.slice(2) }, rec));
+  }
+  let snap = null;
+  try { snap = await getSnapshot(); } catch {}
+  const data = foldCohort(records, (snap && snap.byNode) || {});
+  data.avaxUsd = (snap && snap.avaxUsd) || null;
+  data.asOf = Date.now();
+  if (cache) await cache.set("cohort/v1", JSON.stringify({ t: Date.now(), data })).catch(() => {});
+  return data;
 }
 
 // Build the merged node payload (on-chain + auto-badges + rarity + lifetime
@@ -299,6 +327,12 @@ function serverCard(nd, px) {
     if (parts.length) h += '<div class="vc-socials">' + parts.join("") + '</div>';
   }
   let r = "";
+  if (p && (p.tier || p.score != null || p.grantedBadges)) {
+    if (tier && TIER_LABEL[tier]) r += drow("cohort tier", "<b>Tier " + tier + "</b> " + dim("\xB7 " + TIER_LABEL[tier]));
+    if (p.score != null) r += drow("cohort score", "<b>" + nfmt(p.score) + "</b> pts" + (p.scoreDelta != null ? " " + dim("\xB7 " + (p.scoreDelta >= 0 ? "+" : "") + nfmt(p.scoreDelta) + " this cycle") : ""));
+    if (p.rank != null) r += drow("cohort rank", "#" + nfmt(p.rank));
+    r += drow("uptime gate", d.uptime != null ? (d.uptime >= UPTIME_GATE ? "<b>met</b> " + dim("\xB7 ≥" + Math.round(UPTIME_GATE * 100) + "%") : dim("below ≥" + Math.round(UPTIME_GATE * 100) + "%")) : "—");
+  }
   if (hist && hist.firstStart) { const lifeDays = (Date.now() / 1000 - hist.firstStart) / 86400;
     r += drow("first validated", day(hist.firstStart) + " " + dim("\xB7 " + durOf(lifeDays) + " ago \xB7 " + nfmt(hist.seasons) + (hist.seasons === 1 ? " season" : " seasons"))); }
   r += drow(hist && hist.firstStart ? "current stake since" : "validating since", day(d.startTime) + " " + dim("\xB7 " + durOf(elapsed) + " so far"));
@@ -420,9 +454,110 @@ function profilePage(nd, px, site) {
 </html>`;
 }
 
+function cohortPage(c, site) {
+  const nodeLink = (r) => { const name = r.handle ? esc2(r.handle) : shortNodeOf(r.nodeID);
+    const pill = r.tier ? ' <span class="tier ' + r.tier + '">' + r.tier + '</span>' : "";
+    return '<a href="/v/' + encodeURIComponent(r.nodeID) + '">' + name + '</a>' + pill; };
+  const boardRow = (r, i) => '<tr>'
+    + '<td class="off">#' + (r.boardRank || i + 1) + '</td>'
+    + '<td class="node">' + nodeLink(r) + '</td>'
+    + '<td>' + (r.score != null ? nfmt(r.score) : "—") + '</td>'
+    + '<td>' + (r.uptime != null ? (r.uptime * 100).toFixed(1) + "%" : "—") + '</td>'
+    + '<td class="off">' + (r.scoreDelta != null ? (r.scoreDelta >= 0 ? "+" : "") + nfmt(r.scoreDelta) : "") + '</td>'
+    + '</tr>';
+  const catList = (arr) => arr && arr.length
+    ? '<ol class="clist">' + arr.map((x) => '<li><a href="/v/' + encodeURIComponent(x.nodeID) + '">' + (x.handle ? esc2(x.handle) : shortNodeOf(x.nodeID)) + '</a> <span class="dim">' + nfmt(x.pts) + " pts</span></li>").join("") + '</ol>'
+    : '<p class="empty">—</p>';
+  const board = c.scoredCount
+    ? '<div class="tablewrap"><table class="vtable"><thead><tr><th>#</th><th>Validator</th><th>Score</th><th>Uptime</th><th>Δ cycle</th></tr></thead><tbody>' + c.top20.map(boardRow).join("") + '</tbody></table></div>'
+    : '<p class="empty">No scored validators yet — the leaderboard fills in once the cohort portal syncs scores.</p>';
+  const rising = (c.rising && c.rising.length)
+    ? '<div class="tablewrap"><table class="vtable"><thead><tr><th>Validator</th><th>Tier</th><th>+ this cycle</th></tr></thead><tbody>'
+      + c.rising.map((r) => '<tr><td class="node">' + nodeLink({ nodeID: r.nodeID, handle: r.handle }) + '</td><td>' + (r.tier || "—") + '</td><td>+' + nfmt(r.scoreDelta) + '</td></tr>').join("") + '</tbody></table></div>'
+    : '<p class="empty">—</p>';
+  const desc = "The validator contributor cohort on avax100m — tiers, scores, badges and leaderboards recognizing the operators who build, educate and support the Avalanche ecosystem.";
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>the cohort \xB7 p-chain validators \xB7 avax100m</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="description" content="${esc2(desc)}">
+<link rel="canonical" href="${site}/cohort">
+<meta property="og:type" content="website">
+<meta property="og:url" content="${site}/cohort">
+<meta property="og:title" content="the cohort \xB7 avax100m p-chain">
+<meta property="og:description" content="${esc2(desc)}">
+<meta property="og:image" content="${site}/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<style>${STYLE}</style>
+</head>
+<body>
+<header><div class="wrap hbar">
+  <a class="logo" href="${site}"><img src="/favicon.svg" alt="Milli" width="24" height="24" decoding="async"><b>AVAX</b>/100M</a>
+  <a class="nav" href="${site}/p-chain">all validators →</a>
+</div></header>
+<main class="wrap">
+  <div class="hero">
+    <div class="eyebrow">avalanche <b>p-chain</b> \xB7 validator cohort</div>
+    <h1>the cohort</h1>
+    <div class="tagline">Recognition for the validators who secure Avalanche and give back — shipping tooling, teaching, running events, and supporting other operators. Tiers &amp; scores are set by the cohort program; badges and stats are live.</div>
+  </div>
+
+  <section>
+    <h2>the tiers</h2>
+    <p class="sub">Earned each quarter from a contribution score, gated on an uptime floor (~${Math.round(UPTIME_GATE * 100)}%).</p>
+    <div class="grid">
+      <div class="cell"><div class="k"><span class="tier A" style="vertical-align:middle">A</span> core contributor</div><div class="v">${nfmt(c.tierCounts && c.tierCounts.A || 0)} <small>validators</small></div></div>
+      <div class="cell"><div class="k"><span class="tier B" style="vertical-align:middle">B</span> active contributor</div><div class="v">${nfmt(c.tierCounts && c.tierCounts.B || 0)} <small>validators</small></div></div>
+      <div class="cell"><div class="k"><span class="tier C" style="vertical-align:middle">C</span> reliable validator</div><div class="v">${nfmt(c.tierCounts && c.tierCounts.C || 0)} <small>validators</small></div></div>
+    </div>
+    <div class="msg">${nfmt(c.memberCount)} registered \xB7 ${nfmt(c.scoredCount)} scored</div>
+  </section>
+
+  <section>
+    <h2>leaderboard \xB7 top 20</h2>
+    <p class="sub">Highest contribution scores in the cohort.</p>
+    ${board}
+  </section>
+
+  <section>
+    <h2>category leaders</h2>
+    <p class="sub">Top contributors by lane.</p>
+    <div class="census-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px">
+      <div><div class="k" style="color:var(--red);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">top builder</div>${catList(c.categories && c.categories.builder)}</div>
+      <div><div class="k" style="color:var(--red);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">top educator</div>${catList(c.categories && c.categories.educator)}</div>
+      <div><div class="k" style="color:var(--red);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">top support</div>${catList(c.categories && c.categories.support)}</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>rising stars</h2>
+    <p class="sub">Biggest score gains this cycle.</p>
+    ${rising}
+  </section>
+</main>
+<footer><div class="wrap frow">
+  <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> \xB7 <a href="${site}/p-chain">validators</a></span>
+  <span>data: avalanche p-chain rpc + data api \xB7 cohort program</span>
+</div></footer>
+<style>.clist{list-style:none;counter-reset:c}.clist li{counter-increment:c;padding:7px 0;border-bottom:1px solid var(--faint);font-size:13px}.clist li::before{content:counter(c);color:var(--dim);margin-right:10px}.clist a{color:var(--ink)}.clist a:hover{color:var(--red)}.clist .dim{color:var(--dim);font-size:11px}.empty{color:var(--dim);font-size:12px;letter-spacing:.04em}.vtable td.node a{color:var(--ink)}.vtable td.node a:hover{color:var(--red)}</style>
+</body>
+</html>`;
+}
+
 var validators_default = async (req) => {
   const url = new URL(req.url);
   const site = (process.env.URL || "https://avax100m.xyz").replace(/\/$/, "");
+
+  // Cohort hub — leaderboards + tiers.
+  if (url.pathname === "/cohort") {
+    const c = await getCohort();
+    return new Response(cohortPage(c, site), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
+  }
 
   // Per-validator shareable profile page.
   if (url.pathname.startsWith("/v/")) {
@@ -499,7 +634,10 @@ function page(site) {
 <body>
 <header><div class="wrap hbar">
   <a class="logo" href="${site}"><img src="/favicon.svg" alt="Milli" width="24" height="24" decoding="async"><b>AVAX</b>/100M</a>
-  <a class="nav" href="${site}/c-chain">check a wallet →</a>
+  <span style="display:inline-flex;gap:18px;align-items:center">
+    <a class="nav" href="${site}/cohort">cohort</a>
+    <a class="nav" href="${site}/c-chain">check a wallet →</a>
+  </span>
 </div></header>
 
 <main class="wrap">
@@ -564,6 +702,7 @@ function page(site) {
   var state={sort:"stake",dir:"desc",q:"",limit:50,offset:0};
   var $=function(id){return document.getElementById(id);};
   var VNAMES=${JSON.stringify(VNAMES)}, VGLYPH=${JSON.stringify(VGLYPH)}, VGRANTED=${JSON.stringify(VGRANTED)};
+  var TIER_LABEL=${JSON.stringify(TIER_LABEL)}, UPTIME_GATE=${UPTIME_GATE};
 
   function nf(n,d){ if(n==null||!isFinite(n)) return "—"; return Number(n).toLocaleString("en-US",{maximumFractionDigits:d==null?0:d}); }
   function usd(avax){ if(px==null||avax==null||!isFinite(avax)) return ""; var v=avax*px;
@@ -734,6 +873,12 @@ function page(site) {
 
     var hist = (meta && meta.history) || null;
     var r="";
+    if(p && (p.tier || p.score!=null || p.grantedBadges)){
+      if(tier && TIER_LABEL[tier]) r+=drow("cohort tier", "<b>Tier "+tier+"</b> "+dim("· "+TIER_LABEL[tier]));
+      if(p.score!=null) r+=drow("cohort score", "<b>"+nf(p.score)+"</b> pts"+(p.scoreDelta!=null?" "+dim("· "+(p.scoreDelta>=0?"+":"")+nf(p.scoreDelta)+" this cycle"):""));
+      if(p.rank!=null) r+=drow("cohort rank", "#"+nf(p.rank));
+      r+=drow("uptime gate", d.uptime!=null?(d.uptime>=UPTIME_GATE?"<b>met</b> "+dim("· ≥"+Math.round(UPTIME_GATE*100)+"%"):dim("below ≥"+Math.round(UPTIME_GATE*100)+"%")):"—");
+    }
     if(hist && hist.firstStart){
       var lifeDays=(Date.now()/1000 - hist.firstStart)/86400;
       r+=drow("first validated", day(hist.firstStart)+" "+dim("· "+dur(lifeDays)+" ago · "+nf(hist.seasons)+(hist.seasons===1?" season":" seasons")));
@@ -785,7 +930,7 @@ function page(site) {
 </html>`;
 }
 
-var config = { path: ["/p-chain", "/validators", "/v/*", "/api/validators"] };
+var config = { path: ["/p-chain", "/validators", "/v/*", "/cohort", "/api/validators"] };
 export {
   _mem,
   config,
