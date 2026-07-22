@@ -101,7 +101,8 @@ var validators_default = async (req) => {
   if (node) {
     const detail = snap.byNode[node] || snap.byNode[node.trim()] || null;
     if (!detail) return json({ none: true, node });
-    return json({ node: detail, avaxUsd: snap.avaxUsd, asOf: snap.asOf });
+    const rank = snap.directory.reduce((n, r) => n + (r.stake > detail.stake ? 1 : 0), 0) + 1;
+    return json({ node: detail, rank, count: snap.stats.validatorCount, avaxUsd: snap.avaxUsd, asOf: snap.asOf });
   }
 
   const p = queryDirectory(snap.directory, {
@@ -374,20 +375,48 @@ footer a:hover{color:var(--red);border-color:var(--red)}
   $("more").onclick=function(){ load(false); };
 
   function drow(k,v){ return '<div class="r-row"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>'; }
-  function renderDetail(d){
+  function dur(days){
+    days=Math.max(0,Math.round(days));
+    if(days<1) return "today";
+    if(days<60) return days+" day"+(days===1?"":"s");
+    if(days<730){ var mo=Math.round(days/30.44); return mo+" month"+(mo===1?"":"s"); }
+    var y=Math.floor(days/365.25), rem=Math.round((days-y*365.25)/30.44);
+    return y+"y"+(rem?(" "+rem+"mo"):"");
+  }
+  function bar(f){ f=Math.max(0,Math.min(1,isFinite(f)?f:0));
+    return '<span style="display:inline-block;width:104px;height:6px;background:var(--faint);vertical-align:middle;margin-left:10px"><span style="display:block;height:100%;width:'+(f*100).toFixed(1)+'%;background:var(--red)"></span></span>'; }
+  var dim=function(s){ return '<span style="color:var(--dim)">'+s+"</span>"; };
+
+  function renderDetail(d, meta){
     var rewUsd=usd(d.potentialReward), stakeUsd=usd(d.stake);
     var day=function(sec){ return sec? new Date(sec*1000).toISOString().slice(0,10):"—"; };
+    var periodDays=(d.endTime-d.startTime)/86400;
+    var elapsed=Math.max(0, periodDays-d.remainingDays);
+    var pElapsed=periodDays>0? elapsed/periodDays : 0;
+    var earned=d.potentialReward*Math.max(0,Math.min(1,pElapsed));
+    var perDay=periodDays>0? d.potentialReward/periodDays : 0;
+    var maxDeleg=d.stake*4;                       // Avalanche caps total stake at 5× own → delegations ≤ 4× own
+    var capFree=Math.max(0, maxDeleg-d.delegated);
+    var pCap=maxDeleg>0? d.delegated/maxDeleg : 0;
+    var earnedUsd=usd(earned);
+
     var h="";
     h+=drow("node id","<b>"+esc(d.nodeID)+"</b>");
     h+=drow("status", d.connected?"connected":"not connected");
+    h+=drow("validating since", day(d.startTime)+" "+dim("· "+dur(elapsed)+" so far"));
+    if(meta&&meta.rank) h+=drow("stake rank", "#"+nf(meta.rank)+" "+dim("of "+nf(meta.count)));
     h+=drow("own stake", nf(d.stake)+" AVAX"+(stakeUsd?" \xB7 "+stakeUsd:""));
-    h+=drow("delegated", nf(d.delegated)+' AVAX <span style="color:var(--dim)">('+nf(d.delegatorCount)+" delegators)</span>");
+    h+=drow("delegated", nf(d.delegated)+" AVAX "+dim("("+nf(d.delegatorCount)+" delegators)"));
+    h+=drow("delegation space", nf(d.delegated)+" / "+nf(maxDeleg)+" AVAX "+dim("· "+nf(capFree)+" free")+bar(pCap));
     h+=drow("total stake", nf(d.stake+d.delegated)+" AVAX");
     h+=drow("uptime", d.uptime!=null?pct(d.uptime,2):"—");
     h+=drow("delegation fee", d.feePct!=null?nf(d.feePct,2)+"%":"—");
-    h+=drow("potential reward", "<b>"+nf(d.potentialReward,2)+" AVAX</b>"+(rewUsd?" \xB7 "+rewUsd:""));
+    h+=drow("reward rate", nf(perDay,2)+" AVAX/day");
+    h+=drow("earned so far (est.)", "<b>"+nf(earned,2)+" AVAX</b>"+(earnedUsd?" \xB7 "+earnedUsd:""));
+    h+=drow("potential reward \xB7 full period", nf(d.potentialReward,2)+" AVAX"+(rewUsd?" \xB7 "+rewUsd:""));
     h+=drow("est. apr", d.estApr?pct(d.estApr,2):"—");
-    h+=drow("stake period", day(d.startTime)+" → "+day(d.endTime));
+    h+=drow("stake period", day(d.startTime)+" → "+day(d.endTime)+" "+dim("· "+nf(periodDays)+"d"));
+    h+=drow("period progress", nf(elapsed)+" / "+nf(periodDays)+" days"+bar(pElapsed));
     h+=drow("ends in", nf(d.remainingDays)+" days");
     if(d.delegators && d.delegators.length){
       var top=d.delegators.slice().sort(function(a,b){return b.stake-a.stake;}).slice(0,5);
@@ -404,7 +433,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       if(j.pending){ $("lmsg").textContent="warming up…"; setTimeout(lookup,2500); return; }
       if(j.none||!j.node){ $("lmsg").textContent="no current validator with that NodeID."; $("detail").style.display="none"; return; }
       if(j.avaxUsd!=null) px=j.avaxUsd;
-      $("lmsg").textContent=""; renderDetail(j.node);
+      $("lmsg").textContent=""; renderDetail(j.node, j);
     }).catch(function(){ $("lmsg").textContent="could not reach the p-chain — try again."; });
   }
   $("lookup").onclick=lookup;
