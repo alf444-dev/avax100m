@@ -89,7 +89,7 @@ var validators_default = async (req) => {
   const site = (process.env.URL || "https://avax100m.xyz").replace(/\/$/, "");
 
   if (!url.pathname.startsWith("/api/")) {
-    return new Response(page(site), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" } });
+    return new Response(page(site), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=60" } });
   }
 
   let snap;
@@ -169,13 +169,15 @@ h1{font-size:clamp(40px,8vw,72px);line-height:1;color:var(--red);letter-spacing:
 section{padding:40px 0;border-bottom:1px solid var(--faint)}
 h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red);font-weight:700;margin-bottom:8px}
 .sub{color:var(--dim);margin-bottom:22px;max-width:700px}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--faint);border:1px solid var(--faint);min-height:84px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--faint);border:1px solid var(--faint)}
 @media(max-width:760px){.grid{grid-template-columns:repeat(2,1fr)}}
 .cell{background:var(--bg);padding:16px 14px;min-height:84px}
 .cell .k{font-size:10px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase}
 .cell .v{font-size:22px;font-weight:700;margin-top:6px;word-break:break-word}
 .cell .v.red{color:var(--red)}
 .cell .v small{font-size:11px;color:var(--dim);font-weight:400}
+.cell.full{grid-column:1/-1;min-height:84px;display:flex;flex-direction:column;justify-content:center}
+.cell.full a{color:var(--red);border-bottom:1px solid var(--red);text-decoration:none}
 .check-row{display:flex;gap:10px;flex-wrap:wrap}
 .check-row input{flex:1;min-width:240px;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:14px;padding:11px 13px}
 .check-row input:focus{outline:none;border-color:var(--red)}
@@ -229,7 +231,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
   <section>
     <h2>network staking</h2>
     <p class="sub">The primary network, right now.</p>
-    <div class="grid" id="stats"></div>
+    <div class="grid" id="stats"><div class="cell full"><span class="k">loading network stats…</span></div></div>
     <div class="msg" id="asof"></div>
   </section>
 
@@ -327,13 +329,22 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     }; }
   }
 
+  // fetch with one automatic retry — CDN/cold-start blips shouldn't surface as a dead page
+  function apiGet(u,tries){
+    return fetch(u).then(function(r){ if(r.status===202) return {pending:true}; return r.json(); })
+      .catch(function(err){ if(tries>0) return new Promise(function(res){setTimeout(res,1200);}).then(function(){return apiGet(u,tries-1);}); throw err; });
+  }
+  function statsError(){
+    $("stats").innerHTML='<div class="cell full"><div class="k">network staking</div><div class="v" style="font-size:14px;color:var(--red)">no response from the p-chain — <a href="#" id="statsretry">retry</a></div></div>';
+    var b=$("statsretry"); if(b) b.onclick=function(e){ e.preventDefault(); $("stats").innerHTML='<div class="cell full"><span class="k">loading network stats…</span></div>'; load(true); };
+  }
   function load(reset){
     if(reset) state.offset=0;
     var u=API+"?sort="+state.sort+"&dir="+state.dir+"&limit="+state.limit+"&offset="+state.offset+"&q="+encodeURIComponent(state.q);
     $("count").textContent="loading…";
-    fetch(u).then(function(r){ if(r.status===202) return {pending:true}; return r.json(); }).then(function(j){
+    apiGet(u,1).then(function(j){
       if(j.pending){ $("count").textContent="warming up the p-chain snapshot…"; setTimeout(function(){load(reset);},2500); return; }
-      if(j.error){ $("count").textContent="p-chain unavailable — try again shortly."; return; }
+      if(j.error){ if(state.offset===0) statsError(); $("count").textContent="p-chain unavailable — retrying…"; setTimeout(function(){load(reset);},5000); return; }
       px=j.avaxUsd; asOf=j.asOf;
       if(state.offset===0){
         renderStats(j.stats);
@@ -346,7 +357,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       $("count").textContent=nf(state.offset)+" of "+nf(total)+" validators";
       $("more").style.display= state.offset<total ? "" : "none";
       bindRows();
-    }).catch(function(){ $("count").textContent="network error."; });
+    }).catch(function(){ if(state.offset===0) statsError(); $("count").textContent="network error — retrying…"; setTimeout(function(){load(reset);},5000); });
   }
 
   var ths=document.querySelectorAll(".vtable th[data-sort]");
@@ -389,12 +400,12 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     var n=$("nid").value.trim();
     if(!n){ $("lmsg").textContent="enter a NodeID."; return; }
     $("lmsg").textContent = n.indexOf("NodeID-")===0 ? "looking up…" : "a NodeID looks like NodeID-… — looking anyway…";
-    fetch(API+"?node="+encodeURIComponent(n)).then(function(r){ return r.json(); }).then(function(j){
+    apiGet(API+"?node="+encodeURIComponent(n),1).then(function(j){
       if(j.pending){ $("lmsg").textContent="warming up…"; setTimeout(lookup,2500); return; }
       if(j.none||!j.node){ $("lmsg").textContent="no current validator with that NodeID."; $("detail").style.display="none"; return; }
       if(j.avaxUsd!=null) px=j.avaxUsd;
       $("lmsg").textContent=""; renderDetail(j.node);
-    }).catch(function(){ $("lmsg").textContent="network error."; });
+    }).catch(function(){ $("lmsg").textContent="could not reach the p-chain — try again."; });
   }
   $("lookup").onclick=lookup;
   $("nid").addEventListener("keydown",function(e){ if(e.key==="Enter") lookup(); });
