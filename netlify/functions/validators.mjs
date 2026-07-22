@@ -389,7 +389,10 @@ function profilePage(nd, px, site) {
 <body>
 <header><div class="wrap hbar">
   <a class="logo" href="${site}"><img src="/favicon.svg" alt="Milli" width="24" height="24" decoding="async"><b>AVAX</b>/100M</a>
-  <a class="nav" href="${site}/p-chain">all validators →</a>
+  <span style="display:inline-flex;gap:18px;align-items:center">
+    <a class="nav" href="${site}/p-chain">validators</a>
+    <a class="nav" href="${site}/c-chain">check a wallet →</a>
+  </span>
 </div></header>
 <main class="wrap">
   <div class="hero">
@@ -420,7 +423,7 @@ function profilePage(nd, px, site) {
 </main>
 <footer><div class="wrap frow">
   <span>avax100m \xB7 p-chain validators</span>
-  <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> \xB7 <a href="${site}/p-chain">directory</a> \xB7 data: avalanche p-chain rpc + data api</span>
+  <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> \xB7 <a href="${site}/p-chain">directory</a> \xB7 data: avalanche p-chain rpc + data api \xB7 unofficial community page</span>
 </div></footer>
 <script>
 (function(){
@@ -498,7 +501,10 @@ function cohortPage(c, site) {
 <body>
 <header><div class="wrap hbar">
   <a class="logo" href="${site}"><img src="/favicon.svg" alt="Milli" width="24" height="24" decoding="async"><b>AVAX</b>/100M</a>
-  <a class="nav" href="${site}/p-chain">all validators →</a>
+  <span style="display:inline-flex;gap:18px;align-items:center">
+    <a class="nav" href="${site}/p-chain">validators</a>
+    <a class="nav" href="${site}/c-chain">check a wallet →</a>
+  </span>
 </div></header>
 <main class="wrap">
   <div class="hero">
@@ -527,7 +533,7 @@ function cohortPage(c, site) {
   <section>
     <h2>category leaders</h2>
     <p class="sub">Top contributors by lane.</p>
-    <div class="census-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px">
+    <div class="catgrid">
       <div><div class="k" style="color:var(--red);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">top builder</div>${catList(c.categories && c.categories.builder)}</div>
       <div><div class="k" style="color:var(--red);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">top educator</div>${catList(c.categories && c.categories.educator)}</div>
       <div><div class="k" style="color:var(--red);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">top support</div>${catList(c.categories && c.categories.support)}</div>
@@ -541,10 +547,10 @@ function cohortPage(c, site) {
   </section>
 </main>
 <footer><div class="wrap frow">
-  <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> \xB7 <a href="${site}/p-chain">validators</a></span>
-  <span>data: avalanche p-chain rpc + data api \xB7 cohort program</span>
+  <span>avax100m \xB7 validator cohort</span>
+  <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> \xB7 <a href="${site}/p-chain">validators</a> \xB7 data: avalanche p-chain rpc + data api \xB7 unofficial community page</span>
 </div></footer>
-<style>.clist{list-style:none;counter-reset:c}.clist li{counter-increment:c;padding:7px 0;border-bottom:1px solid var(--faint);font-size:13px}.clist li::before{content:counter(c);color:var(--dim);margin-right:10px}.clist a{color:var(--ink)}.clist a:hover{color:var(--red)}.clist .dim{color:var(--dim);font-size:11px}.empty{color:var(--dim);font-size:12px;letter-spacing:.04em}.vtable td.node a{color:var(--ink)}.vtable td.node a:hover{color:var(--red)}</style>
+<style>.catgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}@media(max-width:640px){.catgrid{grid-template-columns:1fr;gap:28px}}.clist{list-style:none;counter-reset:c}.clist li{counter-increment:c;padding:7px 0;border-bottom:1px solid var(--faint);font-size:13px}.clist li::before{content:counter(c);color:var(--dim);margin-right:10px}.clist a{color:var(--ink)}.clist a:hover{color:var(--red)}.clist .dim{color:var(--dim);font-size:11px}.empty{color:var(--dim);font-size:12px;letter-spacing:.04em}.vtable td.node a{color:var(--ink)}.vtable td.node a:hover{color:var(--red)}</style>
 </body>
 </html>`;
 }
@@ -604,7 +610,7 @@ var validators_default = async (req) => {
 };
 
 function page(site) {
-  const title = "validators \xB7 avax100m.xyz";
+  const title = "p-chain validators \xB7 avax100m";
   const desc = "Live Avalanche P-Chain validators — network staking stats, the full validator directory, and a card per validator with badges, uptime, delegations, and lifetime history & rewards. No connect, just a read.";
   const pageUrl = site + "/p-chain";
   return `<!DOCTYPE html>
@@ -692,7 +698,7 @@ function page(site) {
 
 <footer><div class="wrap frow">
   <span>avax100m \xB7 p-chain validators</span>
-  <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> \xB7 <a href="${site}">home</a> \xB7 data: avalanche p-chain rpc + data api</span>
+  <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> \xB7 <a href="${site}">home</a> \xB7 data: avalanche p-chain rpc + data api \xB7 unofficial community page</span>
 </div></footer>
 
 <script>
