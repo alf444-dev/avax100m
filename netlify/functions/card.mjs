@@ -132,7 +132,7 @@ function draw(w) {
   const x = img.getContext("2d");
   x.fillStyle = "#0a0a0a";
   x.fillRect(0, 0, W, H);
-  x.strokeStyle = "#e84142";
+  x.strokeStyle = "#e6212f";
   x.lineWidth = 5;
   x.strokeRect(20, 20, W - 40, H - 40);
   x.strokeStyle = "#2a2a2a";
@@ -142,7 +142,7 @@ function draw(w) {
   x.fillStyle = "#7a7a7a";
   x.font = "22px Mono";
   x.fillText("AVALANCHE C-CHAIN", L, 88);
-  x.fillStyle = "#e84142";
+  x.fillStyle = "#e6212f";
   x.font = "78px MonoB";
   x.fillText(w.rank[1], L, 165);
   x.fillStyle = "#7a7a7a";
@@ -154,7 +154,7 @@ function draw(w) {
     x.fillStyle = "#7a7a7a";
     x.font = "19px Mono";
     x.fillText(k, cx, cy);
-    x.fillStyle = big ? "#e84142" : "#f2f2f2";
+    x.fillStyle = big ? "#e6212f" : "#f2f2f2";
     x.font = big ? "44px MonoB" : "34px MonoB";
     x.fillText(v, cx, cy + (big ? 46 : 38));
   }
@@ -171,7 +171,7 @@ function draw(w) {
   x.fillStyle = "#7a7a7a";
   x.font = "19px Mono";
   x.fillText(w.avvy ? w.avvy : w.addr.slice(0, 10) + "\u2026" + w.addr.slice(-8), L, 586);
-  x.fillStyle = "#e84142";
+  x.fillStyle = "#e6212f";
   x.font = "19px MonoB";
   const tag = "AVAX100M.XYZ \xB7 ROAD TO BLOCK 100,000,000";
   x.fillText(tag, W - L - tag.length * 11.5, 586);

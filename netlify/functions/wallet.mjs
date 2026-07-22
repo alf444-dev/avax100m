@@ -160,7 +160,7 @@ ${w.claimed ? "" : '<meta name="robots" content="noindex,follow">'}
 <meta name="twitter:description" content="${esc(desc)}">
 <meta name="twitter:image" content="${img}">
 <style>
-:root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e84142;
+:root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e6212f;
 --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6}
@@ -603,7 +603,7 @@ function svgFor(id){
 function drawGlyph(x,id,ox,oy,s,inv){
   var ops=GLYPHS[id]; if(!ops) return;
   var k=s/24;
-  var R=window.THEME_HEX||"#e84142";
+  var R=window.THEME_HEX||"#e6212f";
   var C={i:inv?"#0a0a0a":"#f2f2f2",r:inv?"#0a0a0a":R,b:inv?R:"#0a0a0a"};
   ops.forEach(function(o){
     if(o[0]===0){ x.fillStyle=C[o[5]]; x.fillRect(ox+o[1]*k,oy+o[2]*k,o[3]*k,o[4]*k); }
@@ -641,7 +641,7 @@ fetch(SITE+"/api/badges?addr="+D.addr).then(function(r){return r.json();}).then(
 
 /* ---- claim / status / oracle ---- */
 var CLAIMED=false;
-var THEMES={red:"#e84142",snow:"#f2f2f2",gold:"#d4a017",teal:"#2aa198",violet:"#7c5cff",pink:"#ff5ea8",term:"#00ff66"};
+var THEMES={red:"#e6212f",snow:"#f2f2f2",gold:"#d4a017",teal:"#2aa198",violet:"#7c5cff",pink:"#ff5ea8",term:"#00ff66"};
 var CUR={status:"",theme:"red",cardBadges:[],top8:[]};
 function applyTheme(t){
   var c=THEMES[t]||THEMES.red;
@@ -994,12 +994,12 @@ function drawPnlCard(s){
   var c=document.getElementById("pnl-card"),x=c.getContext("2d");
   var W=1080,H=1350,mono="monospace";
   x.fillStyle="#0a0a0a";x.fillRect(0,0,W,H);
-  x.strokeStyle=(window.THEME_HEX||"#e84142");x.lineWidth=6;x.strokeRect(28,28,W-56,H-56);
+  x.strokeStyle=(window.THEME_HEX||"#e6212f");x.lineWidth=6;x.strokeRect(28,28,W-56,H-56);
   x.strokeStyle="#2a2a2a";x.lineWidth=2;x.strokeRect(48,48,W-96,H-96);
   x.textBaseline="top";
   x.fillStyle="#7a7a7a";x.font="600 30px "+mono;
   x.fillText("AVALANCHE C-CHAIN",92,104);
-  x.fillStyle=(window.THEME_HEX||"#e84142");x.font="800 84px "+mono;
+  x.fillStyle=(window.THEME_HEX||"#e6212f");x.font="800 84px "+mono;
   x.fillText("REALIZED P&L",92,150);
   x.fillStyle="#7a7a7a";x.font="400 27px "+mono;
   var subline = RANK.toLowerCase()+" \xB7 since "+ERA.toLowerCase();
@@ -1009,7 +1009,7 @@ function drawPnlCard(s){
   function block(k,o,y){
     x.fillStyle="#7a7a7a";x.font="600 26px "+mono;x.fillText(k,92,y);
     if(!o){ x.fillStyle="#3d3d3d";x.font="700 54px "+mono;x.fillText("\u2014",92,y+38); return; }
-    x.fillStyle=(window.THEME_HEX||"#e84142");x.font="800 60px "+mono;
+    x.fillStyle=(window.THEME_HEX||"#e6212f");x.font="800 60px "+mono;
     x.fillText(o.line.replace(/<[^>]*>/g,""),92,y+38);
     if(o.sub){ x.fillStyle="#f2f2f2";x.font="400 28px "+mono;
       var t=o.sub.replace(/<[^>]*>/g,"");
@@ -1027,7 +1027,7 @@ function drawPnlCard(s){
       var tw=x.measureText(nm).width;
       var cw=16+30+10+tw+16;
       var medal=(i===0);
-      if(medal){ x.fillStyle=(window.THEME_HEX||"#e84142"); x.fillRect(bx,by,cw,bh); }
+      if(medal){ x.fillStyle=(window.THEME_HEX||"#e6212f"); x.fillRect(bx,by,cw,bh); }
       else { x.strokeStyle="#2a2a2a"; x.lineWidth=2; x.strokeRect(bx,by,cw,bh); }
       drawGlyph(x,b.id,bx+16,by+(bh-30)/2,30,medal);
       x.fillStyle=medal?"#0a0a0a":"#f2f2f2";
@@ -1043,7 +1043,7 @@ function drawPnlCard(s){
   x.fillStyle="#2a2a2a";x.fillRect(92,1200,W-184,2);
   x.fillStyle="#7a7a7a";x.font="600 24px "+mono;
   x.fillText(AVVY_NAME ? AVVY_NAME : (D.addr.slice(0,10)+"\u2026"+D.addr.slice(-8)),92,1228);
-  x.fillStyle=(window.THEME_HEX||"#e84142");x.textAlign="right";
+  x.fillStyle=(window.THEME_HEX||"#e6212f");x.textAlign="right";
   x.fillText("AVAX100M.XYZ",W-92,1228);
   x.textAlign="left";
   document.getElementById("pnl-card-wrap").style.display="block";

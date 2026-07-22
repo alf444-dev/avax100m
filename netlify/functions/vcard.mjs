@@ -43,7 +43,7 @@ function draw(data) {
   const img = PImage.make(W, H);
   const x = img.getContext("2d");
   x.fillStyle = "#0a0a0a"; x.fillRect(0, 0, W, H);
-  x.strokeStyle = "#e84142"; x.lineWidth = 5; x.strokeRect(20, 20, W - 40, H - 40);
+  x.strokeStyle = "#e6212f"; x.lineWidth = 5; x.strokeRect(20, 20, W - 40, H - 40);
   x.strokeStyle = "#2a2a2a"; x.lineWidth = 2; x.strokeRect(34, 34, W - 68, H - 68);
 
   const L = 76;
@@ -51,7 +51,7 @@ function draw(data) {
   x.fillText("AVALANCHE P-CHAIN \xB7 VALIDATOR", L, 86);
 
   const handle = (prof && prof.handle) || shortNode(d.nodeID);
-  x.fillStyle = "#e84142"; x.font = "64px MonoB";
+  x.fillStyle = "#e6212f"; x.font = "64px MonoB";
   x.fillText(handle.length > 20 ? handle.slice(0, 20) : handle, L, 156);
 
   x.fillStyle = "#7a7a7a"; x.font = "18px Mono";
@@ -59,13 +59,13 @@ function draw(data) {
 
   // badge names line (top 3)
   const names = (data.badges || []).slice(0, 3).map((b) => BADGE_NAMES[b.id] || b.id.toUpperCase());
-  if (names.length) { x.fillStyle = "#e84142"; x.font = "18px MonoB"; x.fillText(names.join("  \xB7  "), L, 224); }
+  if (names.length) { x.fillStyle = "#e6212f"; x.font = "18px MonoB"; x.fillText(names.join("  \xB7  "), L, 224); }
 
   x.fillStyle = "#2a2a2a"; x.fillRect(L, 248, W - 2 * L, 2);
 
   function cell(k, v, cx, cy, big) {
     x.fillStyle = "#7a7a7a"; x.font = "18px Mono"; x.fillText(k, cx, cy);
-    x.fillStyle = big ? "#e84142" : "#f2f2f2"; x.font = big ? "36px MonoB" : "31px MonoB";
+    x.fillStyle = big ? "#e6212f" : "#f2f2f2"; x.font = big ? "36px MonoB" : "31px MonoB";
     x.fillText(v, cx, cy + (big ? 40 : 36));
   }
   const R = 646;
@@ -85,7 +85,7 @@ function draw(data) {
   x.fillStyle = "#2a2a2a"; x.fillRect(L, 556, W - 2 * L, 2);
   x.fillStyle = "#7a7a7a"; x.font = "18px Mono";
   x.fillText(prof && prof.tier ? "TIER " + String(prof.tier).toUpperCase() + " VALIDATOR" : "PRIMARY NETWORK VALIDATOR", L, 588);
-  x.fillStyle = "#e84142"; x.font = "18px MonoB";
+  x.fillStyle = "#e6212f"; x.font = "18px MonoB";
   const tag = "AVAX100M.XYZ \xB7 P-CHAIN";
   x.fillText(tag, W - L - tag.length * 11, 588);
   return img;

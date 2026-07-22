@@ -32,7 +32,7 @@
     --ink:#f2f2f2;
     --dim:#7a7a7a;
     --faint:#2a2a2a;
-    --red:#e84142;
+    --red:#e6212f;
     --mono:ui-monospace,"SF Mono","Cascadia Mono","JetBrains Mono",Menlo,Consolas,monospace;
   }
   *{margin:0;padding:0;box-sizing:border-box}
@@ -780,14 +780,14 @@
     var c=document.getElementById("card"),x=c.getContext("2d");
     var W=1080,H=1350;
     x.fillStyle="#0a0a0a";x.fillRect(0,0,W,H);
-    x.strokeStyle="#e84142";x.lineWidth=6;x.strokeRect(28,28,W-56,H-56);
+    x.strokeStyle="#e6212f";x.lineWidth=6;x.strokeRect(28,28,W-56,H-56);
     x.strokeStyle="#2a2a2a";x.lineWidth=2;x.strokeRect(48,48,W-96,H-96);
 
     var mono="monospace";
     x.textBaseline="top";
     x.fillStyle="#7a7a7a";x.font="600 30px "+mono;
     x.fillText("AVALANCHE C-CHAIN",92,104);
-    x.fillStyle="#e84142";x.font="800 92px "+mono;
+    x.fillStyle="#e6212f";x.font="800 92px "+mono;
     x.fillText(s.rank[1],92,150);
     x.fillStyle="#7a7a7a";x.font="400 27px "+mono;
     x.fillText(s.rank[2],92,258);
@@ -796,7 +796,7 @@
     function row(k,v,y,big,x0){
       x0=x0||92;
       x.fillStyle="#7a7a7a";x.font="600 26px "+mono;x.fillText(k,x0,y);
-      x.fillStyle= big?"#e84142":"#f2f2f2";
+      x.fillStyle= big?"#e6212f":"#f2f2f2";
       x.font=(big?"800 62px ":"700 48px ")+mono;
       x.fillText(v,x0,y+36);
     }
@@ -818,7 +818,7 @@
     x.fillStyle="#2a2a2a";x.fillRect(92,1200,W-184,2);
     x.fillStyle="#7a7a7a";x.font="600 24px "+mono;
     x.fillText(s.name ? s.name : (s.addr.slice(0,10)+"…"+s.addr.slice(-8)),92,1228);
-    x.fillStyle="#e84142";x.textAlign="right";
+    x.fillStyle="#e6212f";x.textAlign="right";
     x.fillText("ROAD TO BLOCK 100,000,000",W-92,1228);
     x.textAlign="left";
   }
