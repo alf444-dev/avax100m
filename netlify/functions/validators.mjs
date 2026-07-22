@@ -367,7 +367,7 @@ function profilePage(nd, px, site) {
 </main>
 <footer><div class="wrap frow">
   <span>avax100m \xB7 p-chain validators</span>
-  <span><a href="${site}/p-chain">directory</a> \xB7 data: avalanche p-chain rpc + data api</span>
+  <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> \xB7 <a href="${site}/p-chain">directory</a> \xB7 data: avalanche p-chain rpc + data api</span>
 </div></footer>
 <script>
 (function(){
@@ -514,7 +514,7 @@ function page(site) {
 
 <footer><div class="wrap frow">
   <span>avax100m \xB7 p-chain validators</span>
-  <span><a href="${site}">home</a> \xB7 data: avalanche p-chain rpc + data api</span>
+  <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> \xB7 <a href="${site}">home</a> \xB7 data: avalanche p-chain rpc + data api</span>
 </div></footer>
 
 <script>
