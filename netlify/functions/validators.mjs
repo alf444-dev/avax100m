@@ -5,7 +5,8 @@ import {
   foldValidators,
   queryDirectory
 } from "./lib/pchain.mjs";
-import { VNAMES, VGLYPH, VGRANTED } from "./lib/vbadges.mjs";
+import { VNAMES, VGLYPH, VGRANTED, historyBadges } from "./lib/vbadges.mjs";
+import { fetchCompletedValidations, foldHistory } from "./lib/pchain-history.mjs";
 
 // /validators — P-chain validator section: network staking stats, a sortable
 // directory, single-validator lookup, and per-validator reward/APR. One Netlify
@@ -93,6 +94,23 @@ async function readProfile(nodeID) {
   return await store.get("v/" + nodeID, { type: "json" }).catch(() => null);
 }
 
+var HISTORY_TTL = 6 * 3600 * 1e3; // completed periods only change when a stake ends
+// Lifetime history via Glacier: cache the (stable) completed-period list, fold it
+// with the live current period each request. Returns null if Glacier is unreachable.
+async function getHistory(nodeID, detail) {
+  const store = storeOr("vhistory");
+  let completed = null;
+  if (store) {
+    const c = await store.get("h/" + nodeID, { type: "json" }).catch(() => null);
+    if (c && Number.isFinite(c.t) && Date.now() - c.t < HISTORY_TTL) completed = c.v;
+  }
+  if (!completed) {
+    completed = await fetchCompletedValidations(nodeID);
+    if (store) await store.set("h/" + nodeID, JSON.stringify({ t: Date.now(), v: completed })).catch(() => {});
+  }
+  return foldHistory(completed, { startTime: detail.startTime, endTime: detail.endTime });
+}
+
 var validators_default = async (req) => {
   const url = new URL(req.url);
   const site = (process.env.URL || "https://avax100m.xyz").replace(/\/$/, "");
@@ -115,12 +133,16 @@ var validators_default = async (req) => {
     const badges = (detail.badges || [])
       .map((b) => Object.assign({}, b, { rarity: { count: (snap.stats.badgeCounts || {})[b.id] || 0, total } }))
       .sort((a, b) => (a.rarity.count - b.rarity.count) || (b.tier - a.tier));
+    let history = null;
+    try { history = await getHistory(key, detail); } catch {}
+    const allBadges = badges.concat(historyBadges(history));
     const profile = await readProfile(key);
     return json({
       node: detail,
       rank: detail.stakeRank || null,
       count: snap.stats.validatorCount,
-      badges,
+      badges: allBadges,
+      history,
       profile,
       avaxUsd: snap.avaxUsd,
       asOf: snap.asOf
@@ -513,14 +535,22 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       if(parts.length) h+='<div class="vc-socials">'+parts.join("")+'</div>';
     }
 
+    var hist = (meta && meta.history) || null;
     var r="";
-    r+=drow("validating since", day(d.startTime)+" "+dim("· "+dur(elapsed)+" so far"));
+    if(hist && hist.firstStart){
+      var lifeDays=(Date.now()/1000 - hist.firstStart)/86400;
+      r+=drow("first validated", day(hist.firstStart)+" "+dim("· "+dur(lifeDays)+" ago · "+nf(hist.seasons)+(hist.seasons===1?" season":" seasons")));
+    }
+    r+=drow(hist&&hist.firstStart?"current stake since":"validating since", day(d.startTime)+" "+dim("· "+dur(elapsed)+" so far"));
     if(meta&&meta.rank) r+=drow("stake rank", "#"+nf(meta.rank)+" "+dim("of "+nf(meta.count)));
     r+=drow("own stake", nf(d.stake)+" AVAX"+(stakeUsd?" \xB7 "+stakeUsd:""));
     r+=drow("total stake", nf(d.stake+d.delegated)+" AVAX");
     r+=drow("delegation space", nf(d.delegated)+" / "+nf(maxDeleg)+" AVAX "+dim("· "+nf(capFree)+" free")+bar(pCap));
     r+=drow("reward rate", nf(perDay,2)+" AVAX/day");
     r+=drow("earned so far (est.)", "<b>"+nf(earned,2)+" AVAX</b>"+(earnedUsd?" \xB7 "+earnedUsd:""));
+    if(hist && hist.lifetimeRewards>0){ var lifeUsd=usd(hist.lifetimeRewards);
+      r+=drow("lifetime rewards", "<b>"+nf(hist.lifetimeRewards,2)+" AVAX</b>"+(lifeUsd?" \xB7 "+lifeUsd:"")+" "+dim("· "+nf(hist.completedCount)+" paid"));
+    }
     r+=drow("potential reward \xB7 full period", nf(d.potentialReward,2)+" AVAX"+(rewUsd?" \xB7 "+rewUsd:""));
     r+=drow("est. apr", d.estApr?pct(d.estApr,2):"—");
     r+=drow("stake period", day(d.startTime)+" → "+day(d.endTime)+" "+dim("· "+nf(periodDays)+"d"));

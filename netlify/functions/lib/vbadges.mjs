@@ -57,6 +57,35 @@ export function badgesFor(row, ctx = {}) {
   return out;
 }
 
+/**
+ * History-derived badges (from Glacier lifetime data, not the live snapshot).
+ * Appended per-lookup, so these carry no global rarity. `foundingWindow` is an
+ * optional [startSec, endSec]; omit until a program launch window is set.
+ * @param hist { seasons, firstStart, cumulativeDays } from foldHistory
+ */
+export function historyBadges(hist, foundingWindow = null, now = Date.now()) {
+  const out = [];
+  if (!hist) return out;
+  const push = (id, tier, ev) => out.push({ id, tier: tier || 0, ev });
+
+  const s = hist.seasons || 0;
+  if (s >= 10) push("seasons", 3, "<b>" + s + "</b> validation seasons");
+  else if (s >= 5) push("seasons", 2, "<b>" + s + "</b> validation seasons");
+  else if (s >= 2) push("seasons", 1, "<b>" + s + "</b> validation seasons");
+
+  if (hist.firstStart) {
+    const days = (now / 1000 - hist.firstStart) / 86400;
+    if (days >= 730) push("elder", 3, "validating <b>" + (Math.round(days / 365.25 * 10) / 10) + "y</b>");
+    else if (days >= 365) push("elder", 2, "validating <b>" + Math.round(days) + "d</b>");
+    else if (days >= 180) push("elder", 1, "validating <b>" + Math.round(days) + "d</b>");
+  }
+
+  if (foundingWindow && hist.firstStart && hist.firstStart >= foundingWindow[0] && hist.firstStart <= foundingWindow[1]) {
+    push("founding", 0, "among the founding validators");
+  }
+  return out;
+}
+
 export const VNAMES = {
   flawless: "Flawless",
   heavyweight: "Heavyweight",
@@ -65,7 +94,10 @@ export const VNAMES = {
   generous: "Generous",
   veteran: "Veteran",
   committed: "Committed",
-  solo: "Solo"
+  solo: "Solo",
+  seasons: "Seasons",
+  elder: "Elder",
+  founding: "Founding Cohort"
 };
 
 // Monochrome 24x24 glyphs; use currentColor so the tile controls ink vs. medal.
@@ -77,7 +109,10 @@ export const VGLYPH = {
   generous: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><circle cx="9.2" cy="9.2" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.8" cy="14.8" r="1.3" fill="currentColor" stroke="none"/><path d="M8.5 15.5l7-7" stroke-linecap="round"/></svg>',
   veteran: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l2.6 6.3 6.9.5-5.3 4.4 1.7 6.7L12 17.2 6.1 20.9l1.7-6.7L2.5 9.8l6.9-.5z"/></svg>',
   committed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="14.5"/><path d="M4 10h16M8.5 3v5M15.5 3v5" stroke-linecap="round"/></svg>',
-  solo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0113 0"/></svg>'
+  solo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0113 0"/></svg>',
+  seasons: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a8 8 0 0113-3.5L20 9"/><path d="M20 14a8 8 0 01-13 3.5L4 15"/><path d="M20 4v5h-5M4 20v-5h5"/></svg>',
+  elder: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 8l4.2 3.4L12 4l4.8 7.4L21 8v10H3z"/></svg>',
+  founding: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20c0-6 3-13 7-16 4 3 7 10 7 16"/><path d="M9 13h6"/><circle cx="12" cy="8" r="1.4" fill="currentColor" stroke="none"/></svg>'
 };
 
 // Manually-granted program badges (the brief). Rendered only when a validator

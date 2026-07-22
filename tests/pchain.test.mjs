@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { foldValidators, queryDirectory, navaxToAvax } from "../netlify/functions/lib/pchain.mjs";
-import { badgesFor } from "../netlify/functions/lib/vbadges.mjs";
+import { badgesFor, historyBadges } from "../netlify/functions/lib/vbadges.mjs";
+import { foldHistory } from "../netlify/functions/lib/pchain-history.mjs";
 
 const YEAR = 365.25 * 24 * 3600;
 const NOW = 3_000_000_000; // fixed clock (ms) so remainingDays is deterministic
@@ -125,6 +126,39 @@ test("foldValidators attaches badges, stake rank and rarity counts", () => {
   assert.equal(stats.badgeCounts.heavyweight, 2); // both are top-10 in a 2-validator set
   assert.equal(stats.badgeCounts.flawless, 1);    // only AAA has >=99% uptime
   assert.equal(stats.badgeCounts.solo, 1);        // only BBB has 0 delegators
+});
+
+test("foldHistory summarizes lifetime periods + rewards", () => {
+  const DAY = 86400;
+  const t0 = 1_700_000_000; // fixed base
+  const NOW_MS = (t0 + 400 * DAY) * 1000;
+  const completed = [
+    { startTimestamp: t0, endTimestamp: t0 + 100 * DAY, rewards: { validationRewardAmount: "40000000000000" } }, // 40,000 AVAX
+    { startTimestamp: t0 + 120 * DAY, endTimestamp: t0 + 220 * DAY, rewards: { validationRewardAmount: "30000000000000" } } // 30,000
+  ];
+  const current = { startTime: t0 + 240 * DAY, endTime: t0 + 500 * DAY };
+  const h = foldHistory(completed, current, NOW_MS);
+  assert.equal(h.completedCount, 2);
+  assert.equal(h.seasons, 3);                    // 2 completed + 1 current
+  assert.equal(h.firstStart, t0);                // earliest start
+  assert.equal(h.lifetimeRewards, 70000);        // 40k + 30k realized
+  // 100 + 100 completed days + (400-240)=160 current days = 360
+  assert.ok(Math.abs(h.cumulativeDays - 360) < 0.01);
+
+  const none = foldHistory([], null, NOW_MS);
+  assert.equal(none.seasons, 0);
+  assert.equal(none.firstStart, null);
+  assert.equal(none.lifetimeRewards, 0);
+});
+
+test("historyBadges tiers seasons + lifetime tenure", () => {
+  const DAY = 86400, NOW_MS = 2_000_000_000_000;
+  const nowSec = NOW_MS / 1000;
+  const b = historyBadges({ seasons: 6, firstStart: nowSec - 800 * DAY }, null, NOW_MS)
+    .reduce((m, x) => (m[x.id] = x.tier, m), {});
+  assert.equal(b.seasons, 2);  // >=5
+  assert.equal(b.elder, 3);    // >=730 days
+  assert.deepEqual(historyBadges(null), []);
 });
 
 test("queryDirectory sorts, filters and paginates", () => {
