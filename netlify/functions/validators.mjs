@@ -9,6 +9,10 @@ import { VNAMES, VGLYPH, VGRANTED, historyBadges } from "./lib/vbadges.mjs";
 import { fetchCompletedValidations, foldHistory } from "./lib/pchain-history.mjs";
 import { foldCohort, TIER_LABEL, UPTIME_GATE } from "./lib/cohort.mjs";
 
+// Cohort program layer (tiers, scores, /cohort hub, cohort nav + card rows).
+// Hidden until launch; flip on by setting the Netlify env var COHORT_ON=1.
+var COHORT_ON = process.env.COHORT_ON === "1";
+
 // /validators — P-chain validator section: network staking stats, a sortable
 // directory, single-validator lookup, and per-validator reward/APR. One Netlify
 // function serves both the HTML page and the JSON API, branching on the path.
@@ -290,7 +294,7 @@ function grantTileS(id) { const g = VGRANTED[id]; if (!g) return ""; return '<sp
 
 function serverCard(nd, px) {
   const d = nd.node, p = nd.profile || null, hist = nd.history || null;
-  const badges = nd.badges || [], granted = (p && p.grantedBadges) || [];
+  const badges = nd.badges || [], granted = COHORT_ON ? ((p && p.grantedBadges) || []) : [];
   const day = (sec) => sec ? new Date(sec * 1000).toISOString().slice(0, 10) : "—";
   const dim = (s) => '<span style="color:var(--dim)">' + s + "</span>";
   const bar = (f) => { f = Math.max(0, Math.min(1, isFinite(f) ? f : 0)); return '<span style="display:inline-block;width:104px;height:6px;background:var(--faint);vertical-align:middle;margin-left:10px"><span style="display:block;height:100%;width:' + (f * 100).toFixed(1) + '%;background:var(--red)"></span></span>'; };
@@ -305,7 +309,7 @@ function serverCard(nd, px) {
 
   const handle = (p && p.handle) || shortNodeOf(d.nodeID);
   const tier = (p && p.tier) ? String(p.tier).toUpperCase() : null;
-  const tierPill = (tier && /^[ABC]$/.test(tier)) ? '<span class="tier ' + tier + '">tier ' + tier + '</span>' : "";
+  const tierPill = (COHORT_ON && tier && /^[ABC]$/.test(tier)) ? '<span class="tier ' + tier + '">tier ' + tier + '</span>' : "";
   const pfp = (p && p.pfp) ? '<img src="' + esc2(p.pfp) + '" alt="">' : identiconOf(d.nodeID, 56);
 
   let h = '<div class="vcard"><div class="vc-head"><div class="vc-pfp">' + pfp + '</div><div class="vc-id">'
@@ -327,7 +331,7 @@ function serverCard(nd, px) {
     if (parts.length) h += '<div class="vc-socials">' + parts.join("") + '</div>';
   }
   let r = "";
-  if (p && (p.tier || p.score != null || p.grantedBadges)) {
+  if (COHORT_ON && p && (p.tier || p.score != null || p.grantedBadges)) {
     if (tier && TIER_LABEL[tier]) r += drow("cohort tier", "<b>Tier " + tier + "</b> " + dim("\xB7 " + TIER_LABEL[tier]));
     if (p.score != null) r += drow("cohort score", "<b>" + nfmt(p.score) + "</b> pts" + (p.scoreDelta != null ? " " + dim("\xB7 " + (p.scoreDelta >= 0 ? "+" : "") + nfmt(p.scoreDelta) + " this cycle") : ""));
     if (p.rank != null) r += drow("cohort rank", "#" + nfmt(p.rank));
@@ -561,6 +565,7 @@ var validators_default = async (req) => {
 
   // Cohort hub — leaderboards + tiers.
   if (url.pathname === "/cohort") {
+    if (!COHORT_ON) return Response.redirect(site + "/p-chain", 302);
     const c = await getCohort();
     return new Response(cohortPage(c, site), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
   }
@@ -641,7 +646,7 @@ function page(site) {
 <header><div class="wrap hbar">
   <a class="logo" href="${site}"><img src="/favicon.svg" alt="Milli" width="24" height="24" decoding="async"><b>AVAX</b>/100M</a>
   <span style="display:inline-flex;gap:18px;align-items:center">
-    <a class="nav" href="${site}/cohort">cohort</a>
+    ${COHORT_ON ? `<a class="nav" href="${site}/cohort">cohort</a>` : ""}
     <a class="nav" href="${site}/c-chain">check a wallet →</a>
   </span>
 </div></header>
@@ -708,7 +713,7 @@ function page(site) {
   var state={sort:"stake",dir:"desc",q:"",limit:50,offset:0};
   var $=function(id){return document.getElementById(id);};
   var VNAMES=${JSON.stringify(VNAMES)}, VGLYPH=${JSON.stringify(VGLYPH)}, VGRANTED=${JSON.stringify(VGRANTED)};
-  var TIER_LABEL=${JSON.stringify(TIER_LABEL)}, UPTIME_GATE=${UPTIME_GATE};
+  var TIER_LABEL=${JSON.stringify(TIER_LABEL)}, UPTIME_GATE=${UPTIME_GATE}, COHORT_ON=${COHORT_ON};
 
   function nf(n,d){ if(n==null||!isFinite(n)) return "—"; return Number(n).toLocaleString("en-US",{maximumFractionDigits:d==null?0:d}); }
   function usd(avax){ if(px==null||avax==null||!isFinite(avax)) return ""; var v=avax*px;
@@ -839,7 +844,7 @@ function page(site) {
   function renderDetail(d, meta){
     var p = (meta && meta.profile) || null;
     var badges = (meta && meta.badges) || d.badges || [];
-    var granted = (p && p.grantedBadges) || [];
+    var granted = COHORT_ON ? ((p && p.grantedBadges) || []) : [];
     var stakeUsd=usd(d.stake), rewUsd=usd(d.potentialReward);
     var day=function(sec){ return sec? new Date(sec*1000).toISOString().slice(0,10):"—"; };
     var periodDays=(d.endTime-d.startTime)/86400;
@@ -851,7 +856,7 @@ function page(site) {
 
     var handle=(p&&p.handle)||shortNode(d.nodeID);
     var tier=(p&&p.tier)? String(p.tier).toUpperCase():null;
-    var tierPill=(tier&&/^[ABC]$/.test(tier))? '<span class="tier '+tier+'">tier '+tier+'</span>':"";
+    var tierPill=(COHORT_ON&&tier&&/^[ABC]$/.test(tier))? '<span class="tier '+tier+'">tier '+tier+'</span>':"";
     var pfp=(p&&p.pfp)? '<img src="'+esc(p.pfp)+'" alt="">' : identicon(d.nodeID,56);
 
     var h='<div class="vcard"><div class="vc-head"><div class="vc-pfp">'+pfp+'</div><div class="vc-id">'+
@@ -879,7 +884,7 @@ function page(site) {
 
     var hist = (meta && meta.history) || null;
     var r="";
-    if(p && (p.tier || p.score!=null || p.grantedBadges)){
+    if(COHORT_ON && p && (p.tier || p.score!=null || p.grantedBadges)){
       if(tier && TIER_LABEL[tier]) r+=drow("cohort tier", "<b>Tier "+tier+"</b> "+dim("· "+TIER_LABEL[tier]));
       if(p.score!=null) r+=drow("cohort score", "<b>"+nf(p.score)+"</b> pts"+(p.scoreDelta!=null?" "+dim("· "+(p.scoreDelta>=0?"+":"")+nf(p.scoreDelta)+" this cycle"):""));
       if(p.rank!=null) r+=drow("cohort rank", "#"+nf(p.rank));

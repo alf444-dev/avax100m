@@ -3,7 +3,8 @@ import { getStore } from "@netlify/blobs";
 // src/sitemap.js
 var SITE = "https://avax100m.xyz";
 var sitemap_default = async () => {
-  const urls = [SITE + "/", SITE + "/c-chain", SITE + "/p-chain", SITE + "/cohort"];
+  const urls = [SITE + "/", SITE + "/c-chain", SITE + "/p-chain"];
+  if (process.env.COHORT_ON === "1") urls.push(SITE + "/cohort");
   try {
     const cs = getStore("claim");
     let cursor;
