@@ -173,6 +173,12 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .btn.ghost{background:transparent;color:var(--dim);border-color:var(--faint);font-weight:400}
 .btn.ghost:hover{color:var(--red);border-color:var(--red)}
 .pshare{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+.pclaim{margin-top:26px;border-top:1px solid var(--faint);padding-top:22px}
+.frow2{display:flex;gap:12px;align-items:center;margin-bottom:10px}
+.frow2 label{width:110px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);flex:none}
+.frow2 input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px}
+.frow2 input:focus{outline:none;border-color:var(--red)}
+@media(max-width:600px){.frow2{flex-direction:column;align-items:stretch;gap:4px}.frow2 label{width:auto}}
 .msg{margin-top:14px;font-size:12px;color:var(--dim);min-height:18px;letter-spacing:.04em}
 .detail{margin-top:18px;display:none}
 .vcard{border:1px solid var(--faint)}
@@ -363,6 +369,19 @@ function profilePage(nd, px, site) {
       <a class="btn primary" id="pshare" href="https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(pageUrl)}" target="_blank" rel="noopener">share on x</a>
       <a class="btn ghost" href="${img}" target="_blank" rel="noopener">view card image</a>
     </div>
+    <div class="pclaim">
+      <button class="btn ghost" id="editbtn">${p && p.owner ? "edit this validator" : "claim &amp; customize"} →</button>
+      <div id="editform" style="display:none;margin-top:16px">
+        <p class="sub" style="margin-bottom:16px">Prove you run this node by signing with the wallet that owns its staking rewards — then set your handle, avatar and socials. No transaction, no fees, no approvals.</p>
+        <div class="frow2"><label>handle</label><input id="f-handle" maxlength="24" spellcheck="false" placeholder="your name" value="${p && p.handle ? esc2(p.handle) : ""}"></div>
+        <div class="frow2"><label>avatar url</label><input id="f-pfp" spellcheck="false" placeholder="https://…/avatar.png" value="${p && p.pfp ? esc2(p.pfp) : ""}"></div>
+        <div class="frow2"><label>x / twitter</label><input id="f-x" spellcheck="false" placeholder="@handle" value="${p && p.socials && p.socials.x ? esc2(p.socials.x) : ""}"></div>
+        <div class="frow2"><label>discord</label><input id="f-discord" spellcheck="false" placeholder="name" value="${p && p.socials && p.socials.discord ? esc2(p.socials.discord) : ""}"></div>
+        <div class="frow2"><label>website</label><input id="f-site" spellcheck="false" placeholder="https://…" value="${p && p.socials && p.socials.site ? esc2(p.socials.site) : ""}"></div>
+        <button class="btn" id="signbtn">connect wallet &amp; sign</button>
+        <div class="msg" id="cmsg"></div>
+      </div>
+    </div>
   </section>
 </main>
 <footer><div class="wrap frow">
@@ -371,9 +390,30 @@ function profilePage(nd, px, site) {
 </div></footer>
 <script>
 (function(){
-  var cb=document.getElementById("vcopy"); if(cb) cb.onclick=function(){ var t=document.getElementById("vc-nodeid").textContent;
+  var NODE=${JSON.stringify(d.nodeID)};
+  var $=function(id){return document.getElementById(id);};
+  var cb=$("vcopy"); if(cb) cb.onclick=function(){ var t=$("vc-nodeid").textContent;
     if(navigator.clipboard) navigator.clipboard.writeText(t).then(function(){ cb.textContent="copied"; setTimeout(function(){cb.textContent="copy";},1200); }); };
-  var pl=document.getElementById("pcopy"); if(pl) pl.onclick=function(){ if(navigator.clipboard) navigator.clipboard.writeText(location.href).then(function(){ pl.textContent="copied"; setTimeout(function(){pl.textContent="copy link";},1200); }); };
+  var pl=$("pcopy"); if(pl) pl.onclick=function(){ if(navigator.clipboard) navigator.clipboard.writeText(location.href).then(function(){ pl.textContent="copied"; setTimeout(function(){pl.textContent="copy link";},1200); }); };
+  var eb=$("editbtn"); if(eb) eb.onclick=function(){ var f=$("editform"); f.style.display=(f.style.display==="none"?"block":"none"); };
+  function api(body){ return fetch("/api/vclaim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}).then(function(r){return r.json();}); }
+  var sb=$("signbtn"); if(sb) sb.onclick=async function(){
+    var cm=$("cmsg");
+    if(!window.ethereum){ cm.textContent="no wallet detected — install Core or MetaMask, then reload."; return; }
+    var vals={node:NODE, handle:$("f-handle").value, pfp:$("f-pfp").value, x:$("f-x").value, discord:$("f-discord").value, site:$("f-site").value};
+    sb.disabled=true; cm.textContent="preparing…";
+    try{
+      var prep=await api(vals);
+      if(prep.error){ cm.textContent=prep.error; sb.disabled=false; return; }
+      cm.textContent="approve the signature in your wallet — it must be the reward-owner ("+((prep.owners&&prep.owners[0])||"")+")";
+      var acct=(await window.ethereum.request({method:"eth_requestAccounts"}))[0];
+      var sig=await window.ethereum.request({method:"personal_sign",params:[prep.message, acct]});
+      cm.textContent="verifying…";
+      var res=await api({node:NODE, sig:sig});
+      if(res.ok){ cm.textContent="saved ✓ reloading…"; setTimeout(function(){location.reload();},900); }
+      else { cm.textContent=(res.error||"could not verify")+(res.signer?(" (you signed as "+res.signer.slice(0,16)+"…)"):""); sb.disabled=false; }
+    }catch(e){ cm.textContent=(e&&e.message)||"cancelled."; sb.disabled=false; }
+  };
 })();
 </script>
 </body>
