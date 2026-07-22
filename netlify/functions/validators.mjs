@@ -111,88 +111,29 @@ async function getHistory(nodeID, detail) {
   return foldHistory(completed, { startTime: detail.startTime, endTime: detail.endTime });
 }
 
-var validators_default = async (req) => {
-  const url = new URL(req.url);
-  const site = (process.env.URL || "https://avax100m.xyz").replace(/\/$/, "");
+// Build the merged node payload (on-chain + auto-badges + rarity + lifetime
+// history + any profile record). Shared by the JSON API and the profile page.
+async function buildNode(snap, key) {
+  const detail = snap.byNode[key];
+  const total = snap.stats.badgeTotal || snap.stats.validatorCount;
+  const badges = (detail.badges || [])
+    .map((b) => Object.assign({}, b, { rarity: { count: (snap.stats.badgeCounts || {})[b.id] || 0, total } }))
+    .sort((a, b) => (a.rarity.count - b.rarity.count) || (b.tier - a.tier));
+  let history = null;
+  try { history = await getHistory(key, detail); } catch {}
+  const profile = await readProfile(key);
+  return {
+    node: detail,
+    rank: detail.stakeRank || null,
+    count: snap.stats.validatorCount,
+    badges: badges.concat(historyBadges(history)),
+    history,
+    profile
+  };
+}
 
-  if (!url.pathname.startsWith("/api/")) {
-    return new Response(page(site), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=60" } });
-  }
-
-  let snap;
-  try { snap = await getSnapshot(); }
-  catch (e) { return json({ error: "p-chain unavailable", reason: String((e && e.message) || e) }, 503); }
-  if (snap && snap.pending) return json({ pending: true, retryAfter: 5 }, 202, { "retry-after": "5" });
-
-  const node = url.searchParams.get("node");
-  if (node) {
-    const key = snap.byNode[node] ? node : node.trim();
-    const detail = snap.byNode[key] || null;
-    if (!detail) return json({ none: true, node });
-    const total = snap.stats.badgeTotal || snap.stats.validatorCount;
-    const badges = (detail.badges || [])
-      .map((b) => Object.assign({}, b, { rarity: { count: (snap.stats.badgeCounts || {})[b.id] || 0, total } }))
-      .sort((a, b) => (a.rarity.count - b.rarity.count) || (b.tier - a.tier));
-    let history = null;
-    try { history = await getHistory(key, detail); } catch {}
-    const allBadges = badges.concat(historyBadges(history));
-    const profile = await readProfile(key);
-    return json({
-      node: detail,
-      rank: detail.stakeRank || null,
-      count: snap.stats.validatorCount,
-      badges: allBadges,
-      history,
-      profile,
-      avaxUsd: snap.avaxUsd,
-      asOf: snap.asOf
-    });
-  }
-
-  const p = queryDirectory(snap.directory, {
-    sort: url.searchParams.get("sort") || "stake",
-    dir: url.searchParams.get("dir") || "desc",
-    q: url.searchParams.get("q") || "",
-    limit: url.searchParams.get("limit") || 50,
-    offset: url.searchParams.get("offset") || 0
-  });
-  return json({
-    stats: snap.stats,
-    directory: p.rows,
-    page: { total: p.total, offset: p.offset, limit: p.limit, sort: p.sort, dir: p.dir, q: p.q },
-    avaxUsd: snap.avaxUsd,
-    asOf: snap.asOf
-  });
-};
-
-function page(site) {
-  const title = "validators \xB7 avax100m.xyz";
-  const desc = "Live Avalanche P-Chain validators — network staking stats, the full validator directory, and a card per validator with badges, uptime, delegations, and lifetime history & rewards. No connect, just a read.";
-  const pageUrl = site + "/p-chain";
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${title}</title>
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
-<link rel="icon" href="/favicon.ico" sizes="any">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<meta name="description" content="${desc}">
-<link rel="canonical" href="${pageUrl}">
-<meta property="og:type" content="website">
-<meta property="og:url" content="${pageUrl}">
-<meta property="og:title" content="${title}">
-<meta property="og:description" content="${desc}">
-<meta property="og:image" content="${site}/og.png">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="${title}">
-<meta name="twitter:description" content="${desc}">
-<meta name="twitter:image" content="${site}/og.png">
-<style>
-:root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e84142;
+// Shared stylesheet for the /p-chain page and the /v/ profile page (one source).
+var STYLE = `:root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e84142;
 --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6}
@@ -209,7 +150,7 @@ header{border-bottom:1px solid var(--faint)}
 .hero{padding:56px 0 36px;border-bottom:1px solid var(--faint)}
 .eyebrow{font-size:11px;letter-spacing:.24em;color:var(--dim);text-transform:uppercase;margin-bottom:14px}
 .eyebrow b{color:var(--red)}
-h1{font-size:clamp(40px,8vw,72px);line-height:1;color:var(--red);letter-spacing:-.01em}
+h1{font-size:clamp(34px,7vw,66px);line-height:1;color:var(--red);letter-spacing:-.01em;word-break:break-all}
 .tagline{color:var(--dim);margin-top:12px;max-width:660px}
 section{padding:40px 0;border-bottom:1px solid var(--faint)}
 h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red);font-weight:700;margin-bottom:8px}
@@ -226,10 +167,12 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .check-row{display:flex;gap:10px;flex-wrap:wrap}
 .check-row input{flex:1;min-width:240px;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:14px;padding:11px 13px}
 .check-row input:focus{outline:none;border-color:var(--red)}
-.btn{background:var(--red);border:1px solid var(--red);color:#000;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:11px 20px;cursor:pointer}
+.btn{background:var(--red);border:1px solid var(--red);color:#000;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:11px 20px;cursor:pointer;text-decoration:none;display:inline-block}
 .btn:hover{background:var(--ink);border-color:var(--ink)}
+.btn.primary{background:var(--red);border-color:var(--red);color:#000}
 .btn.ghost{background:transparent;color:var(--dim);border-color:var(--faint);font-weight:400}
 .btn.ghost:hover{color:var(--red);border-color:var(--red)}
+.pshare{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
 .msg{margin-top:14px;font-size:12px;color:var(--dim);min-height:18px;letter-spacing:.04em}
 .detail{margin-top:18px;display:none}
 .vcard{border:1px solid var(--faint)}
@@ -297,8 +240,221 @@ table.vtable{width:100%;border-collapse:collapse;font-size:12px;min-width:660px}
 footer{padding:36px 0 64px;color:var(--dim);font-size:12px}
 footer .frow{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
 footer a{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--faint)}
-footer a:hover{color:var(--red);border-color:var(--red)}
-</style>
+footer a:hover{color:var(--red);border-color:var(--red)}`;
+
+/* ---- server-side card render (mirrors the client renderDetail on /p-chain) ---- */
+var esc2 = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+function nfmt(n, d) { if (n == null || !isFinite(n)) return "—"; return Number(n).toLocaleString("en-US", { maximumFractionDigits: d == null ? 0 : d }); }
+function usdOf(avax, px) { if (px == null || avax == null || !isFinite(avax)) return ""; const v = avax * px; if (v >= 1e9) return "$" + nfmt(v / 1e9, 2) + "B"; if (v >= 1e6) return "$" + nfmt(v / 1e6, 2) + "M"; if (v >= 1e3) return "$" + nfmt(v / 1e3, 1) + "K"; return "$" + nfmt(v, 0); }
+function pctOf(f, d) { if (f == null || !isFinite(f)) return "—"; return nfmt(f * 100, d == null ? 1 : d) + "%"; }
+function durOf(days) { days = Math.max(0, Math.round(days)); if (days < 1) return "today"; if (days < 60) return days + " day" + (days === 1 ? "" : "s"); if (days < 730) { const mo = Math.round(days / 30.44); return mo + " month" + (mo === 1 ? "" : "s"); } const y = Math.floor(days / 365.25), rem = Math.round((days - y * 365.25) / 30.44); return y + "y" + (rem ? (" " + rem + "mo") : ""); }
+var shortNodeOf = (id) => { id = String(id || ""); return id.length > 20 ? id.slice(0, 13) + "…" + id.slice(-4) : id; };
+function hashStrS(s) { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+function identiconOf(id, size) { size = size || 56; const h = hashStrS(id), cells = 5, cs = size / cells, ce = Math.ceil(cs); let rects = ""; for (let y = 0; y < cells; y++) for (let xx = 0; xx < 3; xx++) if ((h >>> ((y * 3 + xx) % 29)) & 1) { const mm = cells - 1 - xx; rects += '<rect x="' + (xx * cs) + '" y="' + (y * cs) + '" width="' + ce + '" height="' + ce + '"/>'; if (mm !== xx) rects += '<rect x="' + (mm * cs) + '" y="' + (y * cs) + '" width="' + ce + '" height="' + ce + '"/>'; } return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '"><rect width="' + size + '" height="' + size + '" fill="#141414"/><g fill="var(--red)">' + rects + '</g></svg>'; }
+function badgeTileS(b, i) { const name = VNAMES[b.id] || b.id, glyph = VGLYPH[b.id] || "", roman = ["", "i", "ii", "iii"][b.tier] || ""; const rar = b.rarity ? ('<span class="tr">' + nfmt(b.rarity.count) + " of " + nfmt(b.rarity.total) + " validators</span>") : ""; return '<span class="btile' + (i === 0 ? " medal" : "") + '" tabindex="0">' + glyph + (roman ? '<span class="rn">' + roman + '</span>' : '') + '<span class="tip"><span class="tl">badge</span><span class="tn">' + esc2(name) + '</span>' + rar + '<span class="tv">' + b.ev + '</span></span></span>'; }
+function grantTileS(id) { const g = VGRANTED[id]; if (!g) return ""; return '<span class="btile grant" tabindex="0"><span class="emo">' + g.emoji + '</span><span class="tip"><span class="tl">awarded</span><span class="tn">' + esc2(g.name) + '</span><span class="tv">' + esc2(g.ev) + '</span></span></span>'; }
+
+function serverCard(nd, px) {
+  const d = nd.node, p = nd.profile || null, hist = nd.history || null;
+  const badges = nd.badges || [], granted = (p && p.grantedBadges) || [];
+  const day = (sec) => sec ? new Date(sec * 1000).toISOString().slice(0, 10) : "—";
+  const dim = (s) => '<span style="color:var(--dim)">' + s + "</span>";
+  const bar = (f) => { f = Math.max(0, Math.min(1, isFinite(f) ? f : 0)); return '<span style="display:inline-block;width:104px;height:6px;background:var(--faint);vertical-align:middle;margin-left:10px"><span style="display:block;height:100%;width:' + (f * 100).toFixed(1) + '%;background:var(--red)"></span></span>'; };
+  const drow = (k, v) => '<div class="r-row"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
+  const u = (a) => usdOf(a, px);
+  const periodDays = (d.endTime - d.startTime) / 86400;
+  const elapsed = Math.max(0, periodDays - d.remainingDays);
+  const pElapsed = periodDays > 0 ? elapsed / periodDays : 0;
+  const earned = d.potentialReward * Math.max(0, Math.min(1, pElapsed));
+  const perDay = periodDays > 0 ? d.potentialReward / periodDays : 0;
+  const maxDeleg = d.stake * 4, capFree = Math.max(0, maxDeleg - d.delegated), pCap = maxDeleg > 0 ? d.delegated / maxDeleg : 0;
+
+  const handle = (p && p.handle) || shortNodeOf(d.nodeID);
+  const tier = (p && p.tier) ? String(p.tier).toUpperCase() : null;
+  const tierPill = (tier && /^[ABC]$/.test(tier)) ? '<span class="tier ' + tier + '">tier ' + tier + '</span>' : "";
+  const pfp = (p && p.pfp) ? '<img src="' + esc2(p.pfp) + '" alt="">' : identiconOf(d.nodeID, 56);
+
+  let h = '<div class="vcard"><div class="vc-head"><div class="vc-pfp">' + pfp + '</div><div class="vc-id">'
+    + '<div class="vc-handle">' + esc2(handle) + tierPill + '</div>'
+    + '<div class="vc-node"><span class="dot' + (d.connected ? " on" : "") + '"></span>'
+    + '<span class="mono" id="vc-nodeid">' + esc2(d.nodeID) + '</span>'
+    + '<button class="copy" id="vcopy">copy</button></div></div></div>';
+  const tiles = badges.map(badgeTileS).join("") + granted.map(grantTileS).join("");
+  h += '<div class="vc-badges">' + (tiles || '<span class="empty">no badges yet</span>') + '</div>';
+  h += '<div class="vc-strip">'
+    + '<div class="s"><div class="k">uptime</div><div class="v">' + (d.uptime != null ? pctOf(d.uptime, 2) : "—") + '</div></div>'
+    + '<div class="s"><div class="k">delegation fee</div><div class="v">' + (d.feePct != null ? nfmt(d.feePct, 2) + "%" : "—") + '</div></div>'
+    + '<div class="s"><div class="k">delegated stake</div><div class="v">' + nfmt(d.delegated) + ' <small>AVAX ' + dim("\xB7 " + nfmt(d.delegatorCount) + " delegators") + '</small></div></div>'
+    + '</div>';
+  if (p && p.socials) { const sc = p.socials, parts = [];
+    if (sc.x) parts.push('<a href="' + esc2(sc.x) + '" target="_blank" rel="noopener nofollow">x/twitter</a>');
+    if (sc.discord) parts.push('<span>' + esc2(sc.discord) + '</span>');
+    if (sc.site) parts.push('<a href="' + esc2(sc.site) + '" target="_blank" rel="noopener nofollow">website</a>');
+    if (parts.length) h += '<div class="vc-socials">' + parts.join("") + '</div>';
+  }
+  let r = "";
+  if (hist && hist.firstStart) { const lifeDays = (Date.now() / 1000 - hist.firstStart) / 86400;
+    r += drow("first validated", day(hist.firstStart) + " " + dim("\xB7 " + durOf(lifeDays) + " ago \xB7 " + nfmt(hist.seasons) + (hist.seasons === 1 ? " season" : " seasons"))); }
+  r += drow(hist && hist.firstStart ? "current stake since" : "validating since", day(d.startTime) + " " + dim("\xB7 " + durOf(elapsed) + " so far"));
+  if (nd.rank) r += drow("stake rank", "#" + nfmt(nd.rank) + " " + dim("of " + nfmt(nd.count)));
+  r += drow("own stake", nfmt(d.stake) + " AVAX" + (u(d.stake) ? " \xB7 " + u(d.stake) : ""));
+  r += drow("total stake", nfmt(d.stake + d.delegated) + " AVAX");
+  r += drow("delegation space", nfmt(d.delegated) + " / " + nfmt(maxDeleg) + " AVAX " + dim("\xB7 " + nfmt(capFree) + " free") + bar(pCap));
+  r += drow("reward rate", nfmt(perDay, 2) + " AVAX/day");
+  r += drow("earned so far (est.)", "<b>" + nfmt(earned, 2) + " AVAX</b>" + (u(earned) ? " \xB7 " + u(earned) : ""));
+  if (hist && hist.lifetimeRewards > 0) r += drow("lifetime rewards", "<b>" + nfmt(hist.lifetimeRewards, 2) + " AVAX</b>" + (u(hist.lifetimeRewards) ? " \xB7 " + u(hist.lifetimeRewards) : "") + " " + dim("\xB7 across " + nfmt(hist.completedCount) + (hist.completedCount === 1 ? " season" : " seasons")));
+  r += drow("potential reward \xB7 full period", nfmt(d.potentialReward, 2) + " AVAX" + (u(d.potentialReward) ? " \xB7 " + u(d.potentialReward) : ""));
+  r += drow("est. apr", d.estApr ? pctOf(d.estApr, 2) : "—");
+  r += drow("stake period", day(d.startTime) + " → " + day(d.endTime) + " " + dim("\xB7 " + nfmt(periodDays) + "d"));
+  r += drow("period progress", nfmt(elapsed) + " / " + nfmt(periodDays) + " days" + bar(pElapsed));
+  h += '<div class="vc-rows">' + r + '</div></div>';
+  return h;
+}
+
+function profilePage(nd, px, site) {
+  const d = nd.node, p = nd.profile || null, hist = nd.history || null;
+  const handle = (p && p.handle) || shortNodeOf(d.nodeID);
+  const title = handle + " \xB7 p-chain validator \xB7 avax100m";
+  const bits = [];
+  if (d.uptime != null) bits.push((d.uptime * 100).toFixed(1) + "% uptime");
+  bits.push(nfmt(d.stake) + " AVAX staked");
+  if (d.delegatorCount) bits.push(nfmt(d.delegatorCount) + " delegators");
+  if (hist && hist.seasons) bits.push(hist.seasons + " season" + (hist.seasons === 1 ? "" : "s"));
+  const desc = "Avalanche P-Chain validator " + shortNodeOf(d.nodeID) + " — " + bits.join(" \xB7 ") + ". Live on avax100m.";
+  const pageUrl = site + "/v/" + d.nodeID;
+  const img = site + "/vcard/" + d.nodeID + ".png";
+  const shareText = handle + " — p-chain validator on avax100m";
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${esc2(title)}</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="description" content="${esc2(desc)}">
+<link rel="canonical" href="${pageUrl}">
+<meta property="og:type" content="profile">
+<meta property="og:url" content="${pageUrl}">
+<meta property="og:title" content="${esc2(title)}">
+<meta property="og:description" content="${esc2(desc)}">
+<meta property="og:image" content="${img}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${esc2(title)}">
+<meta name="twitter:description" content="${esc2(desc)}">
+<meta name="twitter:image" content="${img}">
+<style>${STYLE}</style>
+</head>
+<body>
+<header><div class="wrap hbar">
+  <a class="logo" href="${site}"><img src="/favicon.svg" alt="Milli" width="24" height="24" decoding="async"><b>AVAX</b>/100M</a>
+  <a class="nav" href="${site}/p-chain">all validators →</a>
+</div></header>
+<main class="wrap">
+  <div class="hero">
+    <div class="eyebrow">avalanche <b>p-chain</b> \xB7 validator</div>
+    <h1>${esc2(handle)}</h1>
+  </div>
+  <section>
+    ${serverCard(nd, px)}
+    <div class="pshare">
+      <button class="btn" id="pcopy">copy link</button>
+      <a class="btn primary" id="pshare" href="https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(pageUrl)}" target="_blank" rel="noopener">share on x</a>
+      <a class="btn ghost" href="${img}" target="_blank" rel="noopener">view card image</a>
+    </div>
+  </section>
+</main>
+<footer><div class="wrap frow">
+  <span>avax100m \xB7 p-chain validators</span>
+  <span><a href="${site}/p-chain">directory</a> \xB7 data: avalanche p-chain rpc + data api</span>
+</div></footer>
+<script>
+(function(){
+  var cb=document.getElementById("vcopy"); if(cb) cb.onclick=function(){ var t=document.getElementById("vc-nodeid").textContent;
+    if(navigator.clipboard) navigator.clipboard.writeText(t).then(function(){ cb.textContent="copied"; setTimeout(function(){cb.textContent="copy";},1200); }); };
+  var pl=document.getElementById("pcopy"); if(pl) pl.onclick=function(){ if(navigator.clipboard) navigator.clipboard.writeText(location.href).then(function(){ pl.textContent="copied"; setTimeout(function(){pl.textContent="copy link";},1200); }); };
+})();
+</script>
+</body>
+</html>`;
+}
+
+var validators_default = async (req) => {
+  const url = new URL(req.url);
+  const site = (process.env.URL || "https://avax100m.xyz").replace(/\/$/, "");
+
+  // Per-validator shareable profile page.
+  if (url.pathname.startsWith("/v/")) {
+    const nodeID = decodeURIComponent(url.pathname.slice(3)).trim();
+    if (!/^NodeID-[A-Za-z0-9]+$/.test(nodeID)) return Response.redirect(site + "/p-chain", 302);
+    let snap = null;
+    try { snap = await getSnapshot(); } catch {}
+    if (!snap || snap.pending || !snap.byNode || !snap.byNode[nodeID]) return Response.redirect(site + "/p-chain", 302);
+    const nd = await buildNode(snap, nodeID);
+    return new Response(profilePage(nd, snap.avaxUsd, site), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=60" } });
+  }
+
+  if (!url.pathname.startsWith("/api/")) {
+    return new Response(page(site), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=60" } });
+  }
+
+  let snap;
+  try { snap = await getSnapshot(); }
+  catch (e) { return json({ error: "p-chain unavailable", reason: String((e && e.message) || e) }, 503); }
+  if (snap && snap.pending) return json({ pending: true, retryAfter: 5 }, 202, { "retry-after": "5" });
+
+  const node = url.searchParams.get("node");
+  if (node) {
+    const key = snap.byNode[node] ? node : node.trim();
+    if (!snap.byNode[key]) return json({ none: true, node });
+    const nd = await buildNode(snap, key);
+    return json(Object.assign(nd, { avaxUsd: snap.avaxUsd, asOf: snap.asOf }));
+  }
+
+  const p = queryDirectory(snap.directory, {
+    sort: url.searchParams.get("sort") || "stake",
+    dir: url.searchParams.get("dir") || "desc",
+    q: url.searchParams.get("q") || "",
+    limit: url.searchParams.get("limit") || 50,
+    offset: url.searchParams.get("offset") || 0
+  });
+  return json({
+    stats: snap.stats,
+    directory: p.rows,
+    page: { total: p.total, offset: p.offset, limit: p.limit, sort: p.sort, dir: p.dir, q: p.q },
+    avaxUsd: snap.avaxUsd,
+    asOf: snap.asOf
+  });
+};
+
+function page(site) {
+  const title = "validators \xB7 avax100m.xyz";
+  const desc = "Live Avalanche P-Chain validators — network staking stats, the full validator directory, and a card per validator with badges, uptime, delegations, and lifetime history & rewards. No connect, just a read.";
+  const pageUrl = site + "/p-chain";
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${title}</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="description" content="${desc}">
+<link rel="canonical" href="${pageUrl}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="${pageUrl}">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${desc}">
+<meta property="og:image" content="${site}/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:description" content="${desc}">
+<meta name="twitter:image" content="${site}/og.png">
+<style>${STYLE}</style>
 </head>
 <body>
 <header><div class="wrap hbar">
@@ -517,7 +673,8 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       '<div class="vc-handle">'+esc(handle)+tierPill+'</div>'+
       '<div class="vc-node"><span class="dot'+(d.connected?" on":"")+'"></span>'+
       '<span class="mono" id="vc-nodeid">'+esc(d.nodeID)+'</span>'+
-      '<button class="copy" id="vcopy">copy</button></div></div></div>';
+      '<button class="copy" id="vcopy">copy</button>'+
+      '<a class="copy" href="/v/'+encodeURIComponent(d.nodeID)+'">page →</a></div></div></div>';
 
     var tiles=badges.map(badgeTile).join("")+granted.map(grantTile).join("");
     h+='<div class="vc-badges">'+(tiles||'<span class="empty">no badges yet</span>')+'</div>';
@@ -588,7 +745,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
 </html>`;
 }
 
-var config = { path: ["/p-chain", "/validators", "/api/validators"] };
+var config = { path: ["/p-chain", "/validators", "/v/*", "/api/validators"] };
 export {
   _mem,
   config,
