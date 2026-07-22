@@ -699,6 +699,36 @@ function page(site) {
       <button class="btn ghost" id="more" style="display:none">Load more</button>
     </div>
   </section>
+
+  <section id="faq">
+    <h2>faq</h2>
+    <div style="max-width:720px">
+      <details style="border-bottom:1px solid var(--faint);padding:14px 0">
+        <summary style="cursor:pointer;font-weight:700">what is the p-chain?</summary>
+        <p style="color:var(--dim);margin:10px 0 0">avalanche's platform chain &mdash; it coordinates validators, staking, and l1s/subnets. this page reads it live: every primary-network validator, what they stake, what they earn, and how reliably they run.</p>
+      </details>
+      <details style="border-bottom:1px solid var(--faint);padding:14px 0">
+        <summary style="cursor:pointer;font-weight:700">what does a validator card show?</summary>
+        <p style="color:var(--dim);margin:10px 0 0">paste a NodeID (or click a row) for its live stake, delegations, uptime, delegation fee, rewards and est. apr &mdash; plus on-chain badges and lifetime history. read-only, no connect, no signature.</p>
+      </details>
+      <details style="border-bottom:1px solid var(--faint);padding:14px 0">
+        <summary style="cursor:pointer;font-weight:700">what are the badges?</summary>
+        <p style="color:var(--dim);margin:10px 0 0">cosmetic achievements auto-derived from public p-chain data &mdash; uptime, stake rank, delegators, delegation-cap filled, minimum fee, tenure, self-funded, and more. each shows how rare it is across the whole validator set. nothing is manually granted.</p>
+      </details>
+      <details style="border-bottom:1px solid var(--faint);padding:14px 0">
+        <summary style="cursor:pointer;font-weight:700">what are &ldquo;seasons&rdquo; and &ldquo;lifetime rewards&rdquo;?</summary>
+        <p style="color:var(--dim);margin:10px 0 0">a NodeID stays the same across restakes, but each staking period is a new on-chain registration. &ldquo;seasons&rdquo; counts those periods; &ldquo;lifetime rewards&rdquo; sums the rewards actually paid across every completed period. current-period figures (earned so far, est. apr) are labeled as estimates.</p>
+      </details>
+      <details style="border-bottom:1px solid var(--faint);padding:14px 0">
+        <summary style="cursor:pointer;font-weight:700">can i claim my validator?</summary>
+        <p style="color:var(--dim);margin:10px 0 0">yes &mdash; on a validator&rsquo;s page you can set a handle, avatar and socials by signing one plain-text message with the wallet that owns its staking reward. it proves you run the node without any on-chain action: not a transaction, nothing moves, nothing is approved, it costs nothing. no token approvals or transfers, ever.</p>
+      </details>
+      <details style="padding:14px 0">
+        <summary style="cursor:pointer;font-weight:700">where does the data come from?</summary>
+        <p style="color:var(--dim);margin:10px 0 0">live from the avalanche p-chain public rpc (<span style="color:var(--ink)">platform.getCurrentValidators</span>) for the current set, and the avalanche data api for historical periods and paid rewards. avax/usd via binance with a coingecko fallback. cached briefly and refreshed. unofficial community page &mdash; <a href="https://github.com/alf444-dev/avax100m" target="_blank" rel="noopener">open source</a>.</p>
+      </details>
+    </div>
+  </section>
 </main>
 
 <footer><div class="wrap frow">
