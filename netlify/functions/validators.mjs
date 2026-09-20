@@ -6,6 +6,7 @@ import {
   queryDirectory
 } from "./lib/pchain.mjs";
 import { VNAMES, VGLYPH, VGRANTED, historyBadges, nextUp } from "./lib/vbadges.mjs";
+import { captureOf, pickBase, pruneIndex, deltaFor, foldMovers, dayKey } from "./lib/movers.mjs";
 import { fetchCompletedValidations, foldHistory } from "./lib/pchain-history.mjs";
 import { foldCohort, TIER_LABEL, UPTIME_GATE } from "./lib/cohort.mjs";
 
@@ -85,10 +86,56 @@ async function getSnapshot() {
     ]);
     const snap = Object.assign({}, foldValidators(validators, supply), { avaxUsd: px });
     if (store) await store.set(SNAP_KEY, JSON.stringify(snap)).catch(() => {});
+    if (store) await recordCapture(store, snap).catch(() => {});
     return snap;
   } finally {
     if (workStore) await workStore.delete(WORK_KEY).catch(() => {});
   }
+}
+
+// ---- weekly movers: one compact capture per UTC day, diffed against ~7 days back ----
+var MOVERS_INDEX = "movers/index", MOVERS_DAY = "movers/day/", MOVERS_TTL = 5 * 60 * 1e3;
+var _base = { day: null, t: 0, data: null };
+// First fresh snapshot of a UTC day becomes that day's capture; the index keeps the last KEEP_DAYS.
+async function recordCapture(store, snap) {
+  const today = dayKey();
+  const idx = (await store.get(MOVERS_INDEX, { type: "json" }).catch(() => null)) || [];
+  if (idx.includes(today)) return;
+  await store.set(MOVERS_DAY + today, JSON.stringify(captureOf(snap)));
+  const next = pruneIndex(idx.concat(today));
+  await store.set(MOVERS_INDEX, JSON.stringify(next));
+  for (const d of idx) if (!next.includes(d)) await store.delete(MOVERS_DAY + d).catch(() => {});
+}
+// The baseline capture (oldest within the window). Null until the first capture exists.
+async function getBase() {
+  const store = storeOr("validators");
+  if (!store) return null;
+  const idx = (await store.get(MOVERS_INDEX, { type: "json" }).catch(() => null)) || [];
+  const day = pickBase(idx);
+  if (!day) return null;
+  if (_base.day === day && Date.now() - _base.t < MOVERS_TTL) return _base.data;
+  const data = await store.get(MOVERS_DAY + day, { type: "json" }).catch(() => null);
+  _base = { day, t: Date.now(), data };
+  return data;
+}
+// Fold + decorate the listed nodes with claimed handles. Cached briefly (the fold is cheap; the handle reads are not).
+async function getMovers(snap) {
+  const cache = storeOr("validators");
+  if (cache) {
+    const c = await cache.get("movers/v1", { type: "json" }).catch(() => null);
+    if (c && Number.isFinite(c.t) && Date.now() - c.t < MOVERS_TTL && c.asOf === snap.asOf) return c.data;
+  }
+  const base = await getBase();
+  const data = base ? foldMovers(snap, base) : { since: null, days: null, tracked: 0, quiet: true, joined: { count: 0, list: [] }, left: { count: 0 }, delegatorGainers: [], stakeGainers: [], rankClimbers: [], unlocked: [] };
+  const ids = new Set();
+  for (const k of ["delegatorGainers", "stakeGainers", "rankClimbers", "unlocked"]) for (const x of data[k]) ids.add(x.nodeID);
+  for (const x of data.joined.list) ids.add(x.nodeID);
+  const handles = {};
+  await Promise.all(Array.from(ids).map(async (id) => { const p = await readProfile(id); if (p && p.handle) handles[id] = p.handle; }));
+  data.handles = handles;
+  data.asOf = snap.asOf;
+  if (cache) await cache.set("movers/v1", JSON.stringify({ t: Date.now(), asOf: snap.asOf, data })).catch(() => {});
+  return data;
 }
 
 // Per-validator identity/tier/granted-badges. Written in Stage 2 (self-claim +
@@ -151,14 +198,18 @@ async function buildNode(snap, key) {
   const badges = (detail.badges || [])
     .map((b) => Object.assign({}, b, { rarity: { count: (snap.stats.badgeCounts || {})[b.id] || 0, total } }))
     .sort((a, b) => (a.rarity.count - b.rarity.count) || (b.tier - a.tier));
-  let history = null;
+  let history = null, base = null;
   try { history = await getHistory(key, detail); } catch {}
+  try { base = await getBase(); } catch {}
   const profile = await readProfile(key);
+  const delta = (base && base.byNode && base.byNode[key]) ? deltaFor(detail, base.byNode[key], badges, base) : null;
+  if (delta && delta.days >= 1) for (const b of badges) if (delta.unlocked.some((u) => u.id === b.id && u.tier === b.tier)) b.fresh = true;
   return {
     node: detail,
     rank: detail.stakeRank || null,
     count: snap.stats.validatorCount,
     badges: badges.concat(historyBadges(history)),
+    delta: delta && delta.days >= 1 ? delta : null,
     next: nextUp(detail, { stakeRank: detail.stakeRank, total, rankStake: snap.stats.rankStake }, history),
     history,
     profile
@@ -237,6 +288,15 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .btile .rn{position:absolute;bottom:1px;right:3px;font-size:8px;color:var(--dim);letter-spacing:.04em}
 .btile.medal{background:var(--red);border-color:var(--red);color:#0a0a0a}
 .btile.medal .rn{color:#0a0a0a}
+.btile.fresh::after{content:"new";position:absolute;top:-7px;right:-7px;background:var(--red);color:#0a0a0a;font-size:7px;letter-spacing:.12em;text-transform:uppercase;padding:1px 4px;font-weight:700}
+.r-row .v .up{color:#3ddc84}.r-row .v .dn{color:var(--red)}
+.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}@media(max-width:640px){.mgrid{grid-template-columns:1fr;gap:28px}}
+.mgrid h3{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);font-weight:700;margin-bottom:8px}
+.mlist{list-style:none;counter-reset:m}.mlist li{counter-increment:m;padding:7px 0;border-bottom:1px solid var(--faint);font-size:13px;display:flex;justify-content:space-between;gap:10px}
+.mlist li::before{content:counter(m);color:var(--dim);margin-right:10px;flex:none}.mlist li>span:first-of-type{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mlist a{color:var(--ink)}.mlist a:hover{color:var(--red)}.mlist .d{color:#3ddc84;white-space:nowrap;font-variant-numeric:tabular-nums}.mlist .dim{color:var(--dim);font-size:11px}
+.mlist .empty{color:var(--dim);font-size:12px;letter-spacing:.04em}
+.mline{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:22px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}.mline b{color:var(--ink)}
 .btile .tip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:220px;z-index:9;background:var(--bg);border:1px solid var(--red);padding:9px 11px;text-align:left;white-space:normal}
 .btile:hover .tip,.btile:focus-visible .tip{display:block}
 .btile .tl{color:var(--red);letter-spacing:.2em;font-size:9px;display:block;margin-bottom:3px;text-transform:uppercase}
@@ -299,13 +359,26 @@ function durOf(days) { days = Math.max(0, Math.round(days)); if (days < 1) retur
 var shortNodeOf = (id) => { id = String(id || ""); return id.length > 20 ? id.slice(0, 13) + "…" + id.slice(-4) : id; };
 function hashStrS(s) { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function identiconOf(id, size) { size = size || 56; const h = hashStrS(id), cells = 5, cs = size / cells, ce = Math.ceil(cs); let rects = ""; for (let y = 0; y < cells; y++) for (let xx = 0; xx < 3; xx++) if ((h >>> ((y * 3 + xx) % 29)) & 1) { const mm = cells - 1 - xx; rects += '<rect x="' + (xx * cs) + '" y="' + (y * cs) + '" width="' + ce + '" height="' + ce + '"/>'; if (mm !== xx) rects += '<rect x="' + (mm * cs) + '" y="' + (y * cs) + '" width="' + ce + '" height="' + ce + '"/>'; } return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '"><rect width="' + size + '" height="' + size + '" fill="#141414"/><g fill="var(--red)">' + rects + '</g></svg>'; }
-function badgeTileS(b, i) { const name = VNAMES[b.id] || b.id, glyph = VGLYPH[b.id] || "", roman = ["", "i", "ii", "iii"][b.tier] || ""; const rar = b.rarity ? ('<span class="tr">' + nfmt(b.rarity.count) + " of " + nfmt(b.rarity.total) + " validators</span>") : ""; return '<span class="btile' + (i === 0 ? " medal" : "") + '" tabindex="0">' + glyph + (roman ? '<span class="rn">' + roman + '</span>' : '') + '<span class="tip"><span class="tl">badge</span><span class="tn">' + esc2(name) + '</span>' + rar + '<span class="tv">' + b.ev + '</span></span></span>'; }
+function badgeTileS(b, i) { const name = VNAMES[b.id] || b.id, glyph = VGLYPH[b.id] || "", roman = ["", "i", "ii", "iii"][b.tier] || ""; const rar = b.rarity ? ('<span class="tr">' + nfmt(b.rarity.count) + " of " + nfmt(b.rarity.total) + " validators</span>") : ""; return '<span class="btile' + (i === 0 ? " medal" : "") + (b.fresh ? " fresh" : "") + '" tabindex="0">' + glyph + (roman ? '<span class="rn">' + roman + '</span>' : '') + '<span class="tip"><span class="tl">badge</span><span class="tn">' + esc2(name) + '</span>' + rar + '<span class="tv">' + b.ev + '</span></span></span>'; }
 function nextStripS(next) {
   if (!next || !next.length) return "";
   const roman = ["", "i", "ii", "iii"];
   return '<div class="vc-next">' + next.map((n) => '<div class="n"><div class="nk"><span>next up</span><b>' + esc2((VNAMES[n.id] || n.id) + " " + (roman[n.tier] || "")) + '</b></div>'
     + '<div class="nb"><span style="width:' + (n.frac * 100).toFixed(1) + '%"></span></div>'
     + '<div class="nv"><b>' + esc2(n.label) + '</b> \xB7 ' + Math.round(n.frac * 100) + '% there</div></div>').join("") + '</div>';
+}
+// "since 7 days ago" rows: only what actually moved, signed and coloured.
+function deltaRowsS(dl) {
+  if (!dl || !(dl.days >= 1)) return "";
+  const sgn = (v, unit, d) => v === 0 ? "" : '<span class="' + (v > 0 ? "up" : "dn") + '">' + (v > 0 ? "+" : "\u2212") + nfmt(Math.abs(v), d) + unit + '</span>';
+  const parts = [];
+  if (dl.delegators) parts.push(sgn(dl.delegators, " delegators"));
+  if (Math.abs(dl.stake) >= 1) parts.push(sgn(dl.stake, " AVAX", 0));
+  if (dl.rank) parts.push(sgn(dl.rank, " ranks", 0));
+  if (dl.uptime != null && Math.abs(dl.uptime) >= 0.0005) parts.push(sgn(dl.uptime * 100, "% uptime", 2));
+  if (dl.unlocked.length) parts.push('<span class="up">' + dl.unlocked.length + " new badge" + (dl.unlocked.length === 1 ? "" : "s") + "</span>");
+  const label = "last " + dl.days + " day" + (dl.days === 1 ? "" : "s");
+  return '<div class="r-row"><span class="k">' + label + '</span><span class="v">' + (parts.length ? parts.join(' <span style="color:var(--dim)">\xB7</span> ') : '<span style="color:var(--dim)">no change</span>') + '</span></div>';
 }
 function grantTileS(id) { const g = VGRANTED[id]; if (!g) return ""; return '<span class="btile grant" tabindex="0"><span class="emo">' + g.emoji + '</span><span class="tip"><span class="tl">awarded</span><span class="tn">' + esc2(g.name) + '</span><span class="tv">' + esc2(g.ev) + '</span></span></span>'; }
 
@@ -355,6 +428,7 @@ function serverCard(nd, px) {
     if (p.rank != null) r += drow("cohort rank", "#" + nfmt(p.rank));
     r += drow("uptime gate", d.uptime != null ? (d.uptime >= UPTIME_GATE ? "<b>met</b> " + dim("\xB7 ≥" + Math.round(UPTIME_GATE * 100) + "%") : dim("below ≥" + Math.round(UPTIME_GATE * 100) + "%")) : "—");
   }
+  r += deltaRowsS(nd.delta);
   if (hist && hist.firstStart) { const lifeDays = (Date.now() / 1000 - hist.firstStart) / 86400;
     r += drow("first validated", day(hist.firstStart) + " " + dim("\xB7 " + durOf(lifeDays) + " ago \xB7 " + nfmt(hist.seasons) + (hist.seasons === 1 ? " season" : " seasons"))); }
   r += drow(hist && hist.firstStart ? "current stake since" : "validating since", day(d.startTime) + " " + dim("\xB7 " + durOf(elapsed) + " so far"));
@@ -608,6 +682,11 @@ var validators_default = async (req) => {
   catch (e) { return json({ error: "p-chain unavailable", reason: String((e && e.message) || e) }, 503); }
   if (snap && snap.pending) return json({ pending: true, retryAfter: 5 }, 202, { "retry-after": "5" });
 
+  if (url.searchParams.get("movers")) {
+    const m = await getMovers(snap);
+    return json(Object.assign({}, m, { asOf: snap.asOf }), 200, { "cache-control": "public, max-age=120" });
+  }
+
   const node = url.searchParams.get("node");
   if (node) {
     const key = snap.byNode[node] ? node : node.trim();
@@ -683,6 +762,13 @@ function page(site) {
     <div class="msg" id="asof"></div>
   </section>
 
+  <section id="movers">
+    <h2>movers \xB7 last 7 days</h2>
+    <p class="sub">Who is climbing. Diffed against a daily capture of the whole set, so it is the same read for everyone.</p>
+    <div id="mgrid" class="mgrid"><div class="empty" style="color:var(--dim);font-size:12px">loading movers\u2026</div></div>
+    <div class="mline" id="mline"></div>
+  </section>
+
   <section>
     <h2>validator lookup</h2>
     <p class="sub">Paste a NodeID for its full card — stake, delegations, uptime, badges, and lifetime history &amp; rewards.</p>
@@ -732,6 +818,10 @@ function page(site) {
       <details style="border-bottom:1px solid var(--faint);padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">what are the badges?</summary>
         <p style="color:var(--dim);margin:10px 0 0">cosmetic achievements auto-derived from public p-chain data &mdash; uptime, stake rank, delegators, delegation-cap filled, minimum fee, tenure, self-funded, and more. each shows how rare it is across the whole validator set. nothing is manually granted.</p>
+      </details>
+      <details style="border-bottom:1px solid var(--faint);padding:14px 0">
+        <summary style="cursor:pointer;font-weight:700">what are &ldquo;movers&rdquo; and &ldquo;next up&rdquo;?</summary>
+        <p style="color:var(--dim);margin:10px 0 0">once a day the whole validator set is captured. &ldquo;movers&rdquo; diffs the live set against the capture from ~7 days back: who gained delegators and stake, who unlocked badges, who joined or left. a validator card shows its own 7-day change and, under &ldquo;next up&rdquo;, the closest badge tiers it has not earned yet and what it takes to get there.</p>
       </details>
       <details style="border-bottom:1px solid var(--faint);padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">what are &ldquo;seasons&rdquo; and &ldquo;lifetime rewards&rdquo;?</summary>
@@ -880,7 +970,7 @@ function page(site) {
   function badgeTile(b,i){
     var name=VNAMES[b.id]||b.id, glyph=VGLYPH[b.id]||"", roman=["","i","ii","iii"][b.tier]||"";
     var rar=b.rarity? ('<span class="tr">'+nf(b.rarity.count)+" of "+nf(b.rarity.total)+" validators</span>") : "";
-    return '<span class="btile'+(i===0?" medal":"")+'" tabindex="0">'+glyph+(roman?'<span class="rn">'+roman+'</span>':'')+
+    return '<span class="btile'+(i===0?" medal":"")+(b.fresh?" fresh":"")+'" tabindex="0">'+glyph+(roman?'<span class="rn">'+roman+'</span>':'')+
       '<span class="tip"><span class="tl">badge</span><span class="tn">'+esc(name)+'</span>'+rar+'<span class="tv">'+b.ev+'</span></span></span>';
   }
   function nextStrip(next){
@@ -891,6 +981,17 @@ function page(site) {
         '<div class="nb"><span style="width:'+(n.frac*100).toFixed(1)+'%"></span></div>'+
         '<div class="nv"><b>'+esc(n.label)+'</b> \xB7 '+Math.round(n.frac*100)+'% there</div></div>';
     }).join("")+'</div>';
+  }
+  function deltaRows(dl){
+    if(!dl||!(dl.days>=1)) return "";
+    var sgn=function(v,unit,d){ if(v===0) return ""; return '<span class="'+(v>0?"up":"dn")+'">'+(v>0?"+":"\u2212")+nf(Math.abs(v),d)+unit+'</span>'; };
+    var parts=[];
+    if(dl.delegators) parts.push(sgn(dl.delegators," delegators"));
+    if(Math.abs(dl.stake)>=1) parts.push(sgn(dl.stake," AVAX",0));
+    if(dl.rank) parts.push(sgn(dl.rank," ranks",0));
+    if(dl.uptime!=null&&Math.abs(dl.uptime)>=0.0005) parts.push(sgn(dl.uptime*100,"% uptime",2));
+    if(dl.unlocked.length) parts.push('<span class="up">'+dl.unlocked.length+" new badge"+(dl.unlocked.length===1?"":"s")+"</span>");
+    return drow("last "+dl.days+" day"+(dl.days===1?"":"s"), parts.length? parts.join(' <span style="color:var(--dim)">\xB7</span> ') : '<span style="color:var(--dim)">no change</span>');
   }
   function grantTile(id){
     var g=VGRANTED[id]; if(!g) return "";
@@ -942,6 +1043,7 @@ function page(site) {
 
     var hist = (meta && meta.history) || null;
     var r="";
+    r+=deltaRows(meta&&meta.delta);
     if(COHORT_ON && p && (p.tier || p.score!=null || p.grantedBadges)){
       if(tier && TIER_LABEL[tier]) r+=drow("cohort tier", "<b>Tier "+tier+"</b> "+dim("· "+TIER_LABEL[tier]));
       if(p.score!=null) r+=drow("cohort score", "<b>"+nf(p.score)+"</b> pts"+(p.scoreDelta!=null?" "+dim("· "+(p.scoreDelta>=0?"+":"")+nf(p.scoreDelta)+" this cycle"):""));
@@ -977,6 +1079,35 @@ function page(site) {
       if(navigator.clipboard) navigator.clipboard.writeText(t).then(function(){ cb.textContent="copied"; setTimeout(function(){cb.textContent="copy";},1200); }); };
   }
 
+  function moverName(m,id){ var h=m.handles&&m.handles[id]; return '<a href="/v/'+encodeURIComponent(id)+'">'+esc(h||shortNode(id))+'</a>'; }
+  function moverList(title, items, fmt){
+    var lis = items.length ? items.map(function(x){ return '<li><span>'+moverName(currentMovers,x.nodeID)+'</span><span class="d">'+fmt(x)+'</span></li>'; }).join("")
+      : '<li class="empty" style="display:block">nothing yet</li>';
+    return '<div><h3>'+title+'</h3><ol class="mlist">'+lis+'</ol></div>';
+  }
+  var currentMovers=null;
+  function renderMovers(m){
+    currentMovers=m;
+    if(m.since==null){ $("mgrid").innerHTML='<div class="empty" style="color:var(--dim);font-size:12px">first capture lands with the next snapshot \u2014 check back tomorrow.</div>'; $("mline").innerHTML=""; return; }
+    if(!(m.days>=1)){ $("mgrid").innerHTML='<div class="empty" style="color:var(--dim);font-size:12px">baseline captured today \u2014 movers appear from tomorrow.</div>'; $("mline").innerHTML='<span>tracking <b>'+nf(m.tracked)+'</b> validators</span>'; return; }
+    var h="";
+    h+=moverList("delegator gainers", m.delegatorGainers, function(x){ return "+"+nf(x.delta)+' <span class="dim">\xB7 '+nf(x.now)+'</span>'; });
+    h+=moverList("stake gainers", m.stakeGainers, function(x){ return "+"+nf(x.delta)+' <span class="dim">avax</span>'; });
+    h+=moverList("badges unlocked", m.unlocked, function(x){ return x.badges.map(function(b){ return esc(VNAMES[b.id]||b.id)+(b.tier?" "+["","i","ii","iii"][b.tier]:""); }).join(", "); });
+    $("mgrid").innerHTML=h;
+    var since=new Date(m.since).toISOString().slice(0,10);
+    var l='<span>since <b>'+since+'</b> \xB7 '+nf(m.days)+' day'+(m.days===1?"":"s")+'</span>';
+    l+='<span><b>'+nf(m.joined.count)+'</b> joined</span><span><b>'+nf(m.left.count)+'</b> left</span>';
+    if(m.rankClimbers.length) l+='<span>top climber '+moverName(m,m.rankClimbers[0].nodeID)+' <b>+'+nf(m.rankClimbers[0].delta)+'</b> ranks</span>';
+    $("mline").innerHTML=l;
+  }
+  function loadMovers(tries){
+    apiGet(API+"?movers=1",1).then(function(j){
+      if(j.pending){ if((tries||0)<8) setTimeout(function(){loadMovers((tries||0)+1);},3000); return; }
+      if(j.error) throw 0; renderMovers(j);
+    }).catch(function(){ $("mgrid").innerHTML='<div class="empty" style="color:var(--dim);font-size:12px">movers unavailable right now.</div>'; });
+  }
+
   function lookup(){
     var n=$("nid").value.trim();
     if(!n){ $("lmsg").textContent="enter a NodeID."; return; }
@@ -993,6 +1124,7 @@ function page(site) {
 
   setActive();
   load(true);
+  loadMovers(0);
 })();
 </script>
 </body>
