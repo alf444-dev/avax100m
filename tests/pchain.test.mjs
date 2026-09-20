@@ -179,3 +179,40 @@ test("queryDirectory sorts, filters and paginates", () => {
   assert.deepEqual(paged.rows.map((r) => r.nodeID), ["NodeID-BBB"]);
   assert.equal(paged.total, 2);
 });
+
+test("nextUp reports the nearest unearned tiers with progress", async () => {
+  const { nextUp, TIERS } = await import("../netlify/functions/lib/vbadges.mjs");
+  const row = { stake: 3000, delegated: 6000, delegatorCount: 80, uptime: 0.997, feePct: 2, startTime: 0, endTime: 400 * 86400, remainingDays: 100 };
+  const ctx = { stakeRank: 60, total: 1000, rankStake: { 10: 500000, 50: 4000, 100: 1000 } };
+  const hist = { seasons: 4, firstStart: Math.floor(Date.now() / 1000) - 300 * 86400 };
+  const next = nextUp(row, ctx, hist);
+  assert.ok(next.length <= 3, "capped at three goals");
+  for (let i = 1; i < next.length; i++) assert.ok(next[i - 1].frac >= next[i].frac, "closest goal first");
+  for (const n of next) { assert.ok(n.frac >= 0 && n.frac < 1); assert.ok(n.label && n.id && n.tier >= 1 && n.tier <= 3); }
+
+  // Each goal is the *next* tier above what badgesFor already grants.
+  const held = Object.fromEntries(badgesFor(row, ctx).concat(historyBadges(hist)).map((b) => [b.id, b.tier]));
+  for (const n of next) assert.equal(n.tier, (held[n.id] || 0) + 1, n.id + " goal is one tier above held");
+
+  // A maxed validator gets nothing to chase.
+  const maxed = { stake: 1e6, delegated: 3.9e6, delegatorCount: 500, uptime: 0.9999, feePct: 2, startTime: 0, endTime: 400 * 86400, remainingDays: 1 };
+  const maxNext = nextUp(maxed, { stakeRank: 1, total: 1000, rankStake: { 10: 5e5, 50: 4000, 100: 1000 } }, { seasons: 12, firstStart: 0 });
+  assert.deepEqual(maxNext, []);
+
+  // Without rankStake the heavyweight goal is skipped rather than guessed.
+  assert.ok(!nextUp(row, { stakeRank: 60 }, null).some((n) => n.id === "heavyweight"));
+  // Seasons goal names the exact count still needed.
+  const seasonsGoal = nextUp(row, ctx, hist).find((n) => n.id === "seasons");
+  assert.ok(seasonsGoal && seasonsGoal.need === TIERS.seasons[1] && /1 more season$/.test(seasonsGoal.label));
+});
+
+test("foldValidators exposes own stake at each heavyweight rank cut", () => {
+  const { stats } = foldValidators(VALIDATORS, SUPPLY_NAVAX, NOW);
+  assert.ok(stats.rankStake && typeof stats.rankStake === "object");
+  // Only two validators in the fixture: no rank-10/50/100 cut exists, so nothing is fabricated.
+  assert.deepEqual(stats.rankStake, {});
+  // With 100+ validators the cut is the own stake of the validator holding that rank.
+  const many = Array.from({ length: 120 }, (_, i) => Object.assign({}, VALIDATORS[0], { nodeID: "NodeID-" + i, stakeAmount: String((120 - i) * 1e12), delegators: [] }));
+  const big = foldValidators(many, SUPPLY_NAVAX, NOW).stats.rankStake;
+  assert.equal(big[10], 111000); assert.equal(big[50], 71000); assert.equal(big[100], 21000);
+});

@@ -145,6 +145,9 @@ export function foldValidators(validators, supplyNavax = null, now = Date.now())
   }
   stats.badgeCounts = badgeCounts;
   stats.badgeTotal = directory.length;
+  // Own stake held at each Heavyweight rank cut, so a profile can say "X AVAX to #50".
+  stats.rankStake = {};
+  for (const n of [10, 50, 100]) if (byStake[n - 1]) stats.rankStake[n] = byStake[n - 1].stake;
 
   return { stats, directory, byNode, asOf: now };
 }

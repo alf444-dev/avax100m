@@ -38,6 +38,14 @@ a{color:inherit;text-decoration:none}
 .c .big{color:var(--red)}
 .p .big{color:var(--ink)}
 .desc{margin-top:22px;color:var(--dim);font-size:13px;letter-spacing:.04em;max-width:320px;line-height:1.7}
+.pulse{margin-top:26px;min-height:18px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);
+  display:flex;gap:14px;justify-content:center;flex-wrap:wrap;opacity:0;transition:opacity .5s ease}
+.pulse.on{opacity:1}
+.pulse b{font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+.c .pulse b{color:var(--red)}
+.pulse .live{display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;vertical-align:middle;margin-right:6px;animation:blink 2.2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+@media(prefers-reduced-motion:reduce){.pulse .live{animation:none}.pane,.enter{transition:none}}
 .enter{margin-top:36px;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);
   border:1px solid var(--faint);padding:11px 20px;display:inline-block;transition:border-color .18s,color .18s}
 .pane:hover .enter,.pane:focus-visible .enter{border-color:currentColor;color:currentColor}
@@ -74,17 +82,72 @@ a{color:inherit;text-decoration:none}
     <div class="eyebrow">avalanche · c-chain</div>
     <div class="big">C&#8209;CHAIN</div>
     <div class="desc">the countdown to block 100,000,000 · wallet history · realized P&amp;L · survivor cards</div>
+    <div class="pulse" id="pulse-c" aria-live="off"></div>
     <span class="enter">enter →</span>
   </a>
   <a class="pane p" href="/p-chain" aria-label="Enter the P-Chain: live validators, staking and rewards">
     <div class="eyebrow">avalanche · p-chain</div>
     <div class="big">P&#8209;CHAIN</div>
     <div class="desc">who secures the network · every validator · staking, delegations &amp; rewards</div>
+    <div class="pulse" id="pulse-p" aria-live="off"></div>
     <span class="enter">enter →</span>
   </a>
 </main>
 
 <div class="foot">two chains · one page · no connect, just a read</div>
+
+<script>
+(function(){
+  // Live pulse under each door: the C-Chain block height ticking toward 100M,
+  // and the P-Chain validator set. Read-only, no keys, fails silently to the
+  // static landing if either source is unreachable.
+  var TARGET=100000000, RPC="https://api.avax.network/ext/bc/C/rpc";
+  var nf=function(n){ return Math.round(n).toLocaleString("en-US"); };
+  var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function show(id,html){ var el=document.getElementById(id); if(!el) return; el.innerHTML=html; el.classList.add("on"); }
+
+  // Count a number from its current displayed value to `to` over ~600ms.
+  function tween(el,to){
+    if(!el) return; var from=Number(el.getAttribute("data-v")||to); el.setAttribute("data-v",String(to));
+    if(reduce||!isFinite(from)||from===to){ el.textContent=nf(to); return; }
+    var t0=performance.now(), dur=600;
+    (function step(t){ var k=Math.min(1,(t-t0)/dur); k=1-Math.pow(1-k,3);
+      el.textContent=nf(from+(to-from)*k); if(k<1) requestAnimationFrame(step); })(t0);
+  }
+
+  // ---- c-chain: block height ----
+  function rpc(method,params){
+    return fetch(RPC,{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({jsonrpc:"2.0",id:1,method:method,params:params||[]})})
+      .then(function(r){ return r.json(); }).then(function(j){ if(j.error) throw j.error; return j.result; });
+  }
+  var lastBlock=null, lastAt=0, rate=0; // rate = blocks/sec, measured between polls
+  function pollC(){
+    rpc("eth_blockNumber").then(function(hex){
+      var n=parseInt(hex,16), now=Date.now();
+      if(lastBlock!=null && n>lastBlock && now>lastAt) rate=(n-lastBlock)/((now-lastAt)/1000);
+      lastBlock=n; lastAt=now;
+      if(!document.getElementById("blk")) show("pulse-c",'<span><span class="live"></span>block <b id="blk" data-v="'+n+'">'+nf(n)+'</b></span><span><b id="togo">'+nf(Math.max(0,TARGET-n))+'</b> to go</span>');
+      else { tween(document.getElementById("blk"),n); document.getElementById("togo").textContent=nf(Math.max(0,TARGET-n)); }
+    }).catch(function(){});
+  }
+  pollC(); setInterval(pollC, 6000);
+
+  // ---- p-chain: validator set ----
+  function pollP(tries){
+    fetch("/api/validators?limit=1").then(function(r){ return r.json(); }).then(function(j){
+      if(j.pending){ if((tries||0)<6) setTimeout(function(){ pollP((tries||0)+1); }, 3000); return; }
+      var s=j.stats; if(!s) return;
+      var stakeM=s.totalActive/1e6;
+      show("pulse-p",'<span><span class="live"></span><b>'+nf(s.validatorCount)+'</b> validators</span>'+
+        '<span><b>'+(stakeM>=1?stakeM.toFixed(1)+"M":nf(s.totalActive))+'</b> avax staked</span>'+
+        (s.stakingRatio?'<span><b>'+(s.stakingRatio*100).toFixed(1)+'%</b> of supply</span>':""));
+    }).catch(function(){});
+  }
+  pollP(0);
+})();
+</script>
 
 </body>
 </html>

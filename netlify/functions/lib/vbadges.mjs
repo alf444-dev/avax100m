@@ -9,6 +9,17 @@
 
 const CAP_MULT = 4; // Avalanche caps total stake at 5x own -> delegations <= 4x own
 
+// Tier thresholds, one source of truth for badgesFor + nextUp. Values are the
+// minimum to hold tier i/ii/iii (rank is "at most", everything else "at least").
+export const TIERS = {
+  flawless: [0.99, 0.995, 0.999],     // uptime fraction
+  heavyweight: [100, 50, 10],         // stake rank (lower is better)
+  magnet: [25, 100, 250],             // delegators
+  trusted: [0.50, 0.75, 0.90],        // delegation cap filled
+  seasons: [2, 5, 10],                // completed + current seasons
+  elder: [180, 365, 730]              // days since first validation
+};
+
 /**
  * Derive the on-chain badges a validator row has earned.
  * @param row folded directory row: { stake, delegated, delegatorCount, uptime(0..1),
@@ -27,9 +38,9 @@ export function badgesFor(row, ctx = {}) {
 
   if (Number.isFinite(up)) {
     const pctStr = (up * 100).toFixed(2) + "%";
-    if (up >= 0.999) push("flawless", 3, "uptime <b>" + pctStr + "</b>");
-    else if (up >= 0.995) push("flawless", 2, "uptime <b>" + pctStr + "</b>");
-    else if (up >= 0.99) push("flawless", 1, "uptime <b>" + pctStr + "</b>");
+    if (up >= TIERS.flawless[2]) push("flawless", 3, "uptime <b>" + pctStr + "</b>");
+    else if (up >= TIERS.flawless[1]) push("flawless", 2, "uptime <b>" + pctStr + "</b>");
+    else if (up >= TIERS.flawless[0]) push("flawless", 1, "uptime <b>" + pctStr + "</b>");
   }
   if (rank) {
     if (rank <= 10) push("heavyweight", 3, "top <b>10</b> by stake (#" + rank + ")");
@@ -80,6 +91,87 @@ export function historyBadges(hist, foundingWindow = null, now = Date.now()) {
   }
   return out;
 }
+
+/**
+ * The nearest unearned badge tiers, with progress toward each. Pure, no
+ * network. Feeds the "next up" strip on the card so a badge shelf reads as a
+ * goal list instead of a trophy case.
+ * @param row folded row (see badgesFor)
+ * @param ctx { stakeRank, total, rankStake: {10,50,100 -> own stake (AVAX) held at that rank} }
+ * @param hist { seasons, firstStart } from foldHistory (optional)
+ * @returns [{ id, tier, frac(0..1), have, need, unit, label }] sorted closest-first, max 3
+ */
+export function nextUp(row, ctx = {}, hist = null, now = Date.now()) {
+  const out = [];
+  const add = (id, tier, frac, have, need, unit, label) => {
+    if (!Number.isFinite(frac)) return;
+    out.push({ id, tier, frac: Math.max(0, Math.min(0.999, frac)), have, need, unit, label });
+  };
+  const stake = row.stake, deleg = row.delegated, dcount = row.delegatorCount, up = row.uptime;
+  const capFill = stake > 0 ? deleg / (stake * CAP_MULT) : 0;
+  const rank = ctx.stakeRank;
+
+  // Next tier index for a "more is better" metric; null when tier iii is held.
+  const nextIdx = (arr, v, lowerBetter) => {
+    for (let i = 0; i < arr.length; i++) if (lowerBetter ? !(v <= arr[i]) : !(v >= arr[i])) return i;
+    return null;
+  };
+
+  if (Number.isFinite(up)) {
+    const i = nextIdx(TIERS.flawless, up);
+    if (i != null) {
+      const need = TIERS.flawless[i], floor = i === 0 ? 0.95 : TIERS.flawless[i - 1];
+      const gap = ((need - up) * 100);
+      add("flawless", i + 1, (up - floor) / (need - floor), up * 100, need * 100, "% uptime",
+        gap.toFixed(2) + "% more uptime");
+    }
+  }
+  if (rank && ctx.rankStake) {
+    const i = nextIdx(TIERS.heavyweight, rank, true);
+    if (i != null) {
+      const needRank = TIERS.heavyweight[i], needStake = ctx.rankStake[needRank];
+      if (Number.isFinite(needStake) && needStake > stake) {
+        add("heavyweight", i + 1, stake / needStake, stake, needStake, " AVAX own stake",
+          fmtN(needStake - stake) + " AVAX more own stake for #" + needRank);
+      }
+    }
+  }
+  if (Number.isFinite(dcount)) {
+    const i = nextIdx(TIERS.magnet, dcount);
+    if (i != null) {
+      const need = TIERS.magnet[i];
+      add("magnet", i + 1, dcount / need, dcount, need, " delegators", (need - dcount) + " more delegator" + (need - dcount === 1 ? "" : "s"));
+    }
+  }
+  if (stake > 0) {
+    const i = nextIdx(TIERS.trusted, capFill);
+    if (i != null) {
+      const need = TIERS.trusted[i];
+      const avaxGap = need * stake * CAP_MULT - deleg;
+      add("trusted", i + 1, capFill / need, Math.round(capFill * 100), Math.round(need * 100), "% of cap",
+        fmtN(avaxGap) + " AVAX more delegated");
+    }
+  }
+  if (hist) {
+    const s = hist.seasons || 0;
+    const i = nextIdx(TIERS.seasons, s);
+    if (i != null) {
+      const need = TIERS.seasons[i];
+      add("seasons", i + 1, s / need, s, need, " seasons", (need - s) + " more season" + (need - s === 1 ? "" : "s"));
+    }
+    if (hist.firstStart) {
+      const days = (now / 1000 - hist.firstStart) / 86400;
+      const j = nextIdx(TIERS.elder, days);
+      if (j != null) {
+        const need = TIERS.elder[j];
+        add("elder", j + 1, days / need, Math.round(days), need, " days", Math.ceil(need - days) + " more day" + (Math.ceil(need - days) === 1 ? "" : "s"));
+      }
+    }
+  }
+  return out.sort((a, b) => b.frac - a.frac).slice(0, 3);
+}
+
+function fmtN(n) { return Math.round(n).toLocaleString("en-US"); }
 
 export const VNAMES = {
   flawless: "Flawless",

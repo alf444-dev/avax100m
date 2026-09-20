@@ -5,7 +5,7 @@ import {
   foldValidators,
   queryDirectory
 } from "./lib/pchain.mjs";
-import { VNAMES, VGLYPH, VGRANTED, historyBadges } from "./lib/vbadges.mjs";
+import { VNAMES, VGLYPH, VGRANTED, historyBadges, nextUp } from "./lib/vbadges.mjs";
 import { fetchCompletedValidations, foldHistory } from "./lib/pchain-history.mjs";
 import { foldCohort, TIER_LABEL, UPTIME_GATE } from "./lib/cohort.mjs";
 
@@ -159,6 +159,7 @@ async function buildNode(snap, key) {
     rank: detail.stakeRank || null,
     count: snap.stats.validatorCount,
     badges: badges.concat(historyBadges(history)),
+    next: nextUp(detail, { stakeRank: detail.stakeRank, total, rankStake: snap.stats.rankStake }, history),
     history,
     profile
   };
@@ -243,6 +244,15 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .btile .tr{font-size:9px;color:var(--dim);letter-spacing:.06em;display:block;margin:2px 0 5px}
 .btile .tv{font-size:10px;color:var(--dim);line-height:1.5;display:block}
 .btile .tv b{color:var(--ink)}
+.vc-next{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--faint);border-bottom:1px solid var(--faint)}
+.vc-next .n{background:var(--bg);padding:10px 14px;min-width:0}
+.vc-next .nk{font-size:9px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase;display:flex;justify-content:space-between;gap:8px}
+.vc-next .nk b{color:var(--ink);font-weight:700;letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vc-next .nb{height:4px;background:var(--faint);margin:7px 0 6px}
+.vc-next .nb span{display:block;height:100%;background:var(--red);transition:width .6s ease}
+.vc-next .nv{font-size:10px;color:var(--dim);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vc-next .nv b{color:var(--ink)}
+@media(max-width:640px){.vc-next{grid-template-columns:1fr}}
 .vc-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--faint)}
 .vc-strip .s{background:var(--bg);padding:12px 14px}
 .vc-strip .s .k{font-size:9px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
@@ -290,6 +300,13 @@ var shortNodeOf = (id) => { id = String(id || ""); return id.length > 20 ? id.sl
 function hashStrS(s) { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function identiconOf(id, size) { size = size || 56; const h = hashStrS(id), cells = 5, cs = size / cells, ce = Math.ceil(cs); let rects = ""; for (let y = 0; y < cells; y++) for (let xx = 0; xx < 3; xx++) if ((h >>> ((y * 3 + xx) % 29)) & 1) { const mm = cells - 1 - xx; rects += '<rect x="' + (xx * cs) + '" y="' + (y * cs) + '" width="' + ce + '" height="' + ce + '"/>'; if (mm !== xx) rects += '<rect x="' + (mm * cs) + '" y="' + (y * cs) + '" width="' + ce + '" height="' + ce + '"/>'; } return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '"><rect width="' + size + '" height="' + size + '" fill="#141414"/><g fill="var(--red)">' + rects + '</g></svg>'; }
 function badgeTileS(b, i) { const name = VNAMES[b.id] || b.id, glyph = VGLYPH[b.id] || "", roman = ["", "i", "ii", "iii"][b.tier] || ""; const rar = b.rarity ? ('<span class="tr">' + nfmt(b.rarity.count) + " of " + nfmt(b.rarity.total) + " validators</span>") : ""; return '<span class="btile' + (i === 0 ? " medal" : "") + '" tabindex="0">' + glyph + (roman ? '<span class="rn">' + roman + '</span>' : '') + '<span class="tip"><span class="tl">badge</span><span class="tn">' + esc2(name) + '</span>' + rar + '<span class="tv">' + b.ev + '</span></span></span>'; }
+function nextStripS(next) {
+  if (!next || !next.length) return "";
+  const roman = ["", "i", "ii", "iii"];
+  return '<div class="vc-next">' + next.map((n) => '<div class="n"><div class="nk"><span>next up</span><b>' + esc2((VNAMES[n.id] || n.id) + " " + (roman[n.tier] || "")) + '</b></div>'
+    + '<div class="nb"><span style="width:' + (n.frac * 100).toFixed(1) + '%"></span></div>'
+    + '<div class="nv"><b>' + esc2(n.label) + '</b> \xB7 ' + Math.round(n.frac * 100) + '% there</div></div>').join("") + '</div>';
+}
 function grantTileS(id) { const g = VGRANTED[id]; if (!g) return ""; return '<span class="btile grant" tabindex="0"><span class="emo">' + g.emoji + '</span><span class="tip"><span class="tl">awarded</span><span class="tn">' + esc2(g.name) + '</span><span class="tv">' + esc2(g.ev) + '</span></span></span>'; }
 
 function serverCard(nd, px) {
@@ -319,6 +336,7 @@ function serverCard(nd, px) {
     + '<button class="copy" id="vcopy">copy</button></div></div></div>';
   const tiles = badges.map(badgeTileS).join("") + granted.map(grantTileS).join("");
   h += '<div class="vc-badges">' + (tiles || '<span class="empty">no badges yet</span>') + '</div>';
+  h += nextStripS(nd.next);
   h += '<div class="vc-strip">'
     + '<div class="s"><div class="k">uptime</div><div class="v">' + (d.uptime != null ? pctOf(d.uptime, 2) : "—") + '</div></div>'
     + '<div class="s"><div class="k">delegation fee</div><div class="v">' + (d.feePct != null ? nfmt(d.feePct, 2) + "%" : "—") + '</div></div>'
@@ -865,6 +883,15 @@ function page(site) {
     return '<span class="btile'+(i===0?" medal":"")+'" tabindex="0">'+glyph+(roman?'<span class="rn">'+roman+'</span>':'')+
       '<span class="tip"><span class="tl">badge</span><span class="tn">'+esc(name)+'</span>'+rar+'<span class="tv">'+b.ev+'</span></span></span>';
   }
+  function nextStrip(next){
+    if(!next||!next.length) return "";
+    var roman=["","i","ii","iii"];
+    return '<div class="vc-next">'+next.map(function(n){
+      return '<div class="n"><div class="nk"><span>next up</span><b>'+esc((VNAMES[n.id]||n.id)+" "+(roman[n.tier]||""))+'</b></div>'+
+        '<div class="nb"><span style="width:'+(n.frac*100).toFixed(1)+'%"></span></div>'+
+        '<div class="nv"><b>'+esc(n.label)+'</b> \xB7 '+Math.round(n.frac*100)+'% there</div></div>';
+    }).join("")+'</div>';
+  }
   function grantTile(id){
     var g=VGRANTED[id]; if(!g) return "";
     return '<span class="btile grant" tabindex="0"><span class="emo">'+g.emoji+'</span>'+
@@ -898,6 +925,7 @@ function page(site) {
 
     var tiles=badges.map(badgeTile).join("")+granted.map(grantTile).join("");
     h+='<div class="vc-badges">'+(tiles||'<span class="empty">no badges yet</span>')+'</div>';
+    h+=nextStrip(meta&&meta.next);
 
     h+='<div class="vc-strip">'+
       '<div class="s"><div class="k">uptime</div><div class="v">'+(d.uptime!=null?pct(d.uptime,2):"—")+'</div></div>'+
