@@ -6,7 +6,7 @@ import {
   queryDirectory
 } from "./lib/pchain.mjs";
 import { VNAMES, VGLYPH, VGRANTED, historyBadges, nextUp } from "./lib/vbadges.mjs";
-import { captureOf, pickBase, pruneIndex, deltaFor, foldMovers, dayKey } from "./lib/movers.mjs";
+import { captureOf, pickBase, pruneIndex, deltaFor, foldMovers, dayKey, foldUnlocks } from "./lib/movers.mjs";
 import { compareNodes, handleOf, topPct } from "./lib/compare.mjs";
 import { fetchCompletedValidations, foldHistory } from "./lib/pchain-history.mjs";
 import { foldCohort, TIER_LABEL, UPTIME_GATE } from "./lib/cohort.mjs";
@@ -95,14 +95,27 @@ async function getSnapshot() {
 }
 
 // ---- weekly movers: one compact capture per UTC day, diffed against ~7 days back ----
-var MOVERS_INDEX = "movers/index", MOVERS_DAY = "movers/day/", MOVERS_TTL = 5 * 60 * 1e3;
-var _base = { day: null, t: 0, data: null };
+var MOVERS_INDEX = "movers/index", MOVERS_DAY = "movers/day/", MOVERS_TTL = 5 * 60 * 1e3, UNLOCKS_KEY = "unlocks/v1";
+var _base = { day: null, t: 0, data: null }, _unlocks = { t: 0, data: null };
+// Permanent unlock ledger (see foldUnlocks). Cached briefly per instance.
+async function getUnlocks() {
+  const store = storeOr("validators");
+  if (!store) return null;
+  if (_unlocks.data && Date.now() - _unlocks.t < MOVERS_TTL) return _unlocks.data;
+  const data = await store.get(UNLOCKS_KEY, { type: "json" }).catch(() => null);
+  _unlocks = { t: Date.now(), data };
+  return data;
+}
 // First fresh snapshot of a UTC day becomes that day's capture; the index keeps the last KEEP_DAYS.
 async function recordCapture(store, snap) {
   const today = dayKey();
   const idx = (await store.get(MOVERS_INDEX, { type: "json" }).catch(() => null)) || [];
   if (idx.includes(today)) return;
-  await store.set(MOVERS_DAY + today, JSON.stringify(captureOf(snap)));
+  const cap = captureOf(snap);
+  await store.set(MOVERS_DAY + today, JSON.stringify(cap));
+  // Roll the permanent unlock ledger forward with the same capture (once a day).
+  const prevU = await store.get(UNLOCKS_KEY, { type: "json" }).catch(() => null);
+  await store.set(UNLOCKS_KEY, JSON.stringify(foldUnlocks(prevU, cap, cap.t))).catch(() => {});
   const next = pruneIndex(idx.concat(today));
   await store.set(MOVERS_INDEX, JSON.stringify(next));
   for (const d of idx) if (!next.includes(d)) await store.delete(MOVERS_DAY + d).catch(() => {});
@@ -199,12 +212,15 @@ async function buildNode(snap, key) {
   const badges = (detail.badges || [])
     .map((b) => Object.assign({}, b, { rarity: { count: (snap.stats.badgeCounts || {})[b.id] || 0, total } }))
     .sort((a, b) => (a.rarity.count - b.rarity.count) || (b.tier - a.tier));
-  let history = null, base = null;
+  let history = null, base = null, unlocks = null;
   try { history = await getHistory(key, detail); } catch {}
   try { base = await getBase(); } catch {}
+  try { unlocks = await getUnlocks(); } catch {}
   const profile = await readProfile(key);
   const delta = (base && base.byNode && base.byNode[key]) ? deltaFor(detail, base.byNode[key], badges, base) : null;
   if (delta && delta.days >= 1) for (const b of badges) if (delta.unlocked.some((u) => u.id === b.id && u.tier === b.tier)) b.fresh = true;
+  const led = (unlocks && unlocks[key]) || null;
+  if (led) for (const b of badges) { const u = led[b.id]; if (u && u.tier === b.tier && u.t) { b.since = u.t; if (Date.now() - u.t < 7 * 86400e3) b.fresh = true; } }
   return {
     node: detail,
     rank: detail.stakeRank || null,
@@ -407,7 +423,7 @@ function durOf(days) { days = Math.max(0, Math.round(days)); if (days < 1) retur
 var shortNodeOf = (id) => { id = String(id || ""); return id.length > 20 ? id.slice(0, 13) + "…" + id.slice(-4) : id; };
 function hashStrS(s) { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function identiconOf(id, size) { size = size || 56; const h = hashStrS(id), cells = 5, cs = size / cells, ce = Math.ceil(cs); let rects = ""; for (let y = 0; y < cells; y++) for (let xx = 0; xx < 3; xx++) if ((h >>> ((y * 3 + xx) % 29)) & 1) { const mm = cells - 1 - xx; rects += '<rect x="' + (xx * cs) + '" y="' + (y * cs) + '" width="' + ce + '" height="' + ce + '"/>'; if (mm !== xx) rects += '<rect x="' + (mm * cs) + '" y="' + (y * cs) + '" width="' + ce + '" height="' + ce + '"/>'; } return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '"><rect width="' + size + '" height="' + size + '" fill="#141414"/><g fill="var(--red)">' + rects + '</g></svg>'; }
-function badgeTileS(b, i) { const name = VNAMES[b.id] || b.id, glyph = VGLYPH[b.id] || "", roman = ["", "i", "ii", "iii"][b.tier] || ""; const rar = b.rarity ? ('<span class="tr">' + nfmt(b.rarity.count) + " of " + nfmt(b.rarity.total) + " validators</span>") : ""; return '<span class="btile' + (i === 0 ? " medal" : "") + (b.fresh ? " fresh" : "") + '" tabindex="0">' + glyph + (roman ? '<span class="rn">' + roman + '</span>' : '') + '<span class="tip"><span class="tl">badge</span><span class="tn">' + esc2(name) + '</span>' + rar + '<span class="tv">' + b.ev + '</span></span></span>'; }
+function badgeTileS(b, i) { const name = VNAMES[b.id] || b.id, glyph = VGLYPH[b.id] || "", roman = ["", "i", "ii", "iii"][b.tier] || ""; const rar = (b.rarity ? ('<span class="tr">' + nfmt(b.rarity.count) + " of " + nfmt(b.rarity.total) + " validators" + (b.since ? " \xB7 unlocked " + new Date(b.since).toISOString().slice(0, 10) : "") + "</span>") : (b.since ? '<span class="tr">unlocked ' + new Date(b.since).toISOString().slice(0, 10) + '</span>' : "")); return '<span class="btile' + (i === 0 ? " medal" : "") + (b.fresh ? " fresh" : "") + '" tabindex="0">' + glyph + (roman ? '<span class="rn">' + roman + '</span>' : '') + '<span class="tip"><span class="tl">badge</span><span class="tn">' + esc2(name) + '</span>' + rar + '<span class="tv">' + b.ev + '</span></span></span>'; }
 function nextStripS(next) {
   if (!next || !next.length) return "";
   const roman = ["", "i", "ii", "iii"];
@@ -1147,7 +1163,8 @@ function page(site) {
   }
   function badgeTile(b,i){
     var name=VNAMES[b.id]||b.id, glyph=VGLYPH[b.id]||"", roman=["","i","ii","iii"][b.tier]||"";
-    var rar=b.rarity? ('<span class="tr">'+nf(b.rarity.count)+" of "+nf(b.rarity.total)+" validators</span>") : "";
+    var since=b.since? new Date(b.since).toISOString().slice(0,10) : null;
+    var rar=b.rarity? ('<span class="tr">'+nf(b.rarity.count)+" of "+nf(b.rarity.total)+" validators"+(since?" \xB7 unlocked "+since:"")+"</span>") : (since?'<span class="tr">unlocked '+since+'</span>':"");
     return '<span class="btile'+(i===0?" medal":"")+(b.fresh?" fresh":"")+'" tabindex="0">'+glyph+(roman?'<span class="rn">'+roman+'</span>':'')+
       '<span class="tip"><span class="tl">badge</span><span class="tn">'+esc(name)+'</span>'+rar+'<span class="tv">'+b.ev+'</span></span></span>';
   }

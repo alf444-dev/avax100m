@@ -104,3 +104,29 @@ export function foldMovers(snap, base, now = Date.now()) {
   out.quiet = !out.joined.count && !out.left.count && !out.delegatorGainers.length && !out.stakeGainers.length && !out.rankClimbers.length && !out.unlocked.length;
   return out;
 }
+
+/**
+ * Permanent badge unlock ledger: { nodeID: { badgeId: { tier, t } } }. Folded
+ * once a day from the daily capture. `t` is the capture time the tier first
+ * appeared; null means "held since before tracking began" (the seed run), so
+ * nothing is ever shown as unlocked on a day it was not.
+ * Nodes absent from the capture are dropped; a tier that fell keeps its
+ * original date so a dip and recovery is not a fresh unlock.
+ */
+export function foldUnlocks(prev, capture, now = Date.now()) {
+  const seed = !prev;
+  const out = {};
+  for (const [id, entry] of Object.entries((capture && capture.byNode) || {})) {
+    const tiers = entry[5] || {};
+    const was = (prev && prev[id]) || {};
+    const rec = {};
+    for (const [bid, tier] of Object.entries(tiers)) {
+      const w = was[bid];
+      if (!w) rec[bid] = { tier, t: seed ? null : now };
+      else if (tier > w.tier) rec[bid] = { tier, t: now };
+      else rec[bid] = { tier, t: w.t == null ? null : w.t };
+    }
+    out[id] = rec;
+  }
+  return out;
+}

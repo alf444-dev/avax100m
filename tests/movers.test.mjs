@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { captureOf, pickBase, pruneIndex, deltaFor, foldMovers, dayKey, KEEP_DAYS } from "../netlify/functions/lib/movers.mjs";
+import { captureOf, pickBase, pruneIndex, deltaFor, foldMovers, dayKey, KEEP_DAYS, foldUnlocks } from "../netlify/functions/lib/movers.mjs";
 
 const DAY = 86400e3;
 const NOW = Date.UTC(2026, 8, 28, 12); // 2026-09-28T12:00Z
@@ -65,4 +65,20 @@ test("foldMovers ranks gainers, counts joins/leaves, flags a quiet week", () => 
 
   const same = foldMovers(snapOf([row("A", { stakeRank: 10 })]), { t: NOW - DAY, byNode: { A: [2000, 0, 0, 0.99, 10, {}] } }, NOW);
   assert.equal(same.quiet, true); assert.equal(same.days, 1);
+});
+
+test("foldUnlocks seeds with null dates, then stamps only real upgrades", () => {
+  const cap = (tiersByNode) => ({ t: NOW, byNode: Object.fromEntries(Object.entries(tiersByNode).map(([id, t]) => [id, [1, 0, 0, 0.99, 1, t]])) });
+  const seed = foldUnlocks(null, cap({ A: { flawless: 1, solo: 0 }, B: { magnet: 2 } }), NOW - 3 * DAY);
+  assert.deepEqual(seed.A, { flawless: { tier: 1, t: null }, solo: { tier: 0, t: null } });   // pre-tracking: no date claimed
+  const later = foldUnlocks(seed, cap({ A: { flawless: 2, solo: 0, generous: 0 }, C: { trusted: 1 } }), NOW);
+  assert.deepEqual(later.A.flawless, { tier: 2, t: NOW });      // upgraded: stamped
+  assert.deepEqual(later.A.solo, { tier: 0, t: null });         // unchanged: stays undated
+  assert.deepEqual(later.A.generous, { tier: 0, t: NOW });      // new badge after seed: stamped
+  assert.deepEqual(later.C, { trusted: { tier: 1, t: NOW } });  // new node after seed: stamped
+  assert.equal(later.B, undefined);                              // left the set: dropped
+  const dip = foldUnlocks(later, cap({ A: { flawless: 1, solo: 0, generous: 0 } }), NOW + DAY);
+  assert.deepEqual(dip.A.flawless, { tier: 1, t: NOW });        // fell a tier: keeps its date
+  const back = foldUnlocks(dip, cap({ A: { flawless: 2, solo: 0, generous: 0 } }), NOW + 2 * DAY);
+  assert.deepEqual(back.A.flawless, { tier: 2, t: NOW + 2 * DAY }); // regained: that is a new unlock
 });

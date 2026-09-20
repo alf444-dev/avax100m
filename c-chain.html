@@ -143,6 +143,35 @@
   footer .tag{letter-spacing:.14em;text-transform:uppercase}
   footer a{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--faint)}
   footer a:hover{color:var(--red);border-color:var(--red)}
+  /* the daily call */
+  .call-box{border:1px solid var(--faint);max-width:720px}
+  .call-top{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--faint);border-bottom:1px solid var(--faint)}
+  .call-top .stat .v{font-size:22px}
+  .call-top .stat .v.red{color:var(--red)}
+  .call-row{display:flex;gap:0;padding:18px 16px;flex-wrap:wrap}
+  .call-row input{width:120px;background:transparent;border:1px solid var(--faint);border-right:none;color:var(--ink);font-family:var(--mono);font-size:16px;font-weight:700;padding:12px 14px;outline:none;text-align:center;-moz-appearance:textfield}
+  .call-row input::-webkit-outer-spin-button,.call-row input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .call-row input:focus{border-color:var(--dim)}
+  .call-row .lbl{align-self:center;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-left:14px}
+  #callbtn{background:var(--red);color:#000;border:1px solid var(--red);font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:.12em;padding:12px 20px;cursor:pointer;text-transform:uppercase}
+  #callbtn:hover{background:var(--ink);border-color:var(--ink)}
+  #callbtn:disabled{background:var(--faint);border-color:var(--faint);color:var(--dim);cursor:default}
+  .call-live{padding:0 16px 18px;display:none}
+  .call-live .meter{height:8px;border:1px solid var(--faint);position:relative;margin:6px 0 12px}
+  .call-live .meter i{position:absolute;inset:1px auto 1px 1px;background:var(--red);width:0%}
+  .call-live .meter b{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+  .call-live .nums{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+  .call-live .nums b{color:var(--ink);font-size:16px}
+  .call-live .nums .t{color:var(--red)}
+  .call-res{padding:16px;border-top:1px solid var(--faint);display:none}
+  .call-res .big{font-size:22px;font-weight:700}
+  .call-res .big.hit{color:var(--red)}
+  .call-res .line{font-size:12px;color:var(--dim);margin-top:6px;letter-spacing:.04em}
+  .call-res .acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .call-res .acts button,.call-res .acts a{background:transparent;border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:9px 14px;cursor:pointer;text-decoration:none}
+  .call-res .acts button:hover,.call-res .acts a:hover{border-color:var(--red);color:var(--red)}
+  #callmsg{margin-top:12px;font-size:12px;color:var(--dim);min-height:1.5em}
+  @media(max-width:560px){.call-top{grid-template-columns:1fr 1fr 1fr}.call-top .stat{padding:12px 10px}.call-top .stat .v{font-size:16px}}
 </style>
 </head>
 <body>
@@ -180,6 +209,34 @@
         <div class="stat"><div class="k">days since genesis</div><div class="v" id="gendays">—</div></div>
       </div>
     </div>
+
+    <section id="call">
+      <h2>the daily call</h2>
+      <p class="sub">How many blocks will the C-Chain produce in the next 60 seconds? Call it, then watch it happen live. Within 3 counts as a hit. One call a day counts toward your streak; the rest is practice.</p>
+      <div class="call-box">
+        <div class="call-top">
+          <div class="stat"><div class="k">streak</div><div class="v red" id="call-streak">0</div></div>
+          <div class="stat"><div class="k">best streak</div><div class="v" id="call-best">0</div></div>
+          <div class="stat"><div class="k">long-run pace</div><div class="v" id="call-pace">— <small>/min</small></div></div>
+        </div>
+        <div class="call-row">
+          <input id="callin" type="number" inputmode="numeric" min="0" max="999" placeholder="44" aria-label="Your call: blocks in the next 60 seconds">
+          <button id="callbtn">call it</button>
+          <span class="lbl" id="call-today">today's call is open</span>
+        </div>
+        <div class="call-live" id="call-live">
+          <div class="nums"><span>started at <b id="call-start">—</b></span><span class="t" id="call-left">60s</span><span>so far <b id="call-sofar">0</b></span></div>
+          <div class="meter"><i id="call-fill"></i><b id="call-mark" style="display:none"></b></div>
+          <div class="nums"><span>your call <b id="call-guess">—</b></span><span>pace <b id="call-rate">—</b>/min</span></div>
+        </div>
+        <div class="call-res" id="call-res">
+          <div class="big" id="call-verdict">—</div>
+          <div class="line" id="call-line"></div>
+          <div class="acts"><button id="call-again">call again</button><a id="call-share" href="#" target="_blank" rel="noopener">share on x</a></div>
+        </div>
+      </div>
+      <div id="callmsg" role="status"></div>
+    </section>
 
     <section id="checker">
       <h2>check wallet</h2>
@@ -301,6 +358,10 @@
       <details style="border-bottom:1px solid var(--faint);padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">what is block 100,000,000?</summary>
         <p style="color:var(--dim);margin:10px 0 0">the avalanche c-chain's hundred-millionth block. this page counts down to it live, estimating arrival from the current block rate. when it lands, this page becomes the record that it did.</p>
+      </details>
+      <details style="border-bottom:1px solid var(--faint);padding:14px 0">
+        <summary style="cursor:pointer;font-weight:700">what is the daily call?</summary>
+        <p style="color:var(--dim);margin:10px 0 0">a 60-second game on the live block feed. call how many blocks the c-chain will produce in the next minute, then watch it count. within 3 is a hit. one call per utc day counts toward a streak; extra calls are practice. the streak lives only in your browser &mdash; nothing is sent anywhere.</p>
       </details>
       <details style="border-bottom:1px solid var(--faint);padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">what does the wallet checker do?</summary>
@@ -878,6 +939,77 @@
     inp.value = window.PREFILL;
     check();
   }
+})();
+</script>
+<script>
+(function(){
+  // The daily call — a 60-second live game on top of the block feed. Everything
+  // stays in this browser (localStorage); nothing is sent anywhere.
+  var RPC="https://api.avax.network/ext/bc/C/rpc", KEY="cc-call", DUR=60, TOL=3;
+  var $=function(id){return document.getElementById(id);};
+  function rpc(m,p){ return fetch(RPC,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:1,method:m,params:p||[]})}).then(function(r){return r.json();}).then(function(j){ if(!j||!j.result) throw 0; return parseInt(j.result,16); }); }
+  function day(){ return new Date().toISOString().slice(0,10); }
+  function load(){ try{ var v=JSON.parse(localStorage.getItem(KEY)||"{}"); return v&&typeof v==="object"?v:{}; }catch(e){ return {}; } }
+  function save(v){ try{ localStorage.setItem(KEY,JSON.stringify(v)); }catch(e){} }
+  function yesterday(d){ var t=new Date(d+"T00:00:00Z"); t.setUTCDate(t.getUTCDate()-1); return t.toISOString().slice(0,10); }
+  var st=load();
+  // a streak only survives if yesterday (or today) was a hit
+  if(st.lastHit && st.lastHit!==day() && st.lastHit!==yesterday(day())) st.streak=0;
+  function paintTop(){
+    $("call-streak").textContent=st.streak||0; $("call-best").textContent=st.best||0;
+    var open=st.lastDay!==day();
+    $("call-today").textContent= open ? "today's call is open" : (st.lastResult==="hit" ? "today: hit \u2014 practice mode" : "today: miss \u2014 practice mode");
+    var bt=$("blocktime"); var sec=bt? parseFloat(bt.textContent) : NaN;
+    if(isFinite(sec)&&sec>0){ var pace=Math.round(60/sec); $("call-pace").innerHTML=pace+' <small>/min</small>'; $("callin").placeholder=pace; }
+  }
+  paintTop(); setInterval(paintTop,5000);
+
+  var running=false;
+  function run(){
+    if(running) return;
+    var g=parseInt($("callin").value,10);
+    if(!isFinite(g)||g<0){ $("callmsg").textContent="enter a number of blocks."; return; }
+    running=true; $("callbtn").disabled=true; $("callmsg").textContent="reading the chain\u2026";
+    rpc("eth_blockNumber").then(function(start){
+      var counted = st.lastDay!==day();
+      $("callmsg").textContent= counted ? "this one counts." : "practice \u2014 today's call is already in.";
+      $("call-res").style.display="none"; $("call-live").style.display="block";
+      $("call-start").textContent=start.toLocaleString("en-US"); $("call-guess").textContent=g; $("call-sofar").textContent="0";
+      var scale=Math.max(g*1.6, 20); $("call-mark").style.display="block"; $("call-mark").style.left=Math.min(100,g/scale*100)+"%";
+      var t0=Date.now(), latest=start, done=false;
+      function tick(){
+        var el=(Date.now()-t0)/1000, left=Math.max(0,DUR-el);
+        $("call-left").textContent=Math.ceil(left)+"s";
+        var n=latest-start; $("call-sofar").textContent=n; $("call-fill").style.width=Math.min(100,n/scale*100)+"%";
+        $("call-rate").textContent= el>3 ? Math.round(n/el*60) : "\u2014";
+        if(left<=0 && !done){ done=true; finish(start, g, counted); }
+      }
+      var ui=setInterval(tick,250);
+      var poll=setInterval(function(){ rpc("eth_blockNumber").then(function(b){ if(b>latest) latest=b; }).catch(function(){}); },2000);
+      function finish(start,g,counted){
+        clearInterval(ui); clearInterval(poll);
+        // one last authoritative read, then score
+        rpc("eth_blockNumber").catch(function(){return latest;}).then(function(end){
+          var actual=Math.max(0,end-start), diff=Math.abs(actual-g), hit=diff<=TOL, perfect=diff===0;
+          $("call-live").style.display="none"; $("call-res").style.display="block";
+          var v=$("call-verdict"); v.className="big"+(hit?" hit":"");
+          v.textContent= perfect ? "PERFECT \u2014 "+actual+" blocks" : hit ? "HIT \u2014 "+actual+" blocks, you said "+g : "MISS \u2014 "+actual+" blocks, you said "+g;
+          if(counted){
+            st.lastDay=day(); st.lastResult=hit?"hit":"miss";
+            if(hit){ st.streak=(st.streak||0)+1; st.lastHit=day(); st.best=Math.max(st.best||0, st.streak); } else { st.streak=0; }
+            st.calls=(st.calls||0)+1; st.hits=(st.hits||0)+(hit?1:0); save(st);
+          }
+          $("call-line").textContent=(counted? (hit? "streak "+st.streak+(st.streak===st.best?" \u00B7 personal best":"") : "streak reset") : "practice \u2014 not counted")+" \u00B7 "+(st.hits||0)+"/"+(st.calls||0)+" lifetime";
+          var txt=(perfect?"PERFECT call":"I called "+g)+" \u2014 the C-Chain did "+actual+" blocks in 60s."+(st.streak? " streak "+st.streak+".":"")+" try yours \u2192 avax100m.xyz/c-chain#call";
+          $("call-share").href="https://twitter.com/intent/tweet?text="+encodeURIComponent(txt);
+          paintTop(); running=false; $("callbtn").disabled=false; $("callmsg").textContent="";
+        });
+      }
+    }).catch(function(){ running=false; $("callbtn").disabled=false; $("callmsg").textContent="could not reach the c-chain rpc \u2014 try again."; });
+  }
+  $("callbtn").onclick=run;
+  $("callin").addEventListener("keydown",function(e){ if(e.key==="Enter") run(); });
+  $("call-again").onclick=function(){ $("call-res").style.display="none"; $("callin").focus(); };
 })();
 </script>
 </body>
