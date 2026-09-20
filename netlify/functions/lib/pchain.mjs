@@ -145,6 +145,25 @@ export function foldValidators(validators, supplyNavax = null, now = Date.now())
   }
   stats.badgeCounts = badgeCounts;
   stats.badgeTotal = directory.length;
+  // Percentiles: the share of the set each validator beats on a metric, so a
+  // card can say "top 9% uptime" instead of a bare number. byNode only (the
+  // directory listing stays lean).
+  const PCTL = ["uptime", "stake", "delegated", "delegatorCount", "estApr"];
+  for (const key of PCTL) {
+    const vals = directory.map((r) => r[key]).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+    const n = vals.length;
+    if (n < 2) continue;
+    // count of values strictly below v, via binary search on the sorted list
+    const below = (v) => { let lo = 0, hi = n; while (lo < hi) { const mid = (lo + hi) >> 1; if (vals[mid] < v) lo = mid + 1; else hi = mid; } return lo; };
+    for (const r of directory) {
+      const v = r[key];
+      if (!Number.isFinite(v) || !byNode[r.nodeID]) continue;
+      if (!byNode[r.nodeID].pctl) byNode[r.nodeID].pctl = {};
+      byNode[r.nodeID].pctl[key] = below(v) / (n - 1);
+    }
+  }
+  stats.pctlCount = directory.length;
+
   // Own stake held at each Heavyweight rank cut, so a profile can say "X AVAX to #50".
   stats.rankStake = {};
   for (const n of [10, 50, 100]) if (byStake[n - 1]) stats.rankStake[n] = byStake[n - 1].stake;

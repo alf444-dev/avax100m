@@ -7,6 +7,7 @@ import {
 } from "./lib/pchain.mjs";
 import { VNAMES, VGLYPH, VGRANTED, historyBadges, nextUp } from "./lib/vbadges.mjs";
 import { captureOf, pickBase, pruneIndex, deltaFor, foldMovers, dayKey } from "./lib/movers.mjs";
+import { compareNodes, handleOf, topPct } from "./lib/compare.mjs";
 import { fetchCompletedValidations, foldHistory } from "./lib/pchain-history.mjs";
 import { foldCohort, TIER_LABEL, UPTIME_GATE } from "./lib/cohort.mjs";
 
@@ -318,6 +319,39 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .vc-strip .s .k{font-size:9px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
 .vc-strip .s .v{font-size:16px;font-weight:700;margin-top:3px;word-break:break-word}
 .vc-strip .s .v small{font-size:10px;color:var(--dim);font-weight:400}
+.vc-strip .s .v small.tp{color:var(--red);letter-spacing:.1em;text-transform:uppercase;font-weight:700;display:block;margin-top:2px}
+.cmp-form{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
+.cmp-form input{flex:1;min-width:220px;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:10px 12px}
+.cmp-form input:focus{outline:none;border-color:var(--red)}
+.cmp-form .lbl{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.cmp-heads{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;border:1px solid var(--faint);border-bottom:none}
+.cmp-heads .ch{padding:16px 14px;min-width:0}
+.cmp-heads .ch.b{text-align:right}
+.cmp-heads .ch .nm{font-size:18px;font-weight:700;word-break:break-all;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.cmp-heads .ch.b .nm{justify-content:flex-end}
+.cmp-heads .ch .nid{font-size:11px;color:var(--dim);margin-top:4px;word-break:break-all}
+.cmp-heads .ch .nm a{text-decoration:none}.cmp-heads .ch .nm a:hover{color:var(--red)}
+.cmp-heads .vs{font-size:11px;letter-spacing:.24em;color:var(--red);font-weight:700;text-transform:uppercase}
+.cmp-heads .pf{width:44px;height:44px;flex:none;border:1px solid var(--faint);overflow:hidden;background:#141414}
+.cmp-heads .pf svg,.cmp-heads .pf img{display:block;width:100%;height:100%;object-fit:cover}
+.cmp-badges{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--faint);border:1px solid var(--faint);border-bottom:none}
+.cmp-badges .cb{background:var(--bg);padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px}
+.cmp-badges .cb.b{justify-content:flex-end}
+.cmp-badges .cb .empty{color:var(--dim);font-size:11px;letter-spacing:.08em}
+.cmp-table{width:100%;border:1px solid var(--faint);border-collapse:collapse}
+.cmp-table td{padding:10px 14px;border-bottom:1px solid var(--faint);font-variant-numeric:tabular-nums;vertical-align:middle}
+.cmp-table tr:last-child td{border-bottom:none}
+.cmp-table td.a{text-align:left;width:38%}.cmp-table td.b{text-align:right;width:38%}
+.cmp-table td.k{text-align:center;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.cmp-table td.win{color:var(--red);font-weight:700}
+.cmp-table td.a.win::before{content:"\\25B6";font-size:8px;margin-right:8px;vertical-align:middle}
+.cmp-table td.b.win::after{content:"\\25C0";font-size:8px;margin-left:8px;vertical-align:middle}
+.cmp-tally{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border:1px solid var(--faint);border-top:none;padding:14px}
+.cmp-tally .sc{font-size:26px;font-weight:700;letter-spacing:.04em}
+.cmp-tally .sc b{color:var(--red)}
+.cmp-tally .verdict{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);text-align:right}
+.cmp-tally .verdict b{color:var(--ink)}
+@media(max-width:640px){.cmp-table td.k{font-size:9px;letter-spacing:.08em;white-space:normal}.cmp-table td{padding:9px 8px;font-size:12px}.cmp-heads .ch .nm{font-size:15px}.cmp-tally{flex-direction:column;align-items:flex-start}.cmp-tally .verdict{text-align:left}}
 .vc-socials{display:flex;gap:16px;padding:12px 14px;flex-wrap:wrap;font-size:11px;border-top:1px solid var(--faint)}
 .vc-socials a,.vc-socials span{color:var(--dim)}
 .vc-socials a{border-bottom:1px solid var(--faint);text-decoration:none}
@@ -410,10 +444,11 @@ function serverCard(nd, px) {
   const tiles = badges.map(badgeTileS).join("") + granted.map(grantTileS).join("");
   h += '<div class="vc-badges">' + (tiles || '<span class="empty">no badges yet</span>') + '</div>';
   h += nextStripS(nd.next);
+  const pc = d.pctl || {}, tp = (k) => { const t = topPct(pc[k], nd.count); return t ? ' <small class="tp">' + t + '</small>' : ""; };
   h += '<div class="vc-strip">'
-    + '<div class="s"><div class="k">uptime</div><div class="v">' + (d.uptime != null ? pctOf(d.uptime, 2) : "—") + '</div></div>'
+    + '<div class="s"><div class="k">uptime</div><div class="v">' + (d.uptime != null ? pctOf(d.uptime, 2) : "—") + tp("uptime") + '</div></div>'
     + '<div class="s"><div class="k">delegation fee</div><div class="v">' + (d.feePct != null ? nfmt(d.feePct, 2) + "%" : "—") + '</div></div>'
-    + '<div class="s"><div class="k">delegated stake</div><div class="v">' + nfmt(d.delegated) + ' <small>AVAX ' + dim("\xB7 " + nfmt(d.delegatorCount) + " delegators") + '</small></div></div>'
+    + '<div class="s"><div class="k">delegated stake</div><div class="v">' + nfmt(d.delegated) + ' <small>AVAX ' + dim("\xB7 " + nfmt(d.delegatorCount) + " delegators") + '</small>' + tp("delegated") + '</div></div>'
     + '</div>';
   if (p && p.socials) { const sc = p.socials, parts = [];
     if (sc.x) parts.push('<a href="' + esc2(sc.x) + '" target="_blank" rel="noopener nofollow">x/twitter</a>');
@@ -502,6 +537,11 @@ function profilePage(nd, px, site) {
       <a class="btn primary" id="pshare" href="https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(pageUrl)}" target="_blank" rel="noopener">share on x</a>
       <a class="btn ghost" href="${img}" target="_blank" rel="noopener">view card image</a>
     </div>
+    <form class="cmp-form" id="compare" action="/v/${encodeURIComponent(d.nodeID)}/vs/" method="get" onsubmit="return false">
+      <span class="lbl">head to head</span>
+      <input id="cmp-id" type="text" spellcheck="false" autocomplete="off" placeholder="vs NodeID-\u2026" aria-label="Compare with another validator NodeID">
+      <button class="btn ghost" id="cmp-go">compare \u2192</button>
+    </form>
     <div class="pclaim">
       <button class="btn ghost" id="editbtn">${p && p.owner ? "edit this validator" : "claim &amp; customize"} →</button>
       <div id="editform" style="display:none;margin-top:16px">
@@ -529,6 +569,9 @@ function profilePage(nd, px, site) {
     if(navigator.clipboard) navigator.clipboard.writeText(t).then(function(){ cb.textContent="copied"; setTimeout(function(){cb.textContent="copy";},1200); }); };
   var pl=$("pcopy"); if(pl) pl.onclick=function(){ if(navigator.clipboard) navigator.clipboard.writeText(location.href).then(function(){ pl.textContent="copied"; setTimeout(function(){pl.textContent="copy link";},1200); }); };
   var eb=$("editbtn"); if(eb) eb.onclick=function(){ var f=$("editform"); f.style.display=(f.style.display==="none"?"block":"none"); };
+  function goCompare(){ var o=$("cmp-id").value.trim(); if(!o) return; location.href="/v/"+encodeURIComponent(NODE)+"/vs/"+encodeURIComponent(o); }
+  var cg=$("cmp-go"); if(cg){ cg.onclick=goCompare; $("cmp-id").addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); goCompare(); } }); }
+  if(location.hash==="#compare"){ var ci=$("cmp-id"); if(ci) setTimeout(function(){ ci.focus(); },50); }
   function api(body){ return fetch("/api/vclaim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}).then(function(r){return r.json();}); }
   var sb=$("signbtn"); if(sb) sb.onclick=async function(){
     var cm=$("cmsg");
@@ -663,6 +706,18 @@ var validators_default = async (req) => {
   }
 
   // Per-validator shareable profile page.
+  const vs = url.pathname.match(/^\/v\/([^/]+)\/vs\/([^/]*)\/?$/);
+  if (vs) {
+    const a = decodeURIComponent(vs[1]).trim(), b = decodeURIComponent(vs[2]).trim();
+    if (!b || a === b) return Response.redirect(site + "/v/" + encodeURIComponent(a) + "#compare", 302);
+    let snap;
+    try { snap = await getSnapshot(); } catch { return new Response("p-chain unavailable", { status: 503, headers: { "content-type": "text/plain" } }); }
+    if (snap && snap.pending) return new Response("warming up \u2014 retry in a few seconds", { status: 503, headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "5" } });
+    const ka = snap.byNode[a] ? a : null, kb = snap.byNode[b] ? b : null;
+    if (!ka || !kb) return new Response("no current validator with NodeID " + (ka ? b : a), { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+    const [A, B] = await Promise.all([buildNode(snap, ka), buildNode(snap, kb)]);
+    return new Response(comparePage(A, B, snap.avaxUsd, site), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
+  }
   if (url.pathname.startsWith("/v/")) {
     const nodeID = decodeURIComponent(url.pathname.slice(3)).trim();
     if (!/^NodeID-[A-Za-z0-9]+$/.test(nodeID)) return Response.redirect(site + "/p-chain", 302);
@@ -710,6 +765,98 @@ var validators_default = async (req) => {
     asOf: snap.asOf
   });
 };
+
+function comparePage(A, B, px, site) {
+  const c = compareNodes(A, B);
+  const ha = handleOf(A), hb = handleOf(B);
+  const ida = A.node.nodeID, idb = B.node.nodeID;
+  const pageUrl = site + "/v/" + ida + "/vs/" + idb;
+  const img = site + "/vcard/" + ida + "/vs/" + idb + ".png";
+  const title = ha + " vs " + hb + " \xB7 head to head \xB7 avax100m";
+  const lead = c.leader ? (c.leader === "a" ? ha : hb) + " leads " + Math.max(c.tally.a, c.tally.b) + "\u2013" + Math.min(c.tally.a, c.tally.b) : "dead heat " + c.tally.a + "\u2013" + c.tally.b;
+  const desc = "Avalanche P-Chain validators head to head: " + lead + " across " + c.rows.length + " metrics. Live on avax100m.";
+  const shareText = ha + " vs " + hb + " \u2014 " + lead + " on avax100m";
+  const head = (nd, side) => {
+    const p = nd.profile || null, d = nd.node;
+    const pfp = (p && p.pfp) ? '<img src="' + esc2(p.pfp) + '" alt="">' : identiconOf(d.nodeID, 44);
+    const tier = (COHORT_ON && p && p.tier && /^[ABC]$/i.test(p.tier)) ? '<span class="tier ' + String(p.tier).toUpperCase() + '">tier ' + String(p.tier).toUpperCase() + '</span>' : "";
+    const nm = '<a href="' + site + '/v/' + encodeURIComponent(d.nodeID) + '">' + esc2(handleOf(nd)) + '</a>' + tier;
+    return '<div class="ch ' + side + '"><div class="nm">' + (side === "a" ? '<span class="pf">' + pfp + '</span>' + nm : nm + '<span class="pf">' + pfp + '</span>') + '</div><div class="nid">' + esc2(d.nodeID) + '</div></div>';
+  };
+  const tiles = (nd) => { const t = (nd.badges || []).map(badgeTileS).join("") + (COHORT_ON ? ((nd.profile && nd.profile.grantedBadges) || []).map(grantTileS).join("") : ""); return t || '<span class="empty">no badges yet</span>'; };
+  const rows = c.rows.map((r) => '<tr><td class="a' + (r.win === "a" ? " win" : "") + '">' + r.a.text + '</td><td class="k">' + esc2(r.label) + '</td><td class="b' + (r.win === "b" ? " win" : "") + '">' + r.b.text + '</td></tr>').join("");
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${esc2(title)}</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="description" content="${esc2(desc)}">
+<link rel="canonical" href="${pageUrl}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="${pageUrl}">
+<meta property="og:title" content="${esc2(title)}">
+<meta property="og:description" content="${esc2(desc)}">
+<meta property="og:image" content="${img}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${esc2(title)}">
+<meta name="twitter:description" content="${esc2(desc)}">
+<meta name="twitter:image" content="${img}">
+<style>${STYLE}</style>
+</head>
+<body>
+<header><div class="wrap hbar">
+  <a class="logo" href="${site}"><img src="/favicon.svg" alt="Milli" width="24" height="24" decoding="async"><b>AVAX</b>/100M</a>
+  <span style="display:inline-flex;gap:18px;align-items:center">
+    <a class="nav" href="${site}/p-chain">validators</a>
+    <a class="nav" href="${site}/c-chain">check a wallet \u2192</a>
+  </span>
+</div></header>
+<main class="wrap">
+  <div class="hero">
+    <div class="eyebrow">avalanche <b>p-chain</b> \xB7 head to head</div>
+    <h1>${esc2(ha)} <span style="color:var(--red)">vs</span> ${esc2(hb)}</h1>
+  </div>
+  <section>
+    <div class="cmp-heads">${head(A, "a")}<span class="vs">vs</span>${head(B, "b")}</div>
+    <div class="cmp-badges"><div class="cb a">${tiles(A)}</div><div class="cb b">${tiles(B)}</div></div>
+    <table class="cmp-table"><tbody>${rows}</tbody></table>
+    <div class="cmp-tally">
+      <span class="sc"><b>${c.tally.a}</b> \u2013 <b>${c.tally.b}</b>${c.tally.ties ? ' <span style="font-size:11px;color:var(--dim);font-weight:400;letter-spacing:.1em">\xB7 ' + c.tally.ties + ' tie' + (c.tally.ties === 1 ? "" : "s") + '</span>' : ""}</span>
+      <span class="verdict">${c.leader ? '<b>' + esc2(c.leader === "a" ? ha : hb) + '</b> leads across ' + c.rows.length + ' metrics' : '<b>dead heat</b> across ' + c.rows.length + ' metrics'}</span>
+    </div>
+    <div class="pshare">
+      <button class="btn" id="pcopy">copy link</button>
+      <a class="btn primary" href="https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(pageUrl)}" target="_blank" rel="noopener">share on x</a>
+      <a class="btn ghost" href="${img}" target="_blank" rel="noopener">view card image</a>
+      <a class="btn ghost" href="${site}/v/${encodeURIComponent(idb)}/vs/${encodeURIComponent(ida)}">swap sides</a>
+    </div>
+    <form class="cmp-form" onsubmit="return false">
+      <span class="lbl">${esc2(ha)} vs</span>
+      <input id="cmp-id" type="text" spellcheck="false" autocomplete="off" placeholder="another NodeID-\u2026" aria-label="Compare with a different validator">
+      <button class="btn ghost" id="cmp-go">compare \u2192</button>
+    </form>
+  </section>
+</main>
+<footer><div class="wrap frow">
+  <span>avax100m \xB7 p-chain validators</span>
+  <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> \xB7 <a href="${site}/p-chain">directory</a> \xB7 data: avalanche p-chain rpc + data api \xB7 unofficial community page</span>
+</div></footer>
+<script>
+(function(){
+  var A=${JSON.stringify(ida)};
+  var $=function(id){return document.getElementById(id);};
+  var pl=$("pcopy"); if(pl) pl.onclick=function(){ if(navigator.clipboard) navigator.clipboard.writeText(location.href).then(function(){ pl.textContent="copied"; setTimeout(function(){pl.textContent="copy link";},1200); }); };
+  function go(){ var o=$("cmp-id").value.trim(); if(!o) return; location.href="/v/"+encodeURIComponent(A)+"/vs/"+encodeURIComponent(o); }
+  $("cmp-go").onclick=go; $("cmp-id").addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); go(); } });
+})();
+</script>
+</body>
+</html>`;
+}
 
 function page(site) {
   const title = "p-chain validators \xB7 avax100m";
@@ -1022,16 +1169,19 @@ function page(site) {
       '<div class="vc-node"><span class="dot'+(d.connected?" on":"")+'"></span>'+
       '<span class="mono" id="vc-nodeid">'+esc(d.nodeID)+'</span>'+
       '<button class="copy" id="vcopy">copy</button>'+
-      '<a class="copy" href="/v/'+encodeURIComponent(d.nodeID)+'">page →</a></div></div></div>';
+      '<a class="copy" href="/v/'+encodeURIComponent(d.nodeID)+'">page →</a>'+
+      '<a class="copy" href="/v/'+encodeURIComponent(d.nodeID)+'#compare">compare →</a></div></div></div>';
 
     var tiles=badges.map(badgeTile).join("")+granted.map(grantTile).join("");
     h+='<div class="vc-badges">'+(tiles||'<span class="empty">no badges yet</span>')+'</div>';
     h+=nextStrip(meta&&meta.next);
 
+    var pc=d.pctl||{}, cnt=(meta&&meta.count)||0;
+    var tp=function(k){ var f=pc[k]; if(!isFinite(f)||!(cnt>=20)) return ""; return ' <small class="tp">top '+Math.max(1,Math.round((1-f)*100))+'%</small>'; };
     h+='<div class="vc-strip">'+
-      '<div class="s"><div class="k">uptime</div><div class="v">'+(d.uptime!=null?pct(d.uptime,2):"—")+'</div></div>'+
+      '<div class="s"><div class="k">uptime</div><div class="v">'+(d.uptime!=null?pct(d.uptime,2):"—")+tp("uptime")+'</div></div>'+
       '<div class="s"><div class="k">delegation fee</div><div class="v">'+(d.feePct!=null?nf(d.feePct,2)+"%":"—")+'</div></div>'+
-      '<div class="s"><div class="k">delegated stake</div><div class="v">'+nf(d.delegated)+' <small>AVAX '+dim("· "+nf(d.delegatorCount)+" delegators")+'</small></div></div>'+
+      '<div class="s"><div class="k">delegated stake</div><div class="v">'+nf(d.delegated)+' <small>AVAX '+dim("· "+nf(d.delegatorCount)+" delegators")+'</small>'+tp("delegated")+'</div></div>'+
       '</div>';
 
     if(p&&p.socials){ var sc=p.socials, parts=[];
