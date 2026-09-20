@@ -265,6 +265,20 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .frow2 input:focus{outline:none;border-color:var(--red)}
 @media(max-width:600px){.frow2{flex-direction:column;align-items:stretch;gap:4px}.frow2 label{width:auto}}
 .msg{margin-top:14px;font-size:12px;color:var(--dim);min-height:18px;letter-spacing:.04em}
+.sk{display:block;height:12px;background:linear-gradient(90deg,var(--faint) 25%,#3a3a3a 50%,var(--faint) 75%);background-size:200% 100%;animation:sk 1.4s linear infinite}
+@keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@media(prefers-reduced-motion:reduce){.sk{animation:none;background:var(--faint)}}
+.cell .sk.k{width:38%;height:9px;margin-top:3px}.cell .sk.v{width:62%;height:20px;margin-top:12px}
+.vtable td .sk{height:11px;margin-left:auto;width:60%}.vtable td:first-child .sk{margin-left:0;width:70%}.vtable tr.skr{cursor:default}.vtable tr.skr:hover{background:transparent}
+.mgrid .sk.h{width:45%;height:9px;margin-bottom:14px}.mgrid .sk.l{height:11px;margin:12px 0}.mgrid .sk.l:nth-child(odd){width:85%}
+.vcard.sk-card .vc-head .sk{width:180px;height:16px}.vcard.sk-card .vc-head .sk.s{width:260px;height:10px;margin-top:8px}
+.vcard.sk-card .vc-badges .sk{width:40px;height:40px}.vcard.sk-card .vc-strip .sk.k{width:40%;height:9px}.vcard.sk-card .vc-strip .sk.v{width:65%;height:16px;margin-top:9px}
+.recent{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:0}
+.recent .lbl{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.recent .chip{font-size:11px;border:1px solid var(--faint);padding:4px 9px;cursor:pointer;color:var(--ink);background:transparent;font-family:var(--mono);letter-spacing:.02em;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recent .chip:hover{border-color:var(--red);color:var(--red)}
+.recent .clr{font-size:10px;color:var(--dim);cursor:pointer;background:none;border:none;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase}
+.recent .clr:hover{color:var(--red)}
 .detail{margin-top:18px;display:none}
 .vcard{border:1px solid var(--faint)}
 .vc-head{display:flex;gap:16px;align-items:center;padding:16px 14px;border-bottom:1px solid var(--faint)}
@@ -563,8 +577,9 @@ function profilePage(nd, px, site) {
 </div></footer>
 <script>
 (function(){
-  var NODE=${JSON.stringify(d.nodeID)};
+  var NODE=${JSON.stringify(d.nodeID)}, HANDLE=${JSON.stringify((p && p.handle) || null)};
   var $=function(id){return document.getElementById(id);};
+  try{ var rk="pc-recent", rv=JSON.parse(localStorage.getItem(rk)||"[]"); rv=(Array.isArray(rv)?rv:[]).filter(function(x){return x.id!==NODE;}); rv.unshift({id:NODE,h:HANDLE,t:Date.now()}); localStorage.setItem(rk,JSON.stringify(rv.slice(0,5))); }catch(e){}
   var cb=$("vcopy"); if(cb) cb.onclick=function(){ var t=$("vc-nodeid").textContent;
     if(navigator.clipboard) navigator.clipboard.writeText(t).then(function(){ cb.textContent="copied"; setTimeout(function(){cb.textContent="copy";},1200); }); };
   var pl=$("pcopy"); if(pl) pl.onclick=function(){ if(navigator.clipboard) navigator.clipboard.writeText(location.href).then(function(){ pl.textContent="copied"; setTimeout(function(){pl.textContent="copy link";},1200); }); };
@@ -905,14 +920,14 @@ function page(site) {
   <section>
     <h2>network staking</h2>
     <p class="sub">The primary network, right now.</p>
-    <div class="grid" id="stats"><div class="cell full"><span class="k">loading network stats…</span></div></div>
+    <div class="grid" id="stats"><div class="cell"><span class="sk k"></span><span class="sk v"></span></div><div class="cell"><span class="sk k"></span><span class="sk v"></span></div><div class="cell"><span class="sk k"></span><span class="sk v"></span></div><div class="cell"><span class="sk k"></span><span class="sk v"></span></div><div class="cell"><span class="sk k"></span><span class="sk v"></span></div><div class="cell"><span class="sk k"></span><span class="sk v"></span></div><div class="cell"><span class="sk k"></span><span class="sk v"></span></div><div class="cell"><span class="sk k"></span><span class="sk v"></span></div><div class="cell"><span class="sk k"></span><span class="sk v"></span></div></div>
     <div class="msg" id="asof"></div>
   </section>
 
   <section id="movers">
     <h2>movers \xB7 last 7 days</h2>
     <p class="sub">Who is climbing. Diffed against a daily capture of the whole set, so it is the same read for everyone.</p>
-    <div id="mgrid" class="mgrid"><div class="empty" style="color:var(--dim);font-size:12px">loading movers\u2026</div></div>
+    <div id="mgrid" class="mgrid"><div><span class="sk h"></span><span class="sk l"></span><span class="sk l"></span><span class="sk l"></span><span class="sk l"></span><span class="sk l"></span></div><div><span class="sk h"></span><span class="sk l"></span><span class="sk l"></span><span class="sk l"></span><span class="sk l"></span><span class="sk l"></span></div><div><span class="sk h"></span><span class="sk l"></span><span class="sk l"></span><span class="sk l"></span><span class="sk l"></span><span class="sk l"></span></div></div>
     <div class="mline" id="mline"></div>
   </section>
 
@@ -923,6 +938,7 @@ function page(site) {
       <input id="nid" type="text" spellcheck="false" autocomplete="off" placeholder="NodeID-…" aria-label="Validator NodeID">
       <button class="btn" id="lookup">Look up</button>
     </div>
+    <div class="recent" id="recent"></div>
     <div class="msg" id="lmsg"></div>
     <div class="detail" id="detail"></div>
   </section>
@@ -943,7 +959,7 @@ function page(site) {
         <th data-sort="apr">Est APR</th>
         <th data-sort="remaining">Ends</th>
       </tr></thead>
-      <tbody id="rows"></tbody>
+      <tbody id="rows"><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr></tbody>
     </table></div>
     <div class="morerow">
       <span class="count" id="count"></span>
@@ -1008,6 +1024,21 @@ function page(site) {
   function shortNode(id){ id=String(id||""); return id.length>20? id.slice(0,13)+"…"+id.slice(-4): id; }
   function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
   function cell(k,v,red){ return '<div class="cell"><div class="k">'+k+'</div><div class="v'+(red?" red":"")+'">'+v+'</div></div>'; }
+  var SK_STATS="<div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div>", SK_ROWS="<tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr><tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr><tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr><tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr><tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr><tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr><tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr><tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr>";
+  var SK_CARD='<div class="vcard sk-card"><div class="vc-head"><div class="vc-pfp"></div><div class="vc-id"><span class="sk"></span><span class="sk s"></span></div></div>'+
+    '<div class="vc-badges"><span class="sk"></span><span class="sk"></span><span class="sk"></span></div>'+
+    '<div class="vc-strip"><div class="s"><span class="sk k"></span><span class="sk v"></span></div><div class="s"><span class="sk k"></span><span class="sk v"></span></div><div class="s"><span class="sk k"></span><span class="sk v"></span></div></div></div>';
+
+  // recent lookups — per-browser convenience only; never leaves the device
+  var RKEY="pc-recent", RMAX=5;
+  function recentGet(){ try{ var v=JSON.parse(localStorage.getItem(RKEY)||"[]"); return Array.isArray(v)?v:[]; }catch(e){ return []; } }
+  function recentAdd(id,handle){ try{ var v=recentGet().filter(function(x){return x.id!==id;}); v.unshift({id:id,h:handle||null,t:Date.now()}); localStorage.setItem(RKEY,JSON.stringify(v.slice(0,RMAX))); }catch(e){} renderRecent(); }
+  function renderRecent(){
+    var el=$("recent"); if(!el) return; var v=recentGet(); if(!v.length){ el.innerHTML=""; return; }
+    el.innerHTML='<span class="lbl">recent</span>'+v.map(function(x){ return '<button class="chip" type="button" data-id="'+esc(x.id)+'" title="'+esc(x.id)+'">'+esc(x.h||shortNode(x.id))+'</button>'; }).join("")+'<button class="clr" type="button" id="rclr">clear</button>';
+    var ch=el.querySelectorAll(".chip"); for(var i=0;i<ch.length;i++){ ch[i].onclick=function(){ $("nid").value=this.getAttribute("data-id"); lookup(); }; }
+    var c=$("rclr"); if(c) c.onclick=function(){ try{ localStorage.removeItem(RKEY); }catch(e){} renderRecent(); };
+  }
 
   function renderStats(s){
     if(!s){ $("stats").innerHTML=""; return; }
@@ -1053,10 +1084,10 @@ function page(site) {
   }
   function statsError(){
     $("stats").innerHTML='<div class="cell full"><div class="k">network staking</div><div class="v" style="font-size:14px;color:var(--red)">no response from the p-chain — <a href="#" id="statsretry">retry</a></div></div>';
-    var b=$("statsretry"); if(b) b.onclick=function(e){ e.preventDefault(); $("stats").innerHTML='<div class="cell full"><span class="k">loading network stats…</span></div>'; load(true); };
+    var b=$("statsretry"); if(b) b.onclick=function(e){ e.preventDefault(); $("stats").innerHTML=SK_STATS; load(true); };
   }
   function load(reset){
-    if(reset) state.offset=0;
+    if(reset){ state.offset=0; $("rows").innerHTML=SK_ROWS; }
     var u=API+"?sort="+state.sort+"&dir="+state.dir+"&limit="+state.limit+"&offset="+state.offset+"&q="+encodeURIComponent(state.q);
     $("count").textContent="loading…";
     apiGet(u,1).then(function(j){
@@ -1262,14 +1293,17 @@ function page(site) {
     var n=$("nid").value.trim();
     if(!n){ $("lmsg").textContent="enter a NodeID."; return; }
     $("lmsg").textContent = n.indexOf("NodeID-")===0 ? "looking up…" : "a NodeID looks like NodeID-… — looking anyway…";
+    $("detail").innerHTML=SK_CARD; $("detail").style.display="block";
     apiGet(API+"?node="+encodeURIComponent(n),1).then(function(j){
       if(j.pending){ $("lmsg").textContent="warming up…"; setTimeout(lookup,2500); return; }
       if(j.none||!j.node){ $("lmsg").textContent="no current validator with that NodeID."; $("detail").style.display="none"; return; }
       if(j.avaxUsd!=null) px=j.avaxUsd;
       $("lmsg").textContent=""; renderDetail(j.node, j);
-    }).catch(function(){ $("lmsg").textContent="could not reach the p-chain — try again."; });
+      recentAdd(j.node.nodeID, j.profile&&j.profile.handle);
+    }).catch(function(){ $("lmsg").textContent="could not reach the p-chain — try again."; $("detail").style.display="none"; });
   }
   $("lookup").onclick=lookup;
+  renderRecent();
   $("nid").addEventListener("keydown",function(e){ if(e.key==="Enter") lookup(); });
 
   setActive();

@@ -76,6 +76,8 @@ function draw(data) {
     dateStr(hist && hist.firstStart ? hist.firstStart : d.startTime) + (hist && hist.seasons > 1 ? "  \xB7  " + hist.seasons + " SEASONS" : ""), L, 476);
 
   cell("UPTIME", d.uptime != null ? (d.uptime * 100).toFixed(2) + "%" : "—", R, 300);
+  const pu = d.pctl && d.pctl.uptime;
+  if (Number.isFinite(pu) && data.count >= 20) { x.fillStyle = "#e6212f"; x.font = "15px MonoB"; x.fillText("TOP " + Math.max(1, Math.round((1 - pu) * 100)) + "% OF " + nf(data.count), R, 362); }
   cell("FEE", d.feePct != null ? d.feePct.toFixed(0) + "%" : "—", R + 260, 300);
   cell("DELEGATED", nf(d.delegated) + " AVAX", R, 400);
   const lifetime = hist && hist.lifetimeRewards > 0;
@@ -87,8 +89,8 @@ function draw(data) {
   x.fillStyle = "#7a7a7a"; x.font = "18px Mono";
   x.fillText(prof && prof.tier ? "TIER " + String(prof.tier).toUpperCase() + " VALIDATOR" : "PRIMARY NETWORK VALIDATOR", L, 588);
   x.fillStyle = "#e6212f"; x.font = "18px MonoB";
-  const tag = "AVAX100M.XYZ \xB7 P-CHAIN";
-  x.fillText(tag, W - L - tag.length * 11, 588);
+  const tag = "GET YOURS \xB7 AVAX100M.XYZ/P-CHAIN";
+  x.fillText(tag, W - L - x.measureText(tag).width, 588);
   return img;
 }
 
@@ -133,7 +135,7 @@ function drawCompare(A, B) {
   const lead = c.leader ? (c.leader === "a" ? ha : hb) + " LEADS " + Math.max(c.tally.a, c.tally.b) + "\u2013" + Math.min(c.tally.a, c.tally.b) : "DEAD HEAT " + c.tally.a + "\u2013" + c.tally.b;
   x.fillText(lead, L, 590);
   x.fillStyle = "#e6212f"; x.font = "18px MonoB";
-  rightText("AVAX100M.XYZ \xB7 P-CHAIN", R, 588);
+  rightText("COMPARE YOURS \xB7 AVAX100M.XYZ/P-CHAIN", R, 588);
   return img;
 }
 
