@@ -232,7 +232,8 @@
         <div class="call-res" id="call-res">
           <div class="big" id="call-verdict">—</div>
           <div class="line" id="call-line"></div>
-          <div class="acts"><button id="call-again">call again</button><a id="call-share" href="#" target="_blank" rel="noopener">share on x</a></div>
+          <div class="acts"><button id="call-again">call again</button><button id="call-dl">download card</button><a id="call-share" href="#" target="_blank" rel="noopener">share on x</a></div>
+          <canvas id="call-card" width="1200" height="630" style="display:none" aria-hidden="true"></canvas>
         </div>
       </div>
       <div id="callmsg" role="status"></div>
@@ -1002,11 +1003,39 @@
           $("call-line").textContent=(counted? (hit? "streak "+st.streak+(st.streak===st.best?" \u00B7 personal best":"") : "streak reset") : "practice \u2014 not counted")+" \u00B7 "+(st.hits||0)+"/"+(st.calls||0)+" lifetime";
           var txt=(perfect?"PERFECT call":"I called "+g)+" \u2014 the C-Chain did "+actual+" blocks in 60s."+(st.streak? " streak "+st.streak+".":"")+" try yours \u2192 avax100m.xyz/c-chain#call";
           $("call-share").href="https://twitter.com/intent/tweet?text="+encodeURIComponent(txt);
+          lastCall={g:g,actual:actual,hit:hit,perfect:perfect,start:start,end:end,counted:counted,streak:st.streak||0,best:st.best||0};
+          drawCallCard(lastCall);
           paintTop(); running=false; $("callbtn").disabled=false; $("callmsg").textContent="";
         });
       }
     }).catch(function(){ running=false; $("callbtn").disabled=false; $("callmsg").textContent="could not reach the c-chain rpc \u2014 try again."; });
   }
+  // result card: 1200x630, same brutalist frame as the server-rendered cards
+  var lastCall=null;
+  function drawCallCard(c){
+    var cv=$("call-card"), x=cv.getContext("2d"), W=1200, H=630, L=76, R=W-76;
+    var mono='"SF Mono","Cascadia Mono",Menlo,Consolas,monospace';
+    x.fillStyle="#0a0a0a"; x.fillRect(0,0,W,H);
+    x.strokeStyle="#e6212f"; x.lineWidth=5; x.strokeRect(20,20,W-40,H-40);
+    x.strokeStyle="#2a2a2a"; x.lineWidth=2; x.strokeRect(34,34,W-68,H-68);
+    x.textBaseline="alphabetic";
+    x.fillStyle="#7a7a7a"; x.font="22px "+mono; x.fillText("AVALANCHE C-CHAIN \u00B7 THE DAILY CALL",L,86);
+    x.fillStyle=c.hit?"#e6212f":"#f2f2f2"; x.font="bold 72px "+mono;
+    x.fillText(c.perfect?"PERFECT":(c.hit?"HIT":"MISS"),L,176);
+    x.fillStyle="#f2f2f2"; x.font="bold 40px "+mono;
+    x.fillText("I CALLED "+c.g+" \u00B7 THE CHAIN DID "+c.actual,L,246);
+    x.fillStyle="#7a7a7a"; x.font="22px "+mono; x.fillText("BLOCKS IN 60 SECONDS",L,282);
+    x.fillStyle="#2a2a2a"; x.fillRect(L,314,W-2*L,2);
+    function cell(k,v,cx,cy,red){ x.fillStyle="#7a7a7a"; x.font="18px "+mono; x.fillText(k,cx,cy); x.fillStyle=red?"#e6212f":"#f2f2f2"; x.font="bold 34px "+mono; x.fillText(v,cx,cy+40); }
+    cell("STREAK",String(c.streak),L,366,true);
+    cell("BEST",String(c.best),L+260,366);
+    cell("OFF BY",String(Math.abs(c.actual-c.g)),L+520,366);
+    cell("BLOCKS",c.start.toLocaleString("en-US")+" \u2192 "+c.end.toLocaleString("en-US"),L,466);
+    x.fillStyle="#2a2a2a"; x.fillRect(L,556,W-2*L,2);
+    x.fillStyle="#7a7a7a"; x.font="18px "+mono; x.fillText((c.counted?"COUNTED \u00B7 ":"PRACTICE \u00B7 ")+new Date().toISOString().slice(0,10),L,588);
+    x.fillStyle="#e6212f"; x.font="bold 18px "+mono; var tag="TRY YOURS \u00B7 AVAX100M.XYZ/C-CHAIN"; x.fillText(tag,R-x.measureText(tag).width,588);
+  }
+  $("call-dl").onclick=function(){ if(!lastCall) return; var a=document.createElement("a"); a.download="avax-daily-call.png"; a.href=$("call-card").toDataURL("image/png"); a.click(); };
   $("callbtn").onclick=run;
   $("callin").addEventListener("keydown",function(e){ if(e.key==="Enter") run(); });
   $("call-again").onclick=function(){ $("call-res").style.display="none"; $("callin").focus(); };

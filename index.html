@@ -43,6 +43,8 @@ a{color:inherit;text-decoration:none}
 .pulse.on{opacity:1}
 .pulse b{font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
 .c .pulse b{color:var(--red)}
+.pulse .mv{flex-basis:100%;margin-top:2px}
+.pulse .mv i{font-style:normal;opacity:.7}
 .pulse .live{display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;vertical-align:middle;margin-right:6px;animation:blink 2.2s ease-in-out infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
 @media(prefers-reduced-motion:reduce){.pulse .live{animation:none}.pane,.enter{transition:none}}
@@ -143,6 +145,21 @@ a{color:inherit;text-decoration:none}
       show("pulse-p",'<span><span class="live"></span><b>'+nf(s.validatorCount)+'</b> validators</span>'+
         '<span><b>'+(stakeM>=1?stakeM.toFixed(1)+"M":nf(s.totalActive))+'</b> avax staked</span>'+
         (s.stakingRatio?'<span><b>'+(s.stakingRatio*100).toFixed(1)+'%</b> of supply</span>':""));
+      pollMovers();
+    }).catch(function(){});
+  }
+  // one line from the weekly movers, once there is at least a day of history
+  function pollMovers(){
+    fetch("/api/validators?movers=1").then(function(r){ return r.json(); }).then(function(m){
+      if(!m || !(m.days>=1)) return;
+      var bits=[];
+      if(m.joined&&m.joined.count) bits.push('<b>'+nf(m.joined.count)+'</b> joined');
+      if(m.unlocked&&m.unlocked.length) bits.push('<b>'+nf(m.unlocked.length)+'</b> badges unlocked');
+      var g=m.delegatorGainers&&m.delegatorGainers[0];
+      if(g){ var nm=(m.handles&&m.handles[g.nodeID])||(g.nodeID.slice(0,13)+"\u2026"); bits.push('<b>+'+nf(g.delta)+'</b> delegators to '+nm.replace(/</g,"&lt;")); }
+      if(!bits.length) return;
+      var el=document.getElementById("pulse-p"); if(!el) return;
+      el.insertAdjacentHTML("beforeend",'<span class="mv">'+bits.slice(0,2).join(' \u00B7 ')+' <i>\u00B7 '+m.days+'d</i></span>');
     }).catch(function(){});
   }
   pollP(0);
