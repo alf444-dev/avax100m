@@ -15,6 +15,7 @@ anything up.
   - `token.mjs` → `/api/token` claimed-page, per-token dossier lookup
   - `claim.mjs` → `/api/claim` page claiming via plain-text signature (no approvals, no transactions)
   - `card.mjs` → `/card/*` shareable PNG cards
+  - `vbadge.mjs` → `/badge/NodeID-….svg` live embeddable validator badge (SVG, no external resources)
   - `badges.mjs`, `census.mjs`, `sitemap.mjs` — what they say
   - `resolve.mjs` → `/api/resolve` .avax name resolution. **Prebuilt bundle — do not edit.**
     It vendors circomlibjs; the Poseidon output must stay byte-identical to stored hashes.

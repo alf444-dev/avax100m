@@ -277,6 +277,7 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .btn.ghost:hover{color:var(--red);border-color:var(--red)}
 .pshare{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
 .pclaim{margin-top:26px;border-top:1px solid var(--faint);padding-top:22px}
+.pembed{margin-top:16px}
 .frow2{display:flex;gap:12px;align-items:center;margin-bottom:10px}
 .frow2 label{width:110px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);flex:none}
 .frow2 input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px}
@@ -433,7 +434,7 @@ function nextStripS(next) {
   const roman = ["", "i", "ii", "iii"];
   return '<div class="vc-next">' + next.map((n) => '<div class="n"><div class="nk"><span>next up</span><b>' + esc2((VNAMES[n.id] || n.id) + " " + (roman[n.tier] || "")) + '</b></div>'
     + '<div class="nb"><span style="width:' + (n.frac * 100).toFixed(1) + '%"></span></div>'
-    + '<div class="nv"><b>' + esc2(n.label) + '</b> \xB7 ' + Math.round(n.frac * 100) + '% there</div></div>').join("") + '</div>';
+    + '<div class="nv"><b>' + esc2(n.label) + '</b> \xB7 ' + Math.min(99, Math.round(n.frac * 100)) + '% there</div></div>').join("") + '</div>';
 }
 // "since 7 days ago" rows: only what actually moved, signed and coloured.
 function deltaRowsS(dl) {
@@ -571,6 +572,15 @@ function profilePage(nd, px, site) {
       <a class="btn primary" id="pshare" href="https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(pageUrl)}" target="_blank" rel="noopener">share on x</a>
       <a class="btn ghost" href="${img}" target="_blank" rel="noopener">view card image</a>
     </div>
+    <div class="pembed">
+      <button class="btn ghost" id="embedbtn">embed live badge \u2192</button>
+      <div id="embedbox" style="display:none;margin-top:14px">
+        <img src="${site}/badge/${encodeURIComponent(d.nodeID)}.svg" width="420" height="96" alt="live validator badge" style="display:block;max-width:100%;height:auto;border:0">
+        <p class="sub" style="margin:12px 0 8px">Live from the P-Chain, refreshes every few minutes, links back here. Paste into a README or any page:</p>
+        <textarea id="embedmd" readonly rows="2" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:11px;padding:9px 11px;resize:vertical">[![${esc2(handle)} \u00B7 p-chain validator](${site}/badge/${encodeURIComponent(d.nodeID)}.svg)](${pageUrl})</textarea>
+        <div class="pshare" style="margin-top:10px"><button class="btn ghost" id="embedcopy">copy markdown</button><button class="btn ghost" id="embedhtml">copy html</button></div>
+      </div>
+    </div>
     <form class="cmp-form" id="compare" action="/v/${encodeURIComponent(d.nodeID)}/vs/" method="get" onsubmit="return false">
       <span class="lbl">head to head</span>
       <input id="cmp-id" type="text" spellcheck="false" autocomplete="off" placeholder="vs NodeID-\u2026" aria-label="Compare with another validator NodeID">
@@ -604,6 +614,10 @@ function profilePage(nd, px, site) {
     if(navigator.clipboard) navigator.clipboard.writeText(t).then(function(){ cb.textContent="copied"; setTimeout(function(){cb.textContent="copy";},1200); }); };
   var pl=$("pcopy"); if(pl) pl.onclick=function(){ if(navigator.clipboard) navigator.clipboard.writeText(location.href).then(function(){ pl.textContent="copied"; setTimeout(function(){pl.textContent="copy link";},1200); }); };
   var eb=$("editbtn"); if(eb) eb.onclick=function(){ var f=$("editform"); f.style.display=(f.style.display==="none"?"block":"none"); };
+  var ebx=$("embedbtn"); if(ebx) ebx.onclick=function(){ var b=$("embedbox"); b.style.display=(b.style.display==="none"?"block":"none"); };
+  function copyBtn(id,text,label){ var b=$(id); if(!b) return; b.onclick=function(){ if(navigator.clipboard) navigator.clipboard.writeText(text()).then(function(){ b.textContent="copied"; setTimeout(function(){ b.textContent=label; },1200); }); }; }
+  copyBtn("embedcopy",function(){ return $("embedmd").value; },"copy markdown");
+  copyBtn("embedhtml",function(){ return '<a href="'+location.origin+'/v/'+encodeURIComponent(NODE)+'"><img src="'+location.origin+'/badge/'+encodeURIComponent(NODE)+'.svg" width="420" height="96" alt="p-chain validator badge"></a>'; },"copy html");
   function goCompare(){ var o=$("cmp-id").value.trim(); if(!o) return; location.href="/v/"+encodeURIComponent(NODE)+"/vs/"+encodeURIComponent(o); }
   var cg=$("cmp-go"); if(cg){ cg.onclick=goCompare; $("cmp-id").addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); goCompare(); } }); }
   if(location.hash==="#compare"){ var ci=$("cmp-id"); if(ci) setTimeout(function(){ ci.focus(); },50); }
@@ -1178,7 +1192,7 @@ function page(site) {
     return '<div class="vc-next">'+next.map(function(n){
       return '<div class="n"><div class="nk"><span>next up</span><b>'+esc((VNAMES[n.id]||n.id)+" "+(roman[n.tier]||""))+'</b></div>'+
         '<div class="nb"><span style="width:'+(n.frac*100).toFixed(1)+'%"></span></div>'+
-        '<div class="nv"><b>'+esc(n.label)+'</b> \xB7 '+Math.round(n.frac*100)+'% there</div></div>';
+        '<div class="nv"><b>'+esc(n.label)+'</b> \xB7 '+Math.min(99,Math.round(n.frac*100))+'% there</div></div>';
     }).join("")+'</div>';
   }
   function deltaRows(dl){
