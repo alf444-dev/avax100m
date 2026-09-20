@@ -8,6 +8,7 @@ import {
 import { VNAMES, VGLYPH, VGRANTED, historyBadges, nextUp } from "./lib/vbadges.mjs";
 import { captureOf, pickBase, pruneIndex, deltaFor, foldMovers, dayKey, foldUnlocks } from "./lib/movers.mjs";
 import { compareNodes, handleOf, topPct } from "./lib/compare.mjs";
+import { pickValidators } from "./lib/pick.mjs";
 import { fetchCompletedValidations, foldHistory } from "./lib/pchain-history.mjs";
 import { foldCohort, TIER_LABEL, UPTIME_GATE } from "./lib/cohort.mjs";
 
@@ -292,6 +293,24 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .mgrid .sk.h{width:45%;height:9px;margin-bottom:14px}.mgrid .sk.l{height:11px;margin:12px 0}.mgrid .sk.l:nth-child(odd){width:85%}
 .vcard.sk-card .vc-head .sk{width:180px;height:16px}.vcard.sk-card .vc-head .sk.s{width:260px;height:10px;margin-top:8px}
 .vcard.sk-card .vc-badges .sk{width:40px;height:40px}.vcard.sk-card .vc-strip .sk.k{width:40%;height:9px}.vcard.sk-card .vc-strip .sk.v{width:65%;height:16px;margin-top:9px}
+.pick-form{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:10px;align-items:end;max-width:900px}
+.pick-form label{display:flex;flex-direction:column;gap:6px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.pick-form input,.pick-form select{background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:14px;padding:10px 12px;min-width:0;width:100%;-webkit-appearance:none;appearance:none;border-radius:0}
+.pick-form input:focus,.pick-form select:focus{outline:none;border-color:var(--red)}
+.pick-form .btn{height:42px}
+@media(max-width:760px){.pick-form{grid-template-columns:1fr 1fr}.pick-form .btn{grid-column:1/-1}}
+.pick-note{margin-top:14px;font-size:12px;color:var(--dim);letter-spacing:.04em;min-height:18px}
+.pick-list{list-style:none;margin-top:18px;border:1px solid var(--faint)}
+.pick-list li{display:grid;grid-template-columns:34px 1fr auto;gap:12px;padding:12px 14px;border-bottom:1px solid var(--faint);align-items:center}
+.pick-list li:last-child{border-bottom:none}
+.pick-list .n{font-size:18px;font-weight:700;color:var(--dim)}.pick-list li:first-child .n{color:var(--red)}
+.pick-list .who a{color:var(--ink);font-weight:700;text-decoration:none}.pick-list .who a:hover{color:var(--red)}
+.pick-list .why{font-size:11px;color:var(--dim);margin-top:3px;letter-spacing:.02em}
+.pick-list .nums{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pick-list .nums b{display:block;font-size:18px;color:var(--red)}
+.pick-list .nums small{font-size:10px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+.pick-list .meta{font-size:11px;color:var(--dim);margin-top:2px}
+@media(max-width:560px){.pick-list li{grid-template-columns:28px 1fr}.pick-list .nums{grid-column:2;text-align:left}.pick-list .nums b{display:inline;margin-right:8px}}
 .recent{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:0}
 .recent .lbl{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
 .recent .chip{font-size:11px;border:1px solid var(--faint);padding:4px 9px;cursor:pointer;color:var(--ink);background:transparent;font-family:var(--mono);letter-spacing:.02em;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -786,6 +805,13 @@ var validators_default = async (req) => {
   catch (e) { return json({ error: "p-chain unavailable", reason: String((e && e.message) || e) }, 503); }
   if (snap && snap.pending) return json({ pending: true, retryAfter: 5 }, 202, { "retry-after": "5" });
 
+  if (url.searchParams.get("pick")) {
+    const q = url.searchParams;
+    const p = pickValidators(snap.directory, { amount: q.get("amount"), days: q.get("days"), maxFee: q.get("maxFee"), minUptime: q.get("minUptime"), limit: q.get("limit") || 10 });
+    const handles = {};
+    await Promise.all(p.rows.map(async (r) => { const pr = await readProfile(r.nodeID); if (pr && pr.handle) handles[r.nodeID] = pr.handle; }));
+    return json(Object.assign(p, { handles, avaxUsd: snap.avaxUsd, asOf: snap.asOf }), 200, { "cache-control": "public, max-age=60" });
+  }
   if (url.searchParams.get("movers")) {
     const m = await getMovers(snap);
     return json(Object.assign({}, m, { asOf: snap.asOf }), 200, { "cache-control": "public, max-age=120" });
@@ -977,6 +1003,21 @@ function page(site) {
     <div class="detail" id="detail"></div>
   </section>
 
+  <section id="pick">
+    <h2>delegate \xB7 find a fit</h2>
+    <p class="sub">Say how much and for how long. Ranked by what you would actually earn after the validator's fee, filtered to validators with room for you, a runway that covers your period, and uptime that keeps rewards safe.</p>
+    <form class="pick-form" id="pickform" onsubmit="return false">
+      <label>amount (avax)<input id="pk-amount" type="number" inputmode="decimal" min="25" step="1" value="100"></label>
+      <label>at least<select id="pk-days"><option value="14">2 weeks</option><option value="30" selected>1 month</option><option value="90">3 months</option><option value="180">6 months</option><option value="365">1 year</option></select></label>
+      <label>max fee<select id="pk-fee"><option value="">any</option><option value="2">2% (minimum)</option><option value="5" selected>5%</option><option value="10">10%</option></select></label>
+      <label>min uptime<select id="pk-up"><option value="0.999">99.9%</option><option value="0.99" selected>99%</option><option value="0.98">98%</option><option value="0.9">90%</option></select></label>
+      <button class="btn" id="pk-go">find</button>
+    </form>
+    <div class="pick-note" id="pk-note"></div>
+    <ol class="pick-list" id="pk-list" style="display:none"></ol>
+    <p class="sub" style="margin-top:16px;font-size:12px">A shortlist, not advice. Net yield is the current period's staking rate minus the fee; the chain pays nothing if the validator drops under 80% uptime. Delegate from your own wallet \u2014 this page never asks you to connect.</p>
+  </section>
+
   <section>
     <h2>validator directory</h2>
     <p class="sub">Every current primary-network validator. Click a column to sort, click a row to inspect.</p>
@@ -1015,6 +1056,10 @@ function page(site) {
       <details style="border-bottom:1px solid var(--faint);padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">what are the badges?</summary>
         <p style="color:var(--dim);margin:10px 0 0">cosmetic achievements auto-derived from public p-chain data &mdash; uptime, stake rank, delegators, delegation-cap filled, minimum fee, tenure, self-funded, and more. each shows how rare it is across the whole validator set. nothing is manually granted.</p>
+      </details>
+      <details style="border-bottom:1px solid var(--faint);padding:14px 0">
+        <summary style="cursor:pointer;font-weight:700">how does &ldquo;find a fit&rdquo; rank validators?</summary>
+        <p style="color:var(--dim);margin:10px 0 0">it keeps only validators with free delegation room for your amount (with a little headroom), a stake period that outlasts yours (minimum two weeks), and uptime above your floor. what is left is sorted by net yield: the validator&rsquo;s current staking rate minus its delegation fee. it is a shortlist to research from, not advice, and nothing here connects to a wallet.</p>
       </details>
       <details style="border-bottom:1px solid var(--faint);padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">what are &ldquo;movers&rdquo; and &ldquo;next up&rdquo;?</summary>
@@ -1294,6 +1339,32 @@ function page(site) {
     var cb=$("vcopy"); if(cb) cb.onclick=function(){ var t=$("vc-nodeid").textContent;
       if(navigator.clipboard) navigator.clipboard.writeText(t).then(function(){ cb.textContent="copied"; setTimeout(function(){cb.textContent="copy";},1200); }); };
   }
+
+  function runPick(){
+    var amt=$("pk-amount").value, days=$("pk-days").value, fee=$("pk-fee").value, up=$("pk-up").value;
+    $("pk-note").textContent="ranking\u2026"; $("pk-go").disabled=true;
+    apiGet(API+"?pick=1&amount="+encodeURIComponent(amt)+"&days="+days+"&maxFee="+fee+"&minUptime="+up+"&limit=10",1).then(function(p){
+      $("pk-go").disabled=false;
+      if(p.pending){ $("pk-note").textContent="warming up\u2026"; setTimeout(runPick,2500); return; }
+      if(p.error) throw 0;
+      if(p.avaxUsd!=null) px=p.avaxUsd;
+      var l=$("pk-list");
+      if(!p.rows.length){ l.style.display="none"; $("pk-note").textContent="no validator fits \u2014 loosen the fee or uptime, or shorten the period. "+nf(p.considered)+" checked."; return; }
+      $("pk-note").textContent="top "+p.rows.length+" of "+nf(p.matched)+" that fit "+nf(p.amount)+" AVAX for "+p.days+"+ days \xB7 "+nf(p.considered)+" checked";
+      var yr=function(r){ return p.amount*r.netApr; };
+      l.innerHTML=p.rows.map(function(r){
+        var nm=(p.handles&&p.handles[r.nodeID])||shortNode(r.nodeID);
+        var earn=yr(r), eu=usd(earn);
+        return '<li><span class="n">'+r.pick+'</span><span class="who"><a href="/v/'+encodeURIComponent(r.nodeID)+'">'+esc(nm)+'</a>'+
+          '<div class="why">'+esc(r.why.join(" \xB7 "))+'</div>'+
+          '<div class="meta">'+pct(r.uptime,2)+' uptime \xB7 '+nf(r.free)+' AVAX free \xB7 ends in '+nf(r.remainingDays)+'d \xB7 '+nf(r.delegators)+' delegators</div></span>'+
+          '<span class="nums"><b>'+pct(r.netApr,2)+'</b><small>net apr \xB7 '+nf(r.fee,0)+'% fee</small><div class="meta">\u2248 '+nf(earn,1)+' AVAX/yr'+(eu?" \xB7 "+eu:"")+'</div></span></li>';
+      }).join("");
+      l.style.display="";
+    }).catch(function(){ $("pk-go").disabled=false; $("pk-note").textContent="could not rank right now \u2014 try again."; });
+  }
+  $("pk-go").onclick=runPick;
+  $("pk-amount").addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); runPick(); } });
 
   function moverName(m,id){ var h=m.handles&&m.handles[id]; return '<a href="/v/'+encodeURIComponent(id)+'">'+esc(h||shortNode(id))+'</a>'; }
   function moverList(title, items, fmt){
