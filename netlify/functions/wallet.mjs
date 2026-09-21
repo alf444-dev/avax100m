@@ -268,13 +268,14 @@ footer a:hover{color:var(--red);border-color:var(--red)}
 
 <main class="wrap">
   <div class="hero" style="position:relative">
-    <div id="brack" class="brack" aria-label="badges"></div>
     <div class="eyebrow">avalanche c-chain \xB7 wallet profile</div>
     <h1>${esc(w.rank[1])}</h1>
     <div class="tagline">${esc(w.rank[2])}</div>
     <div id="proof" style="display:none;margin-top:14px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)"></div>
     <div id="status-line" style="display:none;margin-top:20px;font-size:15px;color:var(--ink);letter-spacing:.02em">\u201C<span id="status-text"></span>\u201D</div>
     <div id="avvy" style="display:none;margin-top:24px;font-size:20px;font-weight:700;color:var(--ink);letter-spacing:.02em"></div>
+    <!-- desktop pins this to the right of the title; on narrow screens it flows here, after the name and before the actions -->
+    <div id="brack" class="brack" aria-label="badges"></div>
     <div class="addrline">
       <span class="a" id="copy-addr" role="button" tabindex="0" aria-label="copy address" title="click to copy address" style="cursor:pointer;border-bottom:1px dotted var(--faint)">${esc(short)}</span>
       <button class="btn" id="copy-link">copy link</button>
