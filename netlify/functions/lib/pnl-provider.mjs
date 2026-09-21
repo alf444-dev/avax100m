@@ -708,6 +708,8 @@ export async function fetchPnlData({
       if (normalizedError.code === "bootstrapping" || normalizedError.code === "deadline_exceeded" || !moralis) {
         throw normalizedError;
       }
+      // the moralis fallback hides the zerion failure from the caller, so leave a trace of it
+      console.error("[pnl] zerion failed, falling back to moralis", JSON.stringify({ code: normalizedError.code, status: normalizedError.status || null }));
       return fetchMoralis({
         addr: normalizedAddress,
         key: moralis,

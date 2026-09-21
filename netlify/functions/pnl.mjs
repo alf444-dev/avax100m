@@ -753,6 +753,8 @@ var pnl_default = async (req, context) => {
       });
     }
     const code = e instanceof PnlProviderError ? e.code : "compute_failed";
+    // which provider failed and how goes to the function log only, never to the visitor
+    console.error("[pnl] cold compute failed", JSON.stringify({ code, provider: e && e.provider || null, status: e && e.status || null, message: String(e && e.message || e).slice(0, 200) }));
     return new Response(JSON.stringify({ available: false, error: code }), { status: 503, headers: HEADERS });
   } finally {
     if (leaseStore && !debug && typeof leaseStore.delete === "function") await leaseStore.delete(workKey).catch(() => {});
