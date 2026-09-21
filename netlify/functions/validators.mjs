@@ -239,6 +239,12 @@ async function buildNode(snap, key) {
   };
 }
 
+// One nav on every page: the same three places in the same words, the current one marked.
+const siteNav = (site, cur, extra = "") => '<nav class="sitenav" aria-label="site">'
+  + [["countdown", "/c-chain"], ["wallets", "/c-chain#checker"], ["validators", "/p-chain"]].map(([l, h]) =>
+    '<a class="nav' + (l === cur ? " on" : "") + '" href="' + site + h + '"' + (l === cur ? ' aria-current="page"' : "") + '>' + l + '</a>').join("")
+  + extra + '</nav>';
+
 // Shared by every page with badge tiles: a tooltip near the screen edge is nudged back inside it.
 var TIPFIT = `<script>
 (function(){
@@ -276,7 +282,9 @@ header{border-bottom:1px solid var(--faint)}
 .eyebrow b{color:var(--red)}
 h1{font-size:clamp(34px,7vw,66px);line-height:1;color:var(--red);letter-spacing:-.01em;overflow-wrap:anywhere}
 @media(max-width:480px){h1{font-size:26px;line-height:1.15}}
-@media(max-width:520px){.hbar .nav+.nav{display:none}}
+.sitenav{display:inline-flex;gap:18px;align-items:center}
+.nav.on{color:var(--ink);box-shadow:0 2px 0 var(--red)}
+@media(max-width:560px){.hbar{flex-wrap:wrap;height:auto;padding-top:14px}.sitenav{width:100%;justify-content:space-between;border-top:1px solid var(--faint);margin-top:12px;padding:11px 0}}
 .tagline{color:var(--dim);margin-top:12px;max-width:660px}
 section{padding:40px 0;border-bottom:1px solid var(--faint)}
 h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red);font-weight:700;margin-bottom:8px}
@@ -603,10 +611,7 @@ function profilePage(nd, px, site) {
 <body>
 <header><div class="wrap hbar">
   <a class="logo" href="${site}"><img src="/favicon.svg" alt="Milli" width="24" height="24" decoding="async"><b>AVAX</b>/100M</a>
-  <span style="display:inline-flex;gap:18px;align-items:center">
-    <a class="nav" href="${site}/p-chain">validators</a>
-    <a class="nav" href="${site}/c-chain">check a wallet →</a>
-  </span>
+  ${siteNav(site, "validators")}
 </div></header>
 <main class="wrap">
   <div class="hero">
@@ -740,10 +745,7 @@ function cohortPage(c, site) {
 <body>
 <header><div class="wrap hbar">
   <a class="logo" href="${site}"><img src="/favicon.svg" alt="Milli" width="24" height="24" decoding="async"><b>AVAX</b>/100M</a>
-  <span style="display:inline-flex;gap:18px;align-items:center">
-    <a class="nav" href="${site}/p-chain">validators</a>
-    <a class="nav" href="${site}/c-chain">check a wallet →</a>
-  </span>
+  ${siteNav(site, "validators")}
 </div></header>
 <main class="wrap">
   <div class="hero">
@@ -923,10 +925,7 @@ function comparePage(A, B, px, site) {
 <body>
 <header><div class="wrap hbar">
   <a class="logo" href="${site}"><img src="/favicon.svg" alt="Milli" width="24" height="24" decoding="async"><b>AVAX</b>/100M</a>
-  <span style="display:inline-flex;gap:18px;align-items:center">
-    <a class="nav" href="${site}/p-chain">validators</a>
-    <a class="nav" href="${site}/c-chain">check a wallet \u2192</a>
-  </span>
+  ${siteNav(site, "validators")}
 </div></header>
 <main class="wrap">
   <div class="hero">
@@ -1005,10 +1004,7 @@ function page(site) {
 <body>
 <header><div class="wrap hbar">
   <a class="logo" href="${site}"><img src="/favicon.svg" alt="Milli" width="24" height="24" decoding="async"><b>AVAX</b>/100M</a>
-  <span style="display:inline-flex;gap:18px;align-items:center">
-    ${COHORT_ON ? `<a class="nav" href="${site}/cohort">cohort</a>` : ""}
-    <a class="nav" href="${site}/c-chain">check a wallet →</a>
-  </span>
+  ${siteNav(site, "validators", COHORT_ON ? '<a class="nav" href="' + site + '/cohort">cohort</a>' : "")}
 </div></header>
 
 <main class="wrap">

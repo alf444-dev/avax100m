@@ -56,6 +56,14 @@
   header{position:sticky;top:0;z-index:50;background:rgba(10,10,10,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--faint)}
   .hbar{display:flex;justify-content:space-between;align-items:center;height:52px}
   .logo{font-weight:700;letter-spacing:.08em;display:flex;align-items:center;gap:9px}
+  /* one nav on every page: the same three places in the same words, the current one marked */
+  .sitenav{display:inline-flex;gap:18px;align-items:center;margin-left:auto;margin-right:22px}
+  .nav{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);text-decoration:none}
+  .nav:hover{color:var(--red)}
+  .nav.on{color:var(--ink);box-shadow:0 2px 0 var(--red)}
+  @media(max-width:700px){.hbar{flex-wrap:wrap;height:auto!important;padding-top:14px}#netstatus{margin-left:auto}.sitenav{order:3;width:100%;margin:12px 0 0;justify-content:space-between;border-top:1px solid var(--faint);padding:11px 0}}
+  /* anchors land below the sticky header, not under it */
+  section[id]{scroll-margin-top:96px}
   .logo b{color:var(--red)}
   .logo-mark{width:24px;height:24px;display:block;flex:none}
   #netstatus{font-size:11px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;display:flex;align-items:center;gap:8px}
@@ -80,6 +88,7 @@
   .digit.sep{color:var(--dim);align-self:flex-end}
   .odo-label{margin-top:18px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
   .odo-label b{color:var(--ink);font-weight:400}
+  .hero-what{margin-top:18px;max-width:62ch;color:var(--dim);font-size:12px;line-height:1.7;letter-spacing:.02em}
 
   .progress{margin-top:44px}
   .bar{height:10px;border:1px solid var(--faint);position:relative}
@@ -191,10 +200,8 @@
 <header>
   <div class="wrap hbar">
     <a class="logo" href="/" style="text-decoration:none;color:var(--ink)"><img src="/favicon.svg" alt="" class="logo-mark" width="24" height="24" decoding="async"><b>AVAX</b>/100M</a>
-    <div style="display:flex;align-items:center;gap:18px">
-      <a href="/p-chain" style="font-size:11px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;text-decoration:none">p-chain →</a>
-      <div id="netstatus"><span id="netdot"></span><span id="netlabel">estimating…</span></div>
-    </div>
+    <nav class="sitenav" aria-label="site"><a class="nav on" href="/c-chain" aria-current="page">countdown</a><a class="nav" href="/c-chain#checker">wallets</a><a class="nav" href="/p-chain">validators</a></nav>
+    <div id="netstatus"><span id="netdot"></span><span id="netlabel">estimating…</span></div>
   </div>
 </header>
 
@@ -205,6 +212,7 @@
       <h1 class="eyebrow">avalanche c-chain mainnet<span class="sep"> · </span><b>approaching block 100,000,000</b></h1>
       <div class="odo" id="odo" role="img" aria-label="current block height"></div>
       <div class="odo-label">current block height · <b id="remaining">—</b> blocks remaining</div>
+      <p class="hero-what">a block is a batch of transactions. avalanche’s main chain, the c-chain, has made one every second or two since september 2020. this page counts down to number 100,000,000.</p>
 
       <div class="progress">
         <div class="bar"><div class="fill" id="fill"></div></div>
@@ -221,35 +229,6 @@
         <div class="stat"><div class="k">days since genesis</div><div class="v" id="gendays">—</div></div>
       </div>
     </div>
-
-    <section id="call">
-      <h2>the daily call</h2>
-      <p class="sub">How many blocks will the C-Chain produce in the next 60 seconds? Call it, then watch it happen live. Within 3 counts as a hit. One call a day counts toward your streak; the rest is practice.</p>
-      <div class="call-box">
-        <div class="call-top">
-          <div class="stat"><div class="k">streak</div><div class="v red" id="call-streak">0</div></div>
-          <div class="stat"><div class="k">best streak</div><div class="v" id="call-best">0</div></div>
-          <div class="stat"><div class="k">long-run pace</div><div class="v" id="call-pace">— <small>/min</small></div></div>
-        </div>
-        <div class="call-row">
-          <input id="callin" type="number" inputmode="numeric" min="0" max="999" placeholder="44" aria-label="Your call: blocks in the next 60 seconds">
-          <button id="callbtn">call it</button>
-          <span class="lbl" id="call-today">today's call is open</span>
-        </div>
-        <div class="call-live" id="call-live">
-          <div class="nums"><span>started at <b id="call-start">—</b></span><span class="t" id="call-left">60s</span><span>so far <b id="call-sofar">0</b></span></div>
-          <div class="meter"><i id="call-fill"></i><b id="call-mark" style="display:none"></b></div>
-          <div class="nums"><span>your call <b id="call-guess">—</b></span><span>pace <b id="call-rate">—</b>/min</span></div>
-        </div>
-        <div class="call-res" id="call-res">
-          <div class="big" id="call-verdict">—</div>
-          <div class="line" id="call-line"></div>
-          <div class="acts"><button id="call-again">call again</button><button id="call-dl">download card</button><a id="call-share" href="#" target="_blank" rel="noopener">share on x</a></div>
-          <canvas id="call-card" width="1200" height="630" style="display:none" aria-hidden="true"></canvas>
-        </div>
-      </div>
-      <div id="callmsg" role="status"></div>
-    </section>
 
     <section id="checker">
       <h2>check wallet</h2>
@@ -286,6 +265,35 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <section id="call">
+      <h2>the daily call</h2>
+      <p class="sub">How many blocks will the C-Chain produce in the next 60 seconds? Call it, then watch it happen live. Within 3 counts as a hit. One call a day counts toward your streak; the rest is practice.</p>
+      <div class="call-box">
+        <div class="call-top">
+          <div class="stat"><div class="k">streak</div><div class="v red" id="call-streak">0</div></div>
+          <div class="stat"><div class="k">best streak</div><div class="v" id="call-best">0</div></div>
+          <div class="stat"><div class="k">long-run pace</div><div class="v" id="call-pace">— <small>/min</small></div></div>
+        </div>
+        <div class="call-row">
+          <input id="callin" type="number" inputmode="numeric" min="0" max="999" placeholder="44" aria-label="Your call: blocks in the next 60 seconds">
+          <button id="callbtn">call it</button>
+          <span class="lbl" id="call-today">today's call is open</span>
+        </div>
+        <div class="call-live" id="call-live">
+          <div class="nums"><span>started at <b id="call-start">—</b></span><span class="t" id="call-left">60s</span><span>so far <b id="call-sofar">0</b></span></div>
+          <div class="meter"><i id="call-fill"></i><b id="call-mark" style="display:none"></b></div>
+          <div class="nums"><span>your call <b id="call-guess">—</b></span><span>pace <b id="call-rate">—</b>/min</span></div>
+        </div>
+        <div class="call-res" id="call-res">
+          <div class="big" id="call-verdict">—</div>
+          <div class="line" id="call-line"></div>
+          <div class="acts"><button id="call-again">call again</button><button id="call-dl">download card</button><a id="call-share" href="#" target="_blank" rel="noopener">share on x</a></div>
+          <canvas id="call-card" width="1200" height="630" style="display:none" aria-hidden="true"></canvas>
+        </div>
+      </div>
+      <div id="callmsg" role="status"></div>
     </section>
 
     <section id="census" style="display:none">

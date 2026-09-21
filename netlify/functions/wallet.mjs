@@ -130,6 +130,12 @@ async function fetchWallet(addr) {
   return { addr, ts, blk, days, pct, era: eraFor(ts), rank: rankFor(days), mv, txc, earlyStr, dateStr, claimed: await claimedP };
 }
 
+// One nav on every page: the same three places in the same words, the current one marked.
+const siteNav = (site, cur, extra = "") => '<nav class="sitenav" aria-label="site">'
+  + [["countdown", "/c-chain"], ["wallets", "/c-chain#checker"], ["validators", "/p-chain"]].map(([l, h]) =>
+    '<a class="nav' + (l === cur ? " on" : "") + '" href="' + site + h + '"' + (l === cur ? ' aria-current="page"' : "") + '>' + l + '</a>').join("")
+  + extra + '</nav>';
+
 // 1 = newest rank, RANKS.length = oldest
 function rankPos(name) { const i = RANKS.findIndex((r) => r[1] === name); return i < 0 ? 1 : RANKS.length - i; }
 
@@ -201,6 +207,9 @@ header{border-bottom:1px solid var(--faint)}
 .milli-mark path{fill:var(--red)}
 .hbar .nav{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);text-decoration:none}
 .hbar .nav:hover{color:var(--red)}
+.sitenav{display:inline-flex;gap:18px;align-items:center}
+.nav.on{color:var(--ink);box-shadow:0 2px 0 var(--red)}
+@media(max-width:560px){.hbar{flex-wrap:wrap;height:auto;padding-top:14px}.sitenav{width:100%;justify-content:space-between;border-top:1px solid var(--faint);margin-top:12px;padding:11px 0}}
 .hero{padding:64px 0 40px;border-bottom:1px solid var(--faint)}
 .eyebrow{font-size:11px;letter-spacing:.24em;color:var(--dim);text-transform:uppercase;margin-bottom:14px}
 h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:-.01em}
@@ -289,10 +298,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
 <body>
 <header><div class="wrap hbar">
   <a class="logo" href="${site}"><svg class="milli-mark" viewBox="0 0 288 288" width="24" height="24" aria-hidden="true"><path transform="translate(14,38)" fill-rule="evenodd" d="M255.0,32.1 L254.7,42.2 L233.7,47.8 L224.4,53.3 L224.3,77.7 L186.3,77.8 L186.3,95.7 L198.4,96.5 L198.5,128.1 L227.7,128.1 L237.7,125.2 L244.5,132.5 L170.1,206.8 L146.9,206.8 L135.2,195.1 L121.9,171.7 L131.8,161.3 L151.4,177.8 L171.0,157.8 L164.3,158.7 L151.0,171.8 L131.6,155.5 L115.2,171.7 L126.4,192.1 L103.2,192.1 L92.2,172.8 L84.8,159.9 L94.5,154.2 L108.6,158.0 L121.9,144.7 L122.5,141.2 L113.8,126.0 L126.1,113.3 L123.8,111.8 L121.7,112.7 L84.3,134.6 L76.9,136.1 L66.2,133.2 L59.4,126.7 L40.0,93.2 L39.9,88.2 L67.6,80.8 L80.9,73.0 L113.1,33.5 L119.0,36.8 L115.5,52.9 L145.8,35.6 L148.4,43.5 L139.7,57.3 L159.2,68.6 L159.2,5.0 L167.2,8.6Z M99.1,91.2 L105.9,79.7 L108.4,83.9 L112.4,91.3Z M64.3,139.8 L45.3,173.2 L34.4,173.0 L41.7,160.0 L26.1,164.2 L20.1,159.3 L16.3,161.3 L6.9,164.9 L5.0,163.0 L5.9,158.8 L27.6,137.0 L32.4,139.8 L32.5,146.8 L61.3,139.0Z"></path></svg><b>AVAX</b>/100M</a>
-  <span style="display:inline-flex;gap:18px;align-items:center">
-    <a class="nav" href="${site}/p-chain">p-chain</a>
-    <a class="nav" href="${site}/c-chain">check a wallet \u2192</a>
-  </span>
+  ${siteNav(site, "wallets")}
 </div></header>
 
 <main class="wrap">
