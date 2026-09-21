@@ -1,4 +1,11 @@
 import { getStore } from "@netlify/blobs";
+// constant-time-ish compare so a wrong key can't be timed character by character
+function safeEq(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let out = 0;
+  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return out === 0;
+}
 
 // src/census.js
 var ERAS = [
@@ -91,10 +98,14 @@ function publicRecords(records) {
 var census_default = async (req) => {
   const store = getStore("census");
   if (req.method === "GET") {
-    const counts2 = await store.get("counts", { type: "json" }) || EMPTY();
-    const records = await getStore("records").get("records-v25", { type: "json" }).catch(() => null);
+    const [stored, records] = await Promise.all([
+      store.get("counts", { type: "json" }),
+      getStore("records").get("records-v25", { type: "json" }).catch(() => null)
+    ]);
+    const counts2 = stored || EMPTY();
     counts2.records = publicRecords(records);
-    return new Response(JSON.stringify(counts2), { headers: HEADERS });
+    // public aggregate, read by every c-chain and wallet page view
+    return new Response(JSON.stringify(counts2), { headers: Object.assign({}, HEADERS, { "cache-control": "public, max-age=60" }) });
   }
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "method not allowed" }), { status: 405, headers: HEADERS });
@@ -106,7 +117,7 @@ var census_default = async (req) => {
     return new Response(JSON.stringify({ error: "bad json" }), { status: 400, headers: HEADERS });
   }
   if (body && body.audit && typeof body.key === "string") {
-    if (!process.env.CENSUS_KEY || body.key !== process.env.CENSUS_KEY) {
+    if (!process.env.CENSUS_KEY || !safeEq(body.key, process.env.CENSUS_KEY)) {
       return new Response(JSON.stringify({ error: "bad key" }), { status: 403, headers: HEADERS });
     }
     // sample wallets from the pnl cache, compare txlist-only era (old backfill method)
@@ -145,7 +156,7 @@ var census_default = async (req) => {
     return new Response(JSON.stringify({ audited: rows.length, poolSize: seen.size, rows }), { headers: HEADERS });
   }
   if (body && body.fixeras && typeof body.key === "string") {
-    if (!process.env.CENSUS_KEY || body.key !== process.env.CENSUS_KEY) {
+    if (!process.env.CENSUS_KEY || !safeEq(body.key, process.env.CENSUS_KEY)) {
       return new Response(JSON.stringify({ error: "bad key" }), { status: 403, headers: HEADERS });
     }
     // correction pass: walks every counted wallet still in the pnl cache,
@@ -208,7 +219,7 @@ var census_default = async (req) => {
     return new Response(JSON.stringify({ done: !timedOut, scanned, eraMoved, rankMoved, unresolved, movements, total: counts.total }), { headers: HEADERS });
   }
   if (body && body.backfill && typeof body.key === "string") {
-    if (!process.env.CENSUS_KEY || body.key !== process.env.CENSUS_KEY) {
+    if (!process.env.CENSUS_KEY || !safeEq(body.key, process.env.CENSUS_KEY)) {
       return new Response(JSON.stringify({ error: "bad key" }), { status: 403, headers: HEADERS });
     }
     const pstore = getStore("pnl");
@@ -263,7 +274,7 @@ var census_default = async (req) => {
     return new Response(JSON.stringify({ done: !timedOut, scanned, added, skipped, total: counts.total }), { headers: HEADERS });
   }
   if (body && body.restore && typeof body.key === "string") {
-    if (!process.env.CENSUS_KEY || body.key !== process.env.CENSUS_KEY) {
+    if (!process.env.CENSUS_KEY || !safeEq(body.key, process.env.CENSUS_KEY)) {
       return new Response(JSON.stringify({ error: "bad key" }), { status: 403, headers: HEADERS });
     }
     const r = body.restore;
@@ -289,8 +300,9 @@ var census_default = async (req) => {
   counts.total += 1;
   counts.eras[era] = (counts.eras[era] || 0) + 1;
   counts.ranks[rank] = (counts.ranks[rank] || 0) + 1;
-  if (!(mv in counts.moves) && Object.keys(counts.moves).length >= 300) mv = "other";
-  counts.moves[mv] = (counts.moves[mv] || 0) + 1;
+  // own keys only: "constructor" / "toString" are `in` every object and would poison the tally
+  if (!Object.prototype.hasOwnProperty.call(counts.moves, mv) && Object.keys(counts.moves).length >= 300) mv = "other";
+  counts.moves[mv] = (Object.prototype.hasOwnProperty.call(counts.moves, mv) && Number(counts.moves[mv]) || 0) + 1;
   await store.set("counts", JSON.stringify(counts));
   return new Response(JSON.stringify(counts), { headers: HEADERS });
 };

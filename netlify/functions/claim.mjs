@@ -1,6 +1,8 @@
 import { getStore } from "@netlify/blobs";
 
 import { ethers } from "ethers";
+// upstream reads are bounded so a hung provider rejects into the existing fallbacks
+const bounded = () => ({ signal: AbortSignal.timeout(8e3) });
 
 // src/claim.js
 var HEADERS = { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" };
@@ -30,7 +32,7 @@ function storeOr() {
   return null;
 }
 var clean = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
-var THEMES = { red: "#e6212f", snow: "#f2f2f2", gold: "#d4a017", teal: "#2aa198", violet: "#7c5cff", pink: "#ff5ea8", term: "#00ff66" };
+var THEMES = { red: "#e92733", snow: "#f2f2f2", gold: "#d4a017", teal: "#2aa198", violet: "#7c5cff", pink: "#ff5ea8", term: "#00ff66" };
 var cleanBadges = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9,]/g, "").split(",").filter(Boolean).slice(0, 3);
 var cleanTop8 = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9.,_-]/g, "").split(",").filter((x) => /^0x[0-9a-f]{40}$/.test(x) || /^[a-z0-9-_]+(\.[a-z0-9-_]+)*\.avax$/.test(x)).slice(0, 8);
 var BLOCKED = /nigg|fagg|kike|spic\b|chink|retard|rape|hitler/i;
@@ -45,7 +47,7 @@ function statusProblem(st) {
 }
 async function currentBlock() {
   try {
-    const j = await fetch(RS + "?module=proxy&action=eth_blockNumber" + RS_KEY).then((r) => r.json());
+    const j = await fetch(RS + "?module=proxy&action=eth_blockNumber" + RS_KEY, bounded()).then((r) => r.json());
     return j && j.result ? parseInt(j.result, 16) : null;
   } catch {
     return null;
@@ -96,9 +98,11 @@ var claim_default = async (req) => {
     const nrec = await store.get("n/" + addr, { type: "json" }).catch(() => null);
     if (!nrec || Date.now() - nrec.t > NONCE_MS) return new Response(JSON.stringify({ error: "nonce expired \u2014 try again." }), { status: 400, headers: HEADERS });
     const action = body.action === "profile" ? "profile" : body.action === "status" ? "status" : "claim";
+    // a self-transaction proves only the nonce, none of the payload: it can claim, never edit
+    if (body.method === "tx" && action !== "claim") return new Response(JSON.stringify({ error: "tx method is claim-only" }), { status: 400, headers: HEADERS });
     if (body.method === "tx") {
       try {
-        const j = await fetch(RS + "?module=account&action=txlist&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=10&sort=desc" + RS_KEY).then((r) => r.json());
+        const j = await fetch(RS + "?module=account&action=txlist&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=10&sort=desc" + RS_KEY, bounded()).then((r) => r.json());
         const hexNonce = nrec.nonce;
         const hit = (j.result || []).find((t) => (t.from || "").toLowerCase() === addr && (t.to || "").toLowerCase() === addr && (t.input || "").toLowerCase().includes(hexNonce) && Date.now() / 1e3 - parseInt(t.timeStamp, 10) < 3600);
         if (!hit) return new Response(JSON.stringify({ error: "no matching self-transaction found yet. it can take a minute to index." }), { status: 400, headers: HEADERS });

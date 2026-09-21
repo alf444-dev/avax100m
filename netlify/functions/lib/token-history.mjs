@@ -76,7 +76,7 @@ export async function fetchRoutescanRows({
     const url = routescanUrl({ routescanBase, routescanKey, action, address, contract, startBlock, endBlock, sort, page, offset: pageSize });
     let response;
     try {
-      response = await fetchImpl(url);
+      response = await fetchImpl(url, { signal: AbortSignal.timeout(8e3) });
     } catch {
       return { rows, complete: false, reason: "network" };
     }

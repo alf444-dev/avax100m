@@ -18,7 +18,7 @@ export async function fetchCompletedValidations(nodeID, { fetchImpl = fetch, bas
     u.searchParams.set("validationStatus", "completed");
     u.searchParams.set("pageSize", "100");
     if (pageToken) u.searchParams.set("pageToken", pageToken);
-    const r = await fetchImpl(u);
+    const r = await fetchImpl(u, { signal: AbortSignal.timeout(8e3) });
     if (!r.ok) throw new Error("glacier http " + r.status);
     const j = await r.json();
     for (const v of (j.validators || [])) out.push(v);

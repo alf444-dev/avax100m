@@ -1,4 +1,14 @@
 import { getStore } from "@netlify/blobs";
+import { internalHeaders } from "./lib/ratelimit.mjs";
+// upstream reads are bounded so a hung provider rejects into the existing fallbacks
+const bounded = () => ({ signal: AbortSignal.timeout(8e3) });
+// constant-time-ish compare so a wrong key can't be timed character by character
+function safeEq(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let out = 0;
+  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return out === 0;
+}
 
 // src/lib.js
 var GENESIS = Date.UTC(2020, 8, 21);
@@ -88,8 +98,8 @@ async function fetchWallet(addr) {
   let ts, blk, mv, dateStr, cntj, blkj;
   if (cached && typeof cached.ts === "number" && cached.blk != null && cached.mvKey) {
     [cntj, blkj] = await Promise.all([
-      fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest" + RS_KEY).then((r) => r.json()).catch(() => null),
-      fetch(API + "?module=proxy&action=eth_blockNumber" + RS_KEY).then((r) => r.json()).catch(() => null)
+      fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest" + RS_KEY, bounded()).then((r) => r.json()).catch(() => null),
+      fetch(API + "?module=proxy&action=eth_blockNumber" + RS_KEY, bounded()).then((r) => r.json()).catch(() => null)
     ]);
     ts = cached.ts; blk = cached.blk; dateStr = cached.dateStr;
     mv = { key: cached.mvKey, val: cached.mvVal, contract: cached.mvContract || null };
@@ -97,11 +107,11 @@ async function fetchWallet(addr) {
     const base = API + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=25&sort=asc" + RS_KEY;
     let txj, tokj, intj;
     [txj, tokj, intj, cntj, blkj] = await Promise.all([
-      fetch(base + "&action=txlist").then((r) => r.json()),
-      fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => ({ result: [] })),
-      fetch(base + "&action=txlistinternal").then((r) => r.json()).catch(() => ({ result: [] })),
-      fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest" + RS_KEY).then((r) => r.json()).catch(() => null),
-      fetch(API + "?module=proxy&action=eth_blockNumber" + RS_KEY).then((r) => r.json()).catch(() => null)
+      fetch(base + "&action=txlist", bounded()).then((r) => r.json()),
+      fetch(base + "&action=tokentx", bounded()).then((r) => r.json()).catch(() => ({ result: [] })),
+      fetch(base + "&action=txlistinternal", bounded()).then((r) => r.json()).catch(() => ({ result: [] })),
+      fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest" + RS_KEY, bounded()).then((r) => r.json()).catch(() => null),
+      fetch(API + "?module=proxy&action=eth_blockNumber" + RS_KEY, bounded()).then((r) => r.json()).catch(() => null)
     ]);
     const heads = [];
     if (txj.result && txj.result.length) heads.push(txj.result[0]);
@@ -131,14 +141,14 @@ var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
 var CACHE_MS = 7 * 24 * 3600 * 1e3;
 var SCAM = /claim|visit|reward|bonus|airdrop|gift|prize|www|http|\.com|\.io|\.xyz|\.net|\.org/i;
 var usd = (n) => "$" + Math.round(Math.abs(n)).toLocaleString("en-US");
-var badges_default = async (req) => {
+var badges_default = async (req, context) => {
   const url = new URL(req.url);
   const addr = (url.searchParams.get("addr") || "").toLowerCase();
   if (!/^0x[0-9a-f]{40}$/.test(addr)) {
     return new Response(JSON.stringify({ badges: [] }), { status: 400, headers: HEADERS });
   }
   const debugRequested = url.searchParams.get("debug") === "1";
-  const debug = debugRequested && !!process.env.ADMIN_KEY && req.headers.get("x-admin-key") === process.env.ADMIN_KEY;
+  const debug = debugRequested && !!process.env.ADMIN_KEY && safeEq(req.headers.get("x-admin-key"), process.env.ADMIN_KEY);
   if (debugRequested && !debug) return new Response("Not found", { status: 404, headers: { "content-type": "text/plain" } });
   let store = null;
   let cachedBadge = null;
@@ -147,16 +157,16 @@ var badges_default = async (req) => {
   } catch {
   }
   if (store && !debug) try {
-    cachedBadge = await store.get("w4/" + addr, { type: "json" });
+    cachedBadge = await store.get("w5/" + addr, { type: "json" });
     if (cachedBadge && Date.now() - cachedBadge.t < CACHE_MS) return new Response(JSON.stringify({ badges: cachedBadge.b }), { headers: HEADERS });
   } catch {
   }
   const site = (process.env.URL || "https://avax100m.xyz").replace(/\/$/, "");
   const [w, pnlj, resj, tokj] = await Promise.all([
     fetchWallet(addr).catch(() => null),
-    fetch(site + "/api/pnl?addr=" + addr).then(async (r) => ({ status: r.status, body: await r.json() })).catch(() => null),
-    fetch(site + "/api/resolve?addr=" + addr).then((r) => r.json()).catch(() => null),
-    fetch(RS + "?module=account&action=tokentx&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=100&sort=asc" + RS_KEY).then((r) => r.json()).catch(() => ({ result: [] }))
+    fetch(site + "/api/pnl?addr=" + addr, { headers: internalHeaders(context) }).then(async (r) => ({ status: r.status, body: await r.json() })).catch(() => null),
+    fetch(site + "/api/resolve?addr=" + addr, bounded()).then((r) => r.json()).catch(() => null),
+    fetch(RS + "?module=account&action=tokentx&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=100&sort=asc" + RS_KEY, bounded()).then((r) => r.json()).catch(() => ({ result: [] }))
   ]);
   if (!w) return new Response(JSON.stringify({ badges: [] }), { headers: HEADERS });
   const earned = [];
@@ -176,13 +186,14 @@ var badges_default = async (req) => {
     push("rush", 0, "arrived during <b>avalanche rush</b> \u2014 the $180m summer.");
   if (w.mv && w.mv.key === "FIRST TOKEN" && w.mv.contract) {
     try {
-      const bj = await fetch(RS + "?module=account&action=tokenbalance&contractaddress=" + w.mv.contract + "&address=" + addr + "&tag=latest" + RS_KEY).then((r) => r.json());
+      const bj = await fetch(RS + "?module=account&action=tokenbalance&contractaddress=" + w.mv.contract + "&address=" + addr + "&tag=latest" + RS_KEY, bounded()).then((r) => r.json());
       if (bj && bj.result && BigInt(bj.result) > 0n)
         push("firstlove", 0, "first token <b>$" + mvVal + "</b>, " + w.dateStr.toLowerCase() + " \u2014 balance never reached zero. " + w.days.toLocaleString("en-US") + " days.");
     } catch {
     }
   }
-  if (resj && resj.name)
+  // the name lands in innerHTML on the profile page: hold it to the same charset as forward resolution
+  if (resj && typeof resj.name === "string" && resj.name.length <= 80 && /^[a-z0-9-_]+(\.[a-z0-9-_]+)*\.avax$/.test(resj.name))
     push("registry", 0, "reverse record set: <b>" + resj.name + "</b>. the chain knows your name.");
   try {
     const seen = {};
@@ -263,7 +274,7 @@ var badges_default = async (req) => {
   for (const b of earned) b.rarity = { count: counts.byId[b.id] || 1, total: Math.max(counts.total, 1) };
   earned.sort((a, b) => a.rarity.count - b.rarity.count);
   if (store && !debug) try {
-    await store.set("w4/" + addr, JSON.stringify({ t: Date.now(), b: earned }));
+    await store.set("w5/" + addr, JSON.stringify({ t: Date.now(), b: earned }));
   } catch {
   }
   return new Response(JSON.stringify({ badges: earned }), { headers: HEADERS });

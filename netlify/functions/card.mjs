@@ -89,11 +89,11 @@ var RS_KEY = process.env.ROUTESCAN_KEY ? "&apikey=" + process.env.ROUTESCAN_KEY 
 async function fetchWallet(addr) {
   const base = API + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=25&sort=asc" + RS_KEY;
   const [txj, tokj, intj, cntj, blkj] = await Promise.all([
-    fetch(base + "&action=txlist").then((r) => r.json()),
-    fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => ({ result: [] })),
-    fetch(base + "&action=txlistinternal").then((r) => r.json()).catch(() => ({ result: [] })),
-    fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest" + RS_KEY).then((r) => r.json()).catch(() => null),
-    fetch(API + "?module=proxy&action=eth_blockNumber" + RS_KEY).then((r) => r.json()).catch(() => null)
+    fetch(base + "&action=txlist", { signal: AbortSignal.timeout(8e3) }).then((r) => r.json()),
+    fetch(base + "&action=tokentx", { signal: AbortSignal.timeout(8e3) }).then((r) => r.json()).catch(() => ({ result: [] })),
+    fetch(base + "&action=txlistinternal", { signal: AbortSignal.timeout(8e3) }).then((r) => r.json()).catch(() => ({ result: [] })),
+    fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest" + RS_KEY, { signal: AbortSignal.timeout(8e3) }).then((r) => r.json()).catch(() => null),
+    fetch(API + "?module=proxy&action=eth_blockNumber" + RS_KEY, { signal: AbortSignal.timeout(8e3) }).then((r) => r.json()).catch(() => null)
   ]);
   const heads = [];
   if (txj.result && txj.result.length) heads.push(txj.result[0]);
@@ -132,7 +132,7 @@ function draw(w) {
   const x = img.getContext("2d");
   x.fillStyle = "#0a0a0a";
   x.fillRect(0, 0, W, H);
-  x.strokeStyle = "#e6212f";
+  x.strokeStyle = "#e92733";
   x.lineWidth = 5;
   x.strokeRect(20, 20, W - 40, H - 40);
   x.strokeStyle = "#2a2a2a";
@@ -142,7 +142,7 @@ function draw(w) {
   x.fillStyle = "#7a7a7a";
   x.font = "22px Mono";
   x.fillText("AVALANCHE C-CHAIN", L, 88);
-  x.fillStyle = "#e6212f";
+  x.fillStyle = "#e92733";
   x.font = "78px MonoB";
   x.fillText(w.rank[1], L, 165);
   x.fillStyle = "#7a7a7a";
@@ -154,7 +154,7 @@ function draw(w) {
     x.fillStyle = "#7a7a7a";
     x.font = "19px Mono";
     x.fillText(k, cx, cy);
-    x.fillStyle = big ? "#e6212f" : "#f2f2f2";
+    x.fillStyle = big ? "#e92733" : "#f2f2f2";
     x.font = big ? "44px MonoB" : "34px MonoB";
     x.fillText(v, cx, cy + (big ? 46 : 38));
   }
@@ -171,7 +171,7 @@ function draw(w) {
   x.fillStyle = "#7a7a7a";
   x.font = "19px Mono";
   x.fillText(w.avvy ? w.avvy : w.addr.slice(0, 10) + "\u2026" + w.addr.slice(-8), L, 586);
-  x.fillStyle = "#e6212f";
+  x.fillStyle = "#e92733";
   x.font = "19px MonoB";
   const tag = "AVAX100M.XYZ \xB7 ROAD TO BLOCK 100,000,000";
   x.fillText(tag, W - L - tag.length * 11.5, 586);
@@ -197,14 +197,15 @@ var card_default = async (req) => {
     await loadFonts();
     const [w, nm] = await Promise.all([
       fetchWallet(m[1]),
-      fetch(site + "/api/resolve?addr=" + m[1].toLowerCase()).then((r) => r.json()).then((j) => j && j.name || null).catch(() => null)
+      fetch(site + "/api/resolve?addr=" + m[1].toLowerCase(), { signal: AbortSignal.timeout(8e3) }).then((r) => r.json()).then((j) => j && j.name || null).catch(() => null)
     ]);
     if (!w) return Response.redirect(site + "/og.png", 302);
     w.avvy = nm;
     const png = await toPng(draw(w));
     return new Response(png, { headers: {
       "content-type": "image/png",
-      "cache-control": "public, max-age=86400"
+      "cache-control": "public, max-age=86400",
+      "netlify-cdn-cache-control": "public, durable, max-age=86400"
     } });
   } catch (e) {
     return Response.redirect(site + "/og.png", 302);

@@ -81,29 +81,31 @@ function firstInteresting(txs, toks, addr) {
 }
 var API = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
 var RS_KEY = process.env.ROUTESCAN_KEY ? "&apikey=" + process.env.ROUTESCAN_KEY : "";
+// every upstream read is bounded: a hung upstream must reject so the fallbacks below can fire
+const getJson = (u) => fetch(u, { signal: AbortSignal.timeout(8e3) }).then((r) => r.json());
 async function fetchWallet(addr) {
-  const claimedP = fetch("https://avax100m.xyz/api/claim?addr=" + addr + "&info=1").then((r) => r.json()).then((c) => !!(c && c.claimed)).catch(() => false);
+  const claimedP = getJson("https://avax100m.xyz/api/claim?addr=" + addr + "&info=1").then((c) => !!(c && c.claimed)).catch(() => false);
+  // both branches need the 2 cheap live calls: start them before the blob read
+  const proxyP = Promise.all([
+    getJson(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest" + RS_KEY).catch(() => null),
+    getJson(API + "?module=proxy&action=eth_blockNumber" + RS_KEY).catch(() => null)
+  ]);
   const ft = getStore("firsttx");
   const cached = await ft.get(addr, { type: "json" }).catch(() => null);
-  const proxy = () => Promise.all([
-    fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest" + RS_KEY).then((r) => r.json()).catch(() => null),
-    fetch(API + "?module=proxy&action=eth_blockNumber" + RS_KEY).then((r) => r.json()).catch(() => null)
-  ]);
   let ts, blk, mv, dateStr, cntj, blkj;
   if (cached && typeof cached.ts === "number" && cached.blk != null && cached.mvKey) {
     // hot path: identity is immutable, cached — only the 2 cheap live calls
-    [cntj, blkj] = await proxy();
+    [cntj, blkj] = await proxyP;
     ts = cached.ts; blk = cached.blk; dateStr = cached.dateStr;
     mv = { key: cached.mvKey, val: cached.mvVal, contract: cached.mvContract || null };
   } else {
     const base = API + "?module=account&address=" + addr + "&startblock=0&endblock=999999999&page=1&offset=25&sort=asc" + RS_KEY;
     let txj, tokj, intj;
-    [txj, tokj, intj, cntj, blkj] = await Promise.all([
-      fetch(base + "&action=txlist").then((r) => r.json()),
-      fetch(base + "&action=tokentx").then((r) => r.json()).catch(() => ({ result: [] })),
-      fetch(base + "&action=txlistinternal").then((r) => r.json()).catch(() => ({ result: [] })),
-      fetch(API + "?module=proxy&action=eth_getTransactionCount&address=" + addr + "&tag=latest" + RS_KEY).then((r) => r.json()).catch(() => null),
-      fetch(API + "?module=proxy&action=eth_blockNumber" + RS_KEY).then((r) => r.json()).catch(() => null)
+    [txj, tokj, intj, [cntj, blkj]] = await Promise.all([
+      getJson(base + "&action=txlist"),
+      getJson(base + "&action=tokentx").catch(() => ({ result: [] })),
+      getJson(base + "&action=txlistinternal").catch(() => ({ result: [] })),
+      proxyP
     ]);
     const heads = [];
     if (txj.result && txj.result.length) heads.push(txj.result[0]);
@@ -141,6 +143,8 @@ function page(w, site) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="color-scheme" content="dark">
 <title>${esc(title)}</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
@@ -150,6 +154,7 @@ function page(w, site) {
 <meta name="description" content="${esc(desc)}">
 ${w.claimed ? "" : '<meta name="robots" content="noindex,follow">'}
 <link rel="canonical" href="${pageUrl}">
+<link rel="preconnect" href="https://api.binance.com" crossorigin>
 <meta property="og:type" content="profile">
 <meta property="og:url" content="${pageUrl}">
 <meta property="og:title" content="${esc(title)}">
@@ -160,7 +165,7 @@ ${w.claimed ? "" : '<meta name="robots" content="noindex,follow">'}
 <meta name="twitter:description" content="${esc(desc)}">
 <meta name="twitter:image" content="${img}">
 <style>
-:root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e6212f;
+:root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e92733;
 --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6}
@@ -185,7 +190,7 @@ h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:
 .brack{position:absolute;top:50%;transform:translateY(-50%);right:0;display:grid;grid-template-columns:repeat(5,38px);gap:8px;justify-content:end;max-width:270px}
 .brack-label{grid-column:1/-1;text-align:right;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
 .brack-label b{color:var(--red);font-weight:700}
-.brack-label .hint{color:var(--faint)}
+.brack-label .hint{color:var(--dim)}
 @media(hover:none){.brack-label .hint::before{content:"tap"}}
 @media(hover:hover){.brack-label .hint::before{content:"hover"}}
 .btile{position:relative;width:38px;height:38px;border:1px solid var(--faint);display:flex;align-items:center;justify-content:center;cursor:default;outline:none;background:var(--bg)}
@@ -212,7 +217,6 @@ h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:
 .bdg .bt{color:var(--red)}
 .bdg.medal{background:var(--red);border-color:var(--red)}
 .bdg.medal .bn,.bdg.medal .br{color:#0a0a0a}
-.bdg.medal .br{opacity:.75}
 .bdg.medal .g-ink,.bdg.medal .g-red{fill:#0a0a0a}
 .bdg.medal .s-ink,.bdg.medal .s-red{stroke:#0a0a0a}
 .bdg .ev{display:none;position:absolute;left:-1px;top:calc(100% + 4px);min-width:230px;max-width:320px;z-index:5;background:var(--bg);border:1px solid var(--red);padding:8px 11px;font-size:10px;color:var(--dim);letter-spacing:.05em;line-height:1.55;white-space:normal}
@@ -221,8 +225,11 @@ h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:
 .bdg:hover .ev,.bdg:focus-visible .ev{display:block}
 .g-ink{fill:var(--ink)}.g-red{fill:var(--red)}
 .s-ink{stroke:var(--ink);fill:none;stroke-width:2}.s-red{stroke:var(--red);fill:none;stroke-width:2}.s-thin{stroke-width:1.5}
+input:focus-visible,textarea:focus-visible,.btn:focus-visible,#copy-addr:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 .btn{background:transparent;border:1px solid var(--faint);color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:6px 12px;cursor:pointer}
 .btn:hover{border-color:var(--red);color:var(--red)}
+/* touch only: grow the hit area, not the look */
+@media(pointer:coarse){.btn{position:relative}.btn::after{content:"";position:absolute;inset:-9px -2px}}
 .btn.primary{background:var(--red);border-color:var(--red);color:#000;font-weight:700}
 .btn.primary:hover{background:var(--ink);border-color:var(--ink)}
 section{padding:44px 0;border-bottom:1px solid var(--faint)}
@@ -264,7 +271,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     <div id="status-line" style="display:none;margin-top:20px;font-size:15px;color:var(--ink);letter-spacing:.02em">\u201C<span id="status-text"></span>\u201D</div>
     <div id="avvy" style="display:none;margin-top:24px;font-size:20px;font-weight:700;color:var(--ink);letter-spacing:.02em"></div>
     <div class="addrline">
-      <span class="a" id="copy-addr" title="click to copy address" style="cursor:pointer;border-bottom:1px dotted var(--faint)">${esc(short)}</span>
+      <span class="a" id="copy-addr" role="button" tabindex="0" aria-label="copy address" title="click to copy address" style="cursor:pointer;border-bottom:1px dotted var(--faint)">${esc(short)}</span>
       <button class="btn" id="copy-link">copy link</button>
       <button class="btn primary" id="share-x">share on x</button>
       <button class="btn" id="claim-btn" style="display:none" title="right-click for the hardware-wallet route">claim this page</button>
@@ -276,11 +283,11 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     <div id="cust" style="display:none;margin-top:18px;border:1px solid var(--faint);padding:16px 18px;max-width:560px">
       <div style="font-size:10px;color:var(--red);letter-spacing:.25em;text-transform:uppercase;margin-bottom:12px">customize \xB7 the owner\u2019s signature saves everything</div>
       <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">status \xB7 100 chars \xB7 no links</div>
-      <input id="cust-status" maxlength="100" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px;letter-spacing:.02em;outline:none" placeholder="never selling. ask my roundtrip.">
+      <input id="cust-status" aria-label="status" maxlength="100" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px;letter-spacing:.02em" placeholder="never selling. ask my roundtrip.">
       <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">accent</div>
       <div id="cust-themes" style="display:flex;gap:8px"></div>
       <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">top 8 \xB7 one address or name.avax per line</div>
-      <textarea id="cust-top8" rows="4" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:12px;padding:9px 11px;outline:none;resize:vertical" placeholder="gribbly.avax&#10;0x1234\u2026"></textarea>
+      <textarea id="cust-top8" aria-label="top 8 addresses, one per line" rows="4" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:12px;padding:9px 11px;resize:vertical" placeholder="gribbly.avax&#10;0x1234\u2026"></textarea>
       <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">badges on your card \xB7 pick up to 3</div>
       <div id="cust-badges" style="display:flex;flex-wrap:wrap;gap:6px"></div>
       <div style="display:flex;gap:10px;margin-top:16px">
@@ -363,7 +370,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
   <section id="lookup-sec">
     <h2>token lookup</h2>
     <div style="display:flex;gap:10px;max-width:560px">
-      <input id="tok-q" spellcheck="false" placeholder="$COQ or 0x contract" style="flex:1;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px;outline:none">
+      <input id="tok-q" aria-label="token symbol or contract" spellcheck="false" placeholder="$COQ or 0x contract" style="flex:1;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px">
       <button class="btn primary" id="tok-go">look up</button>
     </div>
     <div id="tok-out" style="margin-top:18px"></div>
@@ -387,6 +394,7 @@ var SITE=${JSON.stringify(site)};
 var PAGE=SITE+"/w/"+D.addr;
 
 document.getElementById("copy-addr").addEventListener("click",function(){cp(D.addr,this);});
+document.getElementById("copy-addr").addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();cp(D.addr,this);}});
 document.getElementById("copy-link").addEventListener("click",function(){cp(PAGE,this);});
 function cp(t,btn){ if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){var o=btn.textContent;btn.textContent="copied";setTimeout(function(){btn.textContent=o;},1400);}).catch(function(){});} }
 document.getElementById("share-x").addEventListener("click",function(){
@@ -603,7 +611,7 @@ function svgFor(id){
 function drawGlyph(x,id,ox,oy,s,inv){
   var ops=GLYPHS[id]; if(!ops) return;
   var k=s/24;
-  var R=window.THEME_HEX||"#e6212f";
+  var R=window.THEME_HEX||"#e92733";
   var C={i:inv?"#0a0a0a":"#f2f2f2",r:inv?"#0a0a0a":R,b:inv?R:"#0a0a0a"};
   ops.forEach(function(o){
     if(o[0]===0){ x.fillStyle=C[o[5]]; x.fillRect(ox+o[1]*k,oy+o[2]*k,o[3]*k,o[4]*k); }
@@ -641,7 +649,7 @@ fetch(SITE+"/api/badges?addr="+D.addr).then(function(r){return r.json();}).then(
 
 /* ---- claim / status / oracle ---- */
 var CLAIMED=false;
-var THEMES={red:"#e6212f",snow:"#f2f2f2",gold:"#d4a017",teal:"#2aa198",violet:"#7c5cff",pink:"#ff5ea8",term:"#00ff66"};
+var THEMES={red:"#e92733",snow:"#f2f2f2",gold:"#d4a017",teal:"#2aa198",violet:"#7c5cff",pink:"#ff5ea8",term:"#00ff66"};
 var CUR={status:"",theme:"red",cardBadges:[],top8:[]};
 function applyTheme(t){
   var c=THEMES[t]||THEMES.red;
@@ -753,7 +761,7 @@ document.getElementById("status-btn").addEventListener("click",function(){
 });
 document.getElementById("cust-cancel").addEventListener("click",function(){ document.getElementById("cust").style.display="none"; });
 document.getElementById("cust-save").addEventListener("click",function(){
-  var st=(document.getElementById("cust-status").value||"").toLowerCase().replace(/s+/g," ").trim().slice(0,100);
+  var st=(document.getElementById("cust-status").value||"").toLowerCase().replace(/\\s+/g," ").trim().slice(0,100);
   var theme=CUR.theme, badges=CUR.cardBadges.join(",");
   var top8=(document.getElementById("cust-top8").value||"").toLowerCase().split(/[\\n,]+/).map(function(x){return x.trim();}).filter(Boolean).slice(0,8).join(",");
   withSig(function(nonce){ return "avax100m.xyz\\nupdate profile for "+D.addr+"\\nstatus: "+st+"\\ntheme: "+theme+"\\nbadges: "+badges+"\\ntop8: "+top8+"\\nnonce: "+nonce; }, function(sig){
@@ -832,7 +840,7 @@ function tokLookup(){
     var srcName=function(s){return s==="llama"?"defillama":s==="cg"?"coingecko":null;};
     var ps=srcName(t.priceSrc), qs2=srcName(t.peakSrc);
     var srcTxt=ps?("priced via "+ps+(qs2&&qs2!==ps?" \xB7 peak via "+qs2:"")):"";
-    var srcFoot=srcTxt?'<div style="font-size:9px;color:var(--faint);letter-spacing:.1em;text-transform:uppercase;padding-top:9px">'+srcTxt+'</div>':"";
+    var srcFoot=srcTxt?'<div style="font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;padding-top:9px">'+srcTxt+'</div>':"";
     out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:16px;font-weight:700;letter-spacing:.06em;margin-bottom:10px">$'+pnlEsc(t.sym)+'</div>'+rows+srcFoot+'</div>';
   }).catch(function(){ out.innerHTML='<span style="font-size:11px;color:var(--red)">lookup failed. try again.</span>'; });
 }
@@ -994,12 +1002,12 @@ function drawPnlCard(s){
   var c=document.getElementById("pnl-card"),x=c.getContext("2d");
   var W=1080,H=1350,mono="monospace";
   x.fillStyle="#0a0a0a";x.fillRect(0,0,W,H);
-  x.strokeStyle=(window.THEME_HEX||"#e6212f");x.lineWidth=6;x.strokeRect(28,28,W-56,H-56);
+  x.strokeStyle=(window.THEME_HEX||"#e92733");x.lineWidth=6;x.strokeRect(28,28,W-56,H-56);
   x.strokeStyle="#2a2a2a";x.lineWidth=2;x.strokeRect(48,48,W-96,H-96);
   x.textBaseline="top";
   x.fillStyle="#7a7a7a";x.font="600 30px "+mono;
   x.fillText("AVALANCHE C-CHAIN",92,104);
-  x.fillStyle=(window.THEME_HEX||"#e6212f");x.font="800 84px "+mono;
+  x.fillStyle=(window.THEME_HEX||"#e92733");x.font="800 84px "+mono;
   x.fillText("REALIZED P&L",92,150);
   x.fillStyle="#7a7a7a";x.font="400 27px "+mono;
   var subline = RANK.toLowerCase()+" \xB7 since "+ERA.toLowerCase();
@@ -1009,7 +1017,7 @@ function drawPnlCard(s){
   function block(k,o,y){
     x.fillStyle="#7a7a7a";x.font="600 26px "+mono;x.fillText(k,92,y);
     if(!o){ x.fillStyle="#3d3d3d";x.font="700 54px "+mono;x.fillText("\u2014",92,y+38); return; }
-    x.fillStyle=(window.THEME_HEX||"#e6212f");x.font="800 60px "+mono;
+    x.fillStyle=(window.THEME_HEX||"#e92733");x.font="800 60px "+mono;
     x.fillText(o.line.replace(/<[^>]*>/g,""),92,y+38);
     if(o.sub){ x.fillStyle="#f2f2f2";x.font="400 28px "+mono;
       var t=o.sub.replace(/<[^>]*>/g,"");
@@ -1027,7 +1035,7 @@ function drawPnlCard(s){
       var tw=x.measureText(nm).width;
       var cw=16+30+10+tw+16;
       var medal=(i===0);
-      if(medal){ x.fillStyle=(window.THEME_HEX||"#e6212f"); x.fillRect(bx,by,cw,bh); }
+      if(medal){ x.fillStyle=(window.THEME_HEX||"#e92733"); x.fillRect(bx,by,cw,bh); }
       else { x.strokeStyle="#2a2a2a"; x.lineWidth=2; x.strokeRect(bx,by,cw,bh); }
       drawGlyph(x,b.id,bx+16,by+(bh-30)/2,30,medal);
       x.fillStyle=medal?"#0a0a0a":"#f2f2f2";
@@ -1043,7 +1051,7 @@ function drawPnlCard(s){
   x.fillStyle="#2a2a2a";x.fillRect(92,1200,W-184,2);
   x.fillStyle="#7a7a7a";x.font="600 24px "+mono;
   x.fillText(AVVY_NAME ? AVVY_NAME : (D.addr.slice(0,10)+"\u2026"+D.addr.slice(-8)),92,1228);
-  x.fillStyle=(window.THEME_HEX||"#e6212f");x.textAlign="right";
+  x.fillStyle=(window.THEME_HEX||"#e92733");x.textAlign="right";
   x.fillText("AVAX100M.XYZ",W-92,1228);
   x.textAlign="left";
   document.getElementById("pnl-card-wrap").style.display="block";
@@ -1081,7 +1089,7 @@ var wallet_default = async (req) => {
   }
   if (!w) return Response.redirect(site, 302);
   return new Response(page(w, site), {
-    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" }
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300", "x-frame-options": "DENY", "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin" }
   });
 };
 var config = { path: "/w/*" };

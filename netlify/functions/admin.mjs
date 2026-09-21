@@ -250,7 +250,8 @@ var admin_default = async (req) => {
       const cstore = getStore("claim");
       const sources = [
         { store: pstore, prefix: "v", ck: "pnl", re: /^v(\d+)\/(0x[0-9a-f]{40})$/ },
-        { store: bstore, prefix: "w4/", ck: "bw4", re: /^w4\/(0x[0-9a-f]{40})$/ },
+        { store: bstore, prefix: "w5/", ck: "bw5", re: /^w5\/(0x[0-9a-f]{40})$/ },
+        { store: bstore, prefix: "w4/", ck: "bw4", re: /^w4\/(0x[0-9a-f]{40})$/ }, // retired prefix: still enumerates wallets seen before w5
         { store: bstore, prefix: "seen/v4/0x", ck: "bseen4", re: /^seen\/v4\/(0x[0-9a-f]{40})$/ },
         { store: cstore, prefix: "c/", ck: "claim", re: /^c\/(0x[0-9a-f]{40})$/ }
       ];

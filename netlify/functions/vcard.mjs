@@ -44,7 +44,7 @@ function draw(data) {
   const img = PImage.make(W, H);
   const x = img.getContext("2d");
   x.fillStyle = "#0a0a0a"; x.fillRect(0, 0, W, H);
-  x.strokeStyle = "#e6212f"; x.lineWidth = 5; x.strokeRect(20, 20, W - 40, H - 40);
+  x.strokeStyle = "#e92733"; x.lineWidth = 5; x.strokeRect(20, 20, W - 40, H - 40);
   x.strokeStyle = "#2a2a2a"; x.lineWidth = 2; x.strokeRect(34, 34, W - 68, H - 68);
 
   const L = 76;
@@ -52,7 +52,7 @@ function draw(data) {
   x.fillText("AVALANCHE P-CHAIN \xB7 VALIDATOR", L, 86);
 
   const handle = (prof && prof.handle) || shortNode(d.nodeID);
-  x.fillStyle = "#e6212f"; x.font = "64px MonoB";
+  x.fillStyle = "#e92733"; x.font = "64px MonoB";
   x.fillText(handle.length > 20 ? handle.slice(0, 20) : handle, L, 156);
 
   x.fillStyle = "#7a7a7a"; x.font = "18px Mono";
@@ -60,13 +60,13 @@ function draw(data) {
 
   // badge names line (top 3)
   const names = (data.badges || []).slice(0, 3).map((b) => BADGE_NAMES[b.id] || b.id.toUpperCase());
-  if (names.length) { x.fillStyle = "#e6212f"; x.font = "18px MonoB"; x.fillText(names.join("  \xB7  "), L, 224); }
+  if (names.length) { x.fillStyle = "#e92733"; x.font = "18px MonoB"; x.fillText(names.join("  \xB7  "), L, 224); }
 
   x.fillStyle = "#2a2a2a"; x.fillRect(L, 248, W - 2 * L, 2);
 
   function cell(k, v, cx, cy, big) {
     x.fillStyle = "#7a7a7a"; x.font = "18px Mono"; x.fillText(k, cx, cy);
-    x.fillStyle = big ? "#e6212f" : "#f2f2f2"; x.font = big ? "36px MonoB" : "31px MonoB";
+    x.fillStyle = big ? "#e92733" : "#f2f2f2"; x.font = big ? "36px MonoB" : "31px MonoB";
     x.fillText(v, cx, cy + (big ? 40 : 36));
   }
   const R = 646;
@@ -77,7 +77,7 @@ function draw(data) {
 
   cell("UPTIME", d.uptime != null ? (d.uptime * 100).toFixed(2) + "%" : "—", R, 300);
   const pu = d.pctl && d.pctl.uptime;
-  if (Number.isFinite(pu) && data.count >= 20) { x.fillStyle = "#e6212f"; x.font = "15px MonoB"; x.fillText("TOP " + Math.max(1, Math.round((1 - pu) * 100)) + "% OF " + nf(data.count), R, 362); }
+  if (Number.isFinite(pu) && data.count >= 20) { x.fillStyle = "#e92733"; x.font = "15px MonoB"; x.fillText("TOP " + Math.max(1, Math.round((1 - pu) * 100)) + "% OF " + nf(data.count), R, 362); }
   cell("FEE", d.feePct != null ? d.feePct.toFixed(0) + "%" : "—", R + 260, 300);
   cell("DELEGATED", nf(d.delegated) + " AVAX", R, 400);
   const lifetime = hist && hist.lifetimeRewards > 0;
@@ -88,7 +88,7 @@ function draw(data) {
   x.fillStyle = "#2a2a2a"; x.fillRect(L, 556, W - 2 * L, 2);
   x.fillStyle = "#7a7a7a"; x.font = "18px Mono";
   x.fillText(prof && prof.tier ? "TIER " + String(prof.tier).toUpperCase() + " VALIDATOR" : "PRIMARY NETWORK VALIDATOR", L, 588);
-  x.fillStyle = "#e6212f"; x.font = "18px MonoB";
+  x.fillStyle = "#e92733"; x.font = "18px MonoB";
   const tag = "GET YOURS \xB7 AVAX100M.XYZ/P-CHAIN";
   x.fillText(tag, W - L - x.measureText(tag).width, 588);
   return img;
@@ -101,7 +101,7 @@ function drawCompare(A, B) {
   const img = PImage.make(W, H);
   const x = img.getContext("2d");
   x.fillStyle = "#0a0a0a"; x.fillRect(0, 0, W, H);
-  x.strokeStyle = "#e6212f"; x.lineWidth = 5; x.strokeRect(20, 20, W - 40, H - 40);
+  x.strokeStyle = "#e92733"; x.lineWidth = 5; x.strokeRect(20, 20, W - 40, H - 40);
   x.strokeStyle = "#2a2a2a"; x.lineWidth = 2; x.strokeRect(34, 34, W - 68, H - 68);
   const L = 76, R = W - 76, CX = W / 2;
   const rightText = (t, xr, y) => x.fillText(t, xr - x.measureText(t).width, y);
@@ -112,9 +112,9 @@ function drawCompare(A, B) {
 
   const ha = handleOf(A).slice(0, 14), hb = handleOf(B).slice(0, 14);
   x.font = "44px MonoB";
-  x.fillStyle = c.leader === "a" ? "#e6212f" : "#f2f2f2"; x.fillText(ha, L, 150);
-  x.fillStyle = c.leader === "b" ? "#e6212f" : "#f2f2f2"; rightText(hb, R, 150);
-  x.fillStyle = "#e6212f"; x.font = "22px MonoB"; center("VS", 142);
+  x.fillStyle = c.leader === "a" ? "#e92733" : "#f2f2f2"; x.fillText(ha, L, 150);
+  x.fillStyle = c.leader === "b" ? "#e92733" : "#f2f2f2"; rightText(hb, R, 150);
+  x.fillStyle = "#e92733"; x.font = "22px MonoB"; center("VS", 142);
   x.fillStyle = "#7a7a7a"; x.font = "16px Mono";
   x.fillText(shortNode(A.node.nodeID), L, 178); rightText(shortNode(B.node.nodeID), R, 178);
   x.fillStyle = "#2a2a2a"; x.fillRect(L, 198, W - 2 * L, 2);
@@ -125,8 +125,8 @@ function drawCompare(A, B) {
   for (const r of rows) {
     x.fillStyle = "#7a7a7a"; x.font = "15px Mono"; center(r.label.toUpperCase(), y);
     x.font = "26px MonoB";
-    x.fillStyle = r.win === "a" ? "#e6212f" : "#f2f2f2"; x.fillText(r.a.text, L, y + 2);
-    x.fillStyle = r.win === "b" ? "#e6212f" : "#f2f2f2"; rightText(r.b.text, R, y + 2);
+    x.fillStyle = r.win === "a" ? "#e92733" : "#f2f2f2"; x.fillText(r.a.text, L, y + 2);
+    x.fillStyle = r.win === "b" ? "#e92733" : "#f2f2f2"; rightText(r.b.text, R, y + 2);
     y += 40;
   }
 
@@ -134,7 +134,7 @@ function drawCompare(A, B) {
   x.fillStyle = "#f2f2f2"; x.font = "22px MonoB";
   const lead = c.leader ? (c.leader === "a" ? ha : hb) + " LEADS " + Math.max(c.tally.a, c.tally.b) + "\u2013" + Math.min(c.tally.a, c.tally.b) : "DEAD HEAT " + c.tally.a + "\u2013" + c.tally.b;
   x.fillText(lead, L, 590);
-  x.fillStyle = "#e6212f"; x.font = "18px MonoB";
+  x.fillStyle = "#e92733"; x.font = "18px MonoB";
   rightText("COMPARE YOURS \xB7 AVAX100M.XYZ/P-CHAIN", R, 588);
   return img;
 }
@@ -157,11 +157,11 @@ var vcard_default = async (req) => {
   if (vs) {
     try {
       await loadFonts();
-      const get = (id) => fetch(site + "/api/validators?node=" + encodeURIComponent(id)).then((r) => r.json());
+      const get = (id) => fetch(site + "/api/validators?node=" + encodeURIComponent(id), { signal: AbortSignal.timeout(8e3) }).then((r) => r.json());
       const [A, B] = await Promise.all([get(vs[1]), get(vs[2])]);
       if (!A || A.none || !A.node || !B || B.none || !B.node) return Response.redirect(site + "/og.png", 302);
       const png = await toPng(drawCompare(A, B));
-      return new Response(png, { headers: { "content-type": "image/png", "cache-control": "public, max-age=3600" } });
+      return new Response(png, { headers: { "content-type": "image/png", "cache-control": "public, max-age=3600", "netlify-cdn-cache-control": "public, durable, max-age=3600" } });
     } catch {
       return Response.redirect(site + "/og.png", 302);
     }
@@ -170,10 +170,10 @@ var vcard_default = async (req) => {
   if (!m) return Response.redirect(site + "/og.png", 302);
   try {
     await loadFonts();
-    const data = await fetch(site + "/api/validators?node=" + encodeURIComponent(m[1])).then((r) => r.json());
+    const data = await fetch(site + "/api/validators?node=" + encodeURIComponent(m[1]), { signal: AbortSignal.timeout(8e3) }).then((r) => r.json());
     if (!data || data.none || !data.node) return Response.redirect(site + "/og.png", 302);
     const png = await toPng(draw(data));
-    return new Response(png, { headers: { "content-type": "image/png", "cache-control": "public, max-age=3600" } });
+    return new Response(png, { headers: { "content-type": "image/png", "cache-control": "public, max-age=3600", "netlify-cdn-cache-control": "public, durable, max-age=3600" } });
   } catch {
     return Response.redirect(site + "/og.png", 302);
   }

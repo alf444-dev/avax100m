@@ -24,7 +24,7 @@ anything up.
 ## Contributing
 
 PRs welcome. Run `npm test`, keep the brutalist voice, and note that P&L/dossier
-cache keys (`v25/`, `tok9/`, `w4/`, `cand/v4/`, `peak4/`, `px/`) must be bumped in
+cache keys (`v25/`, `tok9/`, `w5/`, `cand/v4/`, `peak4/`, `px/`) must be bumped in
 lockstep across `pnl.mjs` and `token.mjs` whenever cached shapes change. Token
 prices come from DeFiLlama (on-chain, keyless) with CoinGecko as automatic
 fallback; the shared first-tx cache lives in the `firsttx` blob store.

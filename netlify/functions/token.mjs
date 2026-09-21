@@ -1,4 +1,5 @@
 import { getStore } from "@netlify/blobs";
+import { internalHeaders } from "./lib/ratelimit.mjs";
 import { normalizeSymbol } from "./lib/pnl-provider.mjs";
 import {
   fetchErc20Balance,
@@ -8,6 +9,8 @@ import {
   registeredToken,
   tokenSymbol
 } from "./lib/token-history.mjs";
+// upstream reads are bounded so a hung provider rejects into the existing fallbacks
+const bounded = () => ({ signal: AbortSignal.timeout(8e3) });
 
 // src/token.js
 var mems = {};
@@ -44,8 +47,8 @@ var RS = "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api";
 async function llamaPrice(contract) {
   const u = "https://coins.llama.fi/prices/current/avax:" + contract;
   try {
-    let r = await fetch(u);
-    if (r.status === 429) { await new Promise((res) => setTimeout(res, 1500)); r = await fetch(u); }
+    let r = await fetch(u, bounded());
+    if (r.status === 429) { await new Promise((res) => setTimeout(res, 1500)); r = await fetch(u, bounded()); }
     if (!r.ok) return null;
     const j = await r.json();
     const coins = j && j.coins || {};
@@ -67,8 +70,8 @@ function llamaChartUrl(contract, fromTs) {
 async function llamaChart(contract, fromTs) {
   const u = llamaChartUrl(contract, fromTs);
   try {
-    let r = await fetch(u);
-    if (r.status === 429) { await new Promise((res) => setTimeout(res, 1500)); r = await fetch(u); }
+    let r = await fetch(u, bounded());
+    if (r.status === 429) { await new Promise((res) => setTimeout(res, 1500)); r = await fetch(u, bounded()); }
     if (!r.ok) return null;
     const j = await r.json();
     const coins = j && j.coins || {};
@@ -80,8 +83,8 @@ async function llamaChart(contract, fromTs) {
 }
 async function cgTokenCG(addr) {
   try {
-    let r = await fetch("https://api.coingecko.com/api/v3/coins/avalanche/contract/" + addr);
-    if (r.status === 429) { await new Promise((res) => setTimeout(res, 2200)); r = await fetch("https://api.coingecko.com/api/v3/coins/avalanche/contract/" + addr); }
+    let r = await fetch("https://api.coingecko.com/api/v3/coins/avalanche/contract/" + addr, bounded());
+    if (r.status === 429) { await new Promise((res) => setTimeout(res, 2200)); r = await fetch("https://api.coingecko.com/api/v3/coins/avalanche/contract/" + addr, bounded()); }
     if (!r.ok) return null;
     const j = await r.json();
     const md = j && j.market_data;
@@ -95,8 +98,8 @@ async function cgTokenCG(addr) {
 async function cgChartCG(contract, fromTs) {
   const u = "https://api.coingecko.com/api/v3/coins/avalanche/contract/" + contract + "/market_chart/range?vs_currency=usd&from=" + Math.floor(fromTs / 1e3) + "&to=" + Math.floor(Date.now() / 1e3);
   try {
-    let r = await fetch(u);
-    for (let a = 0; a < 2 && r.status === 429; a++) { await new Promise((res) => setTimeout(res, 2200)); r = await fetch(u); }
+    let r = await fetch(u, bounded());
+    for (let a = 0; a < 2 && r.status === 429; a++) { await new Promise((res) => setTimeout(res, 2200)); r = await fetch(u, bounded()); }
     if (!r.ok) return null;
     const j = await r.json();
     const prices = j && j.prices || [];
@@ -227,7 +230,7 @@ function classifyTargetFlows(rows, addr) {
   return out;
 }
 
-var token_default = async (req) => {
+var token_default = async (req, context) => {
   const url = new URL(req.url);
   const addr = (url.searchParams.get("addr") || "").toLowerCase();
   const q = (url.searchParams.get("q") || "").trim();
@@ -250,7 +253,7 @@ var token_default = async (req) => {
   const registeredMatches = addressQuery ? [] : registeredContractsForQuery(q);
   if (!rowsIdx.length) {
     const site = (process.env.URL || "https://avax100m.xyz").replace(/\/$/, "");
-    try { await fetch(site + "/api/pnl?addr=" + addr); } catch {
+    try { await fetch(site + "/api/pnl?addr=" + addr, { headers: internalHeaders(context) }); } catch {
     }
     if (store) try {
       const cached = await store.get(pnlCacheKey(addr), { type: "json" });

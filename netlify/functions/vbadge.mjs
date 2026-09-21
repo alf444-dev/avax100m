@@ -13,9 +13,10 @@ var vbadge_default = async (req) => {
   const m = url.pathname.match(/^\/badge\/(NodeID-[A-Za-z0-9]+)\.svg$/);
   if (!m) return new Response(renderEmptyBadgeSvg("badge/NodeID-….svg"), { status: 404, headers: Object.assign({ "cache-control": "public, max-age=60" }, HEAD) });
   try {
-    const data = await fetch(site + "/api/validators?node=" + encodeURIComponent(m[1])).then((r) => r.json());
+    const data = await fetch(site + "/api/validators?node=" + encodeURIComponent(m[1]), { signal: AbortSignal.timeout(8e3) }).then((r) => r.json());
     if (!data || data.none || !data.node) return new Response(renderEmptyBadgeSvg("no current validator " + m[1].slice(0, 13) + "…"), { status: 200, headers: Object.assign({ "cache-control": "public, max-age=300" }, HEAD) });
-    return new Response(renderBadgeSvg(data), { headers: Object.assign({ "cache-control": "public, max-age=300" }, HEAD) });
+    // one render per 5 minutes at the edge instead of one per README view; no stale serving, the badge is live
+    return new Response(renderBadgeSvg(data), { headers: Object.assign({ "cache-control": "public, max-age=300", "netlify-cdn-cache-control": "public, durable, max-age=300" }, HEAD) });
   } catch {
     return new Response(renderEmptyBadgeSvg("p-chain unreachable — retry"), { status: 200, headers: Object.assign({ "cache-control": "public, max-age=60" }, HEAD) });
   }

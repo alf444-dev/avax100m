@@ -6,7 +6,7 @@
 <title>·</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>
-  :root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e6212f;--mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace}
+  :root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e92733;--mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace}
   *{margin:0;padding:0;box-sizing:border-box}
   body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:13px;line-height:1.6;padding:44px 20px;max-width:820px;margin:0 auto}
   h1{font-size:20px;letter-spacing:.02em}h1 b{color:var(--red)}
@@ -161,7 +161,7 @@ async function render(view){
       var CATS={w:"biggest w",l:"biggest l",rt:"biggest roundtrip"};
       out.innerHTML=Object.keys(CATS).map(function(cat){
         return '<h2>'+CATS[cat]+'</h2><div class="rows">'+((rec[cat]||[]).map(function(e,i){
-          return '<div><span>#'+(i+1)+' $'+e.sym+(e.era?" · "+e.era.toLowerCase():"")+'</span><span class="n">'+(e.v<0?"-":"+")+"$"+Math.abs(e.v).toLocaleString("en-US")+'</span></div>';
+          return '<div><span>#'+(i+1)+' $'+esc(e.sym)+(e.era?" · "+esc(e.era.toLowerCase()):"")+'</span><span class="n">'+(e.v<0?"-":"+")+"$"+Math.abs(e.v).toLocaleString("en-US")+'</span></div>';
         }).join("")||'<div><span class="n">empty</span></div>')+'</div>';
       }).join("");
     } else if(view==="claimed"){
@@ -208,10 +208,12 @@ var WCOLS=[
   {k:"claimed",l:"claim"},{k:"t",l:"checked"},{k:"src",l:"src"}
 ];
 async function callq(qs){ var r=await fetch("/api/admin?"+qs,{headers:{"x-admin-key":KEY}}); if(r.status===404) throw new Error("rejected"); return r.json(); }
+// blob contents reach innerHTML on the page that holds the admin key: escape every stored string
+function esc(v){ return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
 function usd(n){ if(n==null) return "—"; return (n<0?"-":"+")+"$"+Math.abs(Math.round(n)).toLocaleString("en-US"); }
-function tok(o){ if(!o||!o.sym) return "—"; return "$"+o.sym+(o.usd!=null?" "+usd(o.usd):""); }
+function tok(o){ if(!o||!o.sym) return "—"; return "$"+esc(o.sym)+(o.usd!=null?" "+usd(o.usd):""); }
 function cls(n){ return n==null?"":(n>=0?"pos":"neg"); }
-function shortA(a){ return '<a href="/w/'+a+'" target="_blank" rel="noopener">'+a.slice(0,10)+"…"+a.slice(-6)+'</a>'; }
+function shortA(a){ a=esc(a); return '<a href="/w/'+a+'" target="_blank" rel="noopener">'+a.slice(0,10)+"…"+a.slice(-6)+'</a>'; }
 function srcStr(s){ if(!s) return "—"; var o=[]; if(s.pnl)o.push("pnl"); if(s.claim)o.push("claim"); return o.join("·")||"—"; }
 function v(id){ var e=document.getElementById(id); return e?e.value:""; }
 function numOr(s,d){ if(s===""||s==null) return d; var n=parseFloat(s); return isNaN(n)?d:n; }
@@ -363,10 +365,10 @@ function wdApply(){
 function renderBody(rows){
   var cap=1500, shown=rows.slice(0,cap);
   document.getElementById("wdBody").innerHTML=shown.map(function(r){
-    return '<tr data-a="'+r.a+'" data-ver="'+(r.ver||24)+'">'
+    return '<tr data-a="'+esc(r.a)+'" data-ver="'+esc(r.ver||24)+'">'
       +'<td class="wd-addr">'+shortA(r.a)+'</td>'
-      +'<td>'+(r.era?r.era.toLowerCase():"—")+'</td>'
-      +'<td>'+(r.rank?r.rank.toLowerCase():"—")+'</td>'
+      +'<td>'+(r.era?esc(r.era.toLowerCase()):"—")+'</td>'
+      +'<td>'+(r.rank?esc(r.rank.toLowerCase()):"—")+'</td>'
       +'<td class="'+cls(r.netUsd)+'">'+usd(r.netUsd)+'</td>'
       +'<td>'+(r.wins!=null?r.wins:"—")+'/'+(r.losses!=null?r.losses:"—")+'</td>'
       +'<td>'+(r.winrate!=null?r.winrate+"%":"—")+'</td>'
@@ -375,8 +377,8 @@ function renderBody(rows){
       +'<td class="neg">'+tok(r.bl)+'</td>'
       +'<td>'+tok(r.rt)+'</td>'
       +'<td>'+tok(r.ste)+'</td>'
-      +'<td class="wd-flags">'+((r.flags||[]).map(function(fl){return '<span class="chip">'+fl+'</span>';}).join("")||"—")+'</td>'
-      +'<td>'+(r.claimed?'<span class="chip on">'+(r.theme||"claimed")+'</span>':"—")+'</td>'
+      +'<td class="wd-flags">'+((r.flags||[]).map(function(fl){return '<span class="chip">'+esc(fl)+'</span>';}).join("")||"—")+'</td>'
+      +'<td>'+(r.claimed?'<span class="chip on">'+esc(r.theme||"claimed")+'</span>':"—")+'</td>'
       +'<td>'+(r.t?new Date(r.t).toISOString().slice(0,10):"—")+'</td>'
       +'<td>'+srcStr(r.src)+'</td></tr>';
   }).join("")+(rows.length>cap?'<tr><td colspan="15" style="text-align:left;color:var(--dim)">showing first '+cap+' of '+rows.length.toLocaleString("en-US")+' — narrow the filters.</td></tr>':"");
@@ -397,9 +399,9 @@ async function wdOpen(a,ver){
         +row2("winrate",su.winrate||"—")+row2("tokens",s.tokens!=null?s.tokens:"—")
         +row2("claimed",d.claim?("yes"+(d.claim.theme?" · "+d.claim.theme:"")+(d.claim.method?" · "+d.claim.method:"")):"no")
       +'</table>'
-      +(s.flags?'<h2>flags</h2><div>'+Object.keys(s.flags).map(function(fl){return '<span class="chip">'+fl+'</span>';}).join("")+'</div>':"")
+      +(s.flags?'<h2>flags</h2><div>'+Object.keys(s.flags).map(function(fl){return '<span class="chip">'+esc(fl)+'</span>';}).join("")+'</div>':"")
       +'<h2>token ledger ('+((d.rowsIdx||[]).length)+')</h2><table>'
-        +(rows.map(function(rr){ return '<tr><td>$'+rr.s+'</td><td class="'+(rr.p>=0?"pos":"neg")+'">'+usd(rr.p)+'</td></tr>'; }).join("")||'<tr><td class="sub">no ledger cached</td></tr>')
+        +(rows.map(function(rr){ return '<tr><td>$'+esc(rr.s)+'</td><td class="'+(rr.p>=0?"pos":"neg")+'">'+usd(rr.p)+'</td></tr>'; }).join("")||'<tr><td class="sub">no ledger cached</td></tr>')
       +'</table>';
   }catch(e){ body.innerHTML='<p class="sub" style="color:var(--red)">failed to load.</p>'; }
 }

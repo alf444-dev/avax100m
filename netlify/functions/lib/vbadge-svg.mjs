@@ -23,11 +23,11 @@ export function renderBadgeSvg(nd) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(handle)} — Avalanche P-Chain validator, uptime ${esc(uptime)}, stake rank ${esc(rank)}">
 <title>${esc(handle)} · avalanche p-chain validator · avax100m</title>
 <rect x="0" y="0" width="${W}" height="${H}" fill="#0a0a0a"/>
-<rect x="1.5" y="1.5" width="${W - 3}" height="${H - 3}" fill="none" stroke="#e6212f" stroke-width="3"/>
+<rect x="1.5" y="1.5" width="${W - 3}" height="${H - 3}" fill="none" stroke="#e92733" stroke-width="3"/>
 <rect x="8" y="8" width="${W - 16}" height="${H - 16}" fill="none" stroke="#2a2a2a" stroke-width="1"/>
 <g font-family='${font}' fill="#f2f2f2">
   <text x="20" y="30" font-size="9" letter-spacing="2" fill="#7a7a7a">AVALANCHE P-CHAIN · VALIDATOR</text>
-  <text x="20" y="54" font-size="18" font-weight="700" fill="#e6212f">${esc(handle.length > 22 ? handle.slice(0, 22) : handle)}</text>
+  <text x="20" y="54" font-size="18" font-weight="700" fill="#e92733">${esc(handle.length > 22 ? handle.slice(0, 22) : handle)}</text>
   <text x="20" y="76" font-size="10" fill="#7a7a7a">${esc(top.length ? top.join("  ·  ") : "PRIMARY NETWORK")}</text>
   <g font-size="9" letter-spacing="1.5" fill="#7a7a7a" text-anchor="end">
     <text x="${W - 20}" y="30">UPTIME</text>
@@ -37,7 +37,7 @@ export function renderBadgeSvg(nd) {
     <text x="${W - 20}" y="45">${esc(uptime)}</text>
     <text x="${W - 20}" y="73" font-size="12">${esc(rank)}</text>
   </g>
-  <text x="${W - 20}" y="88" font-size="8" letter-spacing="1" fill="#e6212f" text-anchor="end">${esc(stake)} · AVAX100M.XYZ</text>
+  <text x="${W - 20}" y="88" font-size="8" letter-spacing="1" fill="#e92733" text-anchor="end">${esc(stake)} · AVAX100M.XYZ</text>
 </g>
 </svg>`;
 }

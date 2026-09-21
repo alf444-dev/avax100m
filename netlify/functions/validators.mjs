@@ -42,6 +42,9 @@ function storeOr(name, opts) {
 }
 
 var HEADERS = { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" };
+// server-rendered pages host message signing: never frameable, never sniffed
+var SEC = { "x-frame-options": "DENY", "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin" };
+const htmlHeaders = (maxAge, extra) => Object.assign({ "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=" + maxAge }, SEC, extra);
 const json = (obj, status = 200, extra) => new Response(JSON.stringify(obj), { status, headers: extra ? Object.assign({}, HEADERS, extra) : HEADERS });
 
 var SNAP_KEY = "val1/primary";
@@ -52,11 +55,11 @@ var LEASE_TTL = 45 * 1e3;   // a build lease is stale after 45s
 /* current AVAX/USD spot: binance primary (keyless), coingecko fallback — same as index.html/wallet.mjs */
 async function avaxUsd() {
   try {
-    const r = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=AVAXUSDT");
+    const r = await fetch("https://api.binance.com/api/v3/ticker/price?symbol=AVAXUSDT", { signal: AbortSignal.timeout(8e3) });
     if (r.ok) { const j = await r.json(); const p = parseFloat(j && j.price); if (p > 0) return p; }
   } catch {}
   try {
-    const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=avalanche-2&vs_currencies=usd");
+    const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=avalanche-2&vs_currencies=usd", { signal: AbortSignal.timeout(8e3) });
     if (r.ok) { const j = await r.json(); const p = j && j["avalanche-2"] && j["avalanche-2"].usd; if (p > 0) return p; }
   } catch {}
   return null;
@@ -65,11 +68,13 @@ async function avaxUsd() {
 // Compute-on-demand + persist to Blobs, guarded by a short lease so a slow P-chain
 // fetch isn't run by many requests at once. Returns { pending:true } if another
 // request is already building and no snapshot is cached yet.
+var _snap = null; // per-instance memo: the folded snapshot is ~600KB, don't re-download it while still fresh
 async function getSnapshot() {
+  if (_snap && Date.now() - _snap.asOf < SNAP_TTL) return _snap;
   const store = storeOr("validators");
   if (store) {
     const cached = await store.get(SNAP_KEY, { type: "json" }).catch(() => null);
-    if (cached && Number.isFinite(cached.asOf) && Date.now() - cached.asOf < SNAP_TTL) return cached;
+    if (cached && Number.isFinite(cached.asOf) && Date.now() - cached.asOf < SNAP_TTL) { _snap = cached; return cached; }
   }
   const workStore = storeOr("validators", { consistency: "strong" }) || store;
   if (workStore) {
@@ -82,13 +87,14 @@ async function getSnapshot() {
   }
   try {
     const [validators, supply, px] = await Promise.all([
-      fetchCurrentValidators(),
-      fetchCurrentSupply().catch(() => null),
+      fetchCurrentValidators({ signal: AbortSignal.timeout(15e3) }),
+      fetchCurrentSupply({ signal: AbortSignal.timeout(15e3) }).catch(() => null),
       avaxUsd().catch(() => null)
     ]);
     const snap = Object.assign({}, foldValidators(validators, supply), { avaxUsd: px });
     if (store) await store.set(SNAP_KEY, JSON.stringify(snap)).catch(() => {});
     if (store) await recordCapture(store, snap).catch(() => {});
+    _snap = snap;
     return snap;
   } finally {
     if (workStore) await workStore.delete(WORK_KEY).catch(() => {});
@@ -191,11 +197,9 @@ async function getCohort() {
   }
   let listed = { blobs: [] };
   try { listed = await store.list({ prefix: "v/" }); } catch {}
-  const records = [];
-  for (const b of (listed.blobs || [])) {
-    const rec = await store.get(b.key, { type: "json" }).catch(() => null);
-    if (rec) records.push(Object.assign({ nodeID: b.key.slice(2) }, rec));
-  }
+  const records = (await Promise.all((listed.blobs || []).map((b) =>
+    store.get(b.key, { type: "json" }).then((rec) => rec && Object.assign({ nodeID: b.key.slice(2) }, rec)).catch(() => null)
+  ))).filter(Boolean);
   let snap = null;
   try { snap = await getSnapshot(); } catch {}
   const data = foldCohort(records, (snap && snap.byNode) || {});
@@ -213,11 +217,12 @@ async function buildNode(snap, key) {
   const badges = (detail.badges || [])
     .map((b) => Object.assign({}, b, { rarity: { count: (snap.stats.badgeCounts || {})[b.id] || 0, total } }))
     .sort((a, b) => (a.rarity.count - b.rarity.count) || (b.tier - a.tier));
-  let history = null, base = null, unlocks = null;
-  try { history = await getHistory(key, detail); } catch {}
-  try { base = await getBase(); } catch {}
-  try { unlocks = await getUnlocks(); } catch {}
-  const profile = await readProfile(key);
+  const [history, base, unlocks, profile] = await Promise.all([
+    getHistory(key, detail).catch(() => null),
+    getBase().catch(() => null),
+    getUnlocks().catch(() => null),
+    readProfile(key)
+  ]);
   const delta = (base && base.byNode && base.byNode[key]) ? deltaFor(detail, base.byNode[key], badges, base) : null;
   if (delta && delta.days >= 1) for (const b of badges) if (delta.unlocked.some((u) => u.id === b.id && u.tier === b.tier)) b.fresh = true;
   const led = (unlocks && unlocks[key]) || null;
@@ -235,7 +240,7 @@ async function buildNode(snap, key) {
 }
 
 // Shared stylesheet for the /p-chain page and the /v/ profile page (one source).
-var STYLE = `:root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e6212f;
+var STYLE = `:root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e92733;
 --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6}
@@ -287,7 +292,7 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .msg{margin-top:14px;font-size:12px;color:var(--dim);min-height:18px;letter-spacing:.04em}
 .sk{display:block;height:12px;background:linear-gradient(90deg,var(--faint) 25%,#3a3a3a 50%,var(--faint) 75%);background-size:200% 100%;animation:sk 1.4s linear infinite}
 @keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
-@media(prefers-reduced-motion:reduce){.sk{animation:none;background:var(--faint)}}
+@media(prefers-reduced-motion:reduce){.sk{animation:none;background:var(--faint)}.vc-next .nb span{transition:none}}
 .cell .sk.k{width:38%;height:9px;margin-top:3px}.cell .sk.v{width:62%;height:20px;margin-top:12px}
 .vtable td .sk{height:11px;margin-left:auto;width:60%}.vtable td:first-child .sk{margin-left:0;width:70%}.vtable tr.skr{cursor:default}.vtable tr.skr:hover{background:transparent}
 .mgrid .sk.h{width:45%;height:9px;margin-bottom:14px}.mgrid .sk.l{height:11px;margin:12px 0}.mgrid .sk.l:nth-child(odd){width:85%}
@@ -332,6 +337,8 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .tier.C{color:#c8813f;border-color:#c8813f}
 .copy{background:transparent;border:1px solid var(--faint);color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:3px 9px;cursor:pointer}
 .copy:hover{border-color:var(--red);color:var(--red)}
+/* touch only: grow the hit area of the small controls, not their look */
+@media(pointer:coarse){.copy,.recent .clr,.nav{position:relative}.copy::after,.recent .clr::after,.nav::after{content:"";position:absolute;inset:-10px -4px}}
 .vc-badges{display:flex;flex-wrap:wrap;gap:8px;padding:14px;border-bottom:1px solid var(--faint)}
 .vc-badges .empty{color:var(--dim);font-size:11px;letter-spacing:.08em}
 .btile{position:relative;width:40px;height:40px;border:1px solid var(--faint);display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--ink);cursor:default;outline:none}
@@ -352,6 +359,7 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .mline{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:22px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}.mline b{color:var(--ink)}
 .btile .tip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:220px;z-index:9;background:var(--bg);border:1px solid var(--red);padding:9px 11px;text-align:left;white-space:normal}
 .btile:hover .tip,.btile:focus-visible .tip{display:block}
+@media(max-width:760px){.btile .tip{left:-1px;transform:none}}
 .btile .tl{color:var(--red);letter-spacing:.2em;font-size:9px;display:block;margin-bottom:3px;text-transform:uppercase}
 .btile .tn{font-size:11px;font-weight:700;color:var(--ink);display:block}
 .btile .tr{font-size:9px;color:var(--dim);letter-spacing:.06em;display:block;margin:2px 0 5px}
@@ -554,6 +562,8 @@ function profilePage(nd, px, site) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="color-scheme" content="dark">
 <title>${esc2(title)}</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
@@ -596,7 +606,7 @@ function profilePage(nd, px, site) {
       <div id="embedbox" style="display:none;margin-top:14px">
         <img src="${site}/badge/${encodeURIComponent(d.nodeID)}.svg" width="420" height="96" alt="live validator badge" style="display:block;max-width:100%;height:auto;border:0">
         <p class="sub" style="margin:12px 0 8px">Live from the P-Chain, refreshes every few minutes, links back here. Paste into a README or any page:</p>
-        <textarea id="embedmd" readonly rows="2" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:11px;padding:9px 11px;resize:vertical">[![${esc2(handle)} \u00B7 p-chain validator](${site}/badge/${encodeURIComponent(d.nodeID)}.svg)](${pageUrl})</textarea>
+        <textarea id="embedmd" aria-label="embed markdown" readonly rows="2" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:11px;padding:9px 11px;resize:vertical">[![${esc2(handle)} \u00B7 p-chain validator](${site}/badge/${encodeURIComponent(d.nodeID)}.svg)](${pageUrl})</textarea>
         <div class="pshare" style="margin-top:10px"><button class="btn ghost" id="embedcopy">copy markdown</button><button class="btn ghost" id="embedhtml">copy html</button></div>
       </div>
     </div>
@@ -609,13 +619,13 @@ function profilePage(nd, px, site) {
       <button class="btn ghost" id="editbtn">${p && p.owner ? "edit this validator" : "claim &amp; customize"} →</button>
       <div id="editform" style="display:none;margin-top:16px">
         <p class="sub" style="margin-bottom:16px">Prove you run this node by signing with the wallet that owns its staking rewards — then set your handle, avatar and socials. No transaction, no fees, no approvals.</p>
-        <div class="frow2"><label>handle</label><input id="f-handle" maxlength="24" spellcheck="false" placeholder="your name" value="${p && p.handle ? esc2(p.handle) : ""}"></div>
-        <div class="frow2"><label>avatar url</label><input id="f-pfp" spellcheck="false" placeholder="https://…/avatar.png" value="${p && p.pfp ? esc2(p.pfp) : ""}"></div>
-        <div class="frow2"><label>x / twitter</label><input id="f-x" spellcheck="false" placeholder="@handle" value="${p && p.socials && p.socials.x ? esc2(p.socials.x) : ""}"></div>
-        <div class="frow2"><label>discord</label><input id="f-discord" spellcheck="false" placeholder="name" value="${p && p.socials && p.socials.discord ? esc2(p.socials.discord) : ""}"></div>
-        <div class="frow2"><label>website</label><input id="f-site" spellcheck="false" placeholder="https://…" value="${p && p.socials && p.socials.site ? esc2(p.socials.site) : ""}"></div>
+        <div class="frow2"><label for="f-handle">handle</label><input id="f-handle" maxlength="24" spellcheck="false" placeholder="your name" value="${p && p.handle ? esc2(p.handle) : ""}"></div>
+        <div class="frow2"><label for="f-pfp">avatar url</label><input id="f-pfp" spellcheck="false" placeholder="https://…/avatar.png" value="${p && p.pfp ? esc2(p.pfp) : ""}"></div>
+        <div class="frow2"><label for="f-x">x / twitter</label><input id="f-x" spellcheck="false" placeholder="@handle" value="${p && p.socials && p.socials.x ? esc2(p.socials.x) : ""}"></div>
+        <div class="frow2"><label for="f-discord">discord</label><input id="f-discord" spellcheck="false" placeholder="name" value="${p && p.socials && p.socials.discord ? esc2(p.socials.discord) : ""}"></div>
+        <div class="frow2"><label for="f-site">website</label><input id="f-site" spellcheck="false" placeholder="https://…" value="${p && p.socials && p.socials.site ? esc2(p.socials.site) : ""}"></div>
         <button class="btn" id="signbtn">connect wallet &amp; sign</button>
-        <div class="msg" id="cmsg"></div>
+        <div class="msg" id="cmsg" role="status"></div>
       </div>
     </div>
   </section>
@@ -679,10 +689,10 @@ function cohortPage(c, site) {
     ? '<ol class="clist">' + arr.map((x) => '<li><a href="/v/' + encodeURIComponent(x.nodeID) + '">' + (x.handle ? esc2(x.handle) : shortNodeOf(x.nodeID)) + '</a> <span class="dim">' + nfmt(x.pts) + " pts</span></li>").join("") + '</ol>'
     : '<p class="empty">—</p>';
   const board = c.scoredCount
-    ? '<div class="tablewrap"><table class="vtable"><thead><tr><th>#</th><th>Validator</th><th>Score</th><th>Uptime</th><th>Δ cycle</th></tr></thead><tbody>' + c.top20.map(boardRow).join("") + '</tbody></table></div>'
+    ? '<div class="tablewrap"><table class="vtable"><thead><tr><th scope="col">#</th><th scope="col">Validator</th><th scope="col">Score</th><th scope="col">Uptime</th><th scope="col">Δ cycle</th></tr></thead><tbody>' + c.top20.map(boardRow).join("") + '</tbody></table></div>'
     : '<p class="empty">No scored validators yet — the leaderboard fills in once the cohort portal syncs scores.</p>';
   const rising = (c.rising && c.rising.length)
-    ? '<div class="tablewrap"><table class="vtable"><thead><tr><th>Validator</th><th>Tier</th><th>+ this cycle</th></tr></thead><tbody>'
+    ? '<div class="tablewrap"><table class="vtable"><thead><tr><th scope="col">Validator</th><th scope="col">Tier</th><th scope="col">+ this cycle</th></tr></thead><tbody>'
       + c.rising.map((r) => '<tr><td class="node">' + nodeLink({ nodeID: r.nodeID, handle: r.handle }) + '</td><td>' + (r.tier || "—") + '</td><td>+' + nfmt(r.scoreDelta) + '</td></tr>').join("") + '</tbody></table></div>'
     : '<p class="empty">—</p>';
   const desc = "The validator contributor cohort on avax100m — tiers, scores, badges and leaderboards recognizing the operators who build, educate and support the Avalanche ecosystem.";
@@ -691,6 +701,8 @@ function cohortPage(c, site) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="color-scheme" content="dark">
 <title>the cohort \xB7 p-chain validators \xB7 avax100m</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
@@ -770,13 +782,14 @@ var validators_default = async (req) => {
   if (url.pathname === "/cohort") {
     if (!COHORT_ON) return Response.redirect(site + "/p-chain", 302);
     const c = await getCohort();
-    return new Response(cohortPage(c, site), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
+    return new Response(cohortPage(c, site), { headers: htmlHeaders(120) });
   }
 
   // Per-validator shareable profile page.
   const vs = url.pathname.match(/^\/v\/([^/]+)\/vs\/([^/]*)\/?$/);
   if (vs) {
-    const a = decodeURIComponent(vs[1]).trim(), b = decodeURIComponent(vs[2]).trim();
+    let a, b;
+    try { a = decodeURIComponent(vs[1]).trim(); b = decodeURIComponent(vs[2]).trim(); } catch { return Response.redirect(site + "/p-chain", 302); }
     if (!b || a === b) return Response.redirect(site + "/v/" + encodeURIComponent(a) + "#compare", 302);
     let snap;
     try { snap = await getSnapshot(); } catch { return new Response("p-chain unavailable", { status: 503, headers: { "content-type": "text/plain" } }); }
@@ -784,25 +797,27 @@ var validators_default = async (req) => {
     const ka = snap.byNode[a] ? a : null, kb = snap.byNode[b] ? b : null;
     if (!ka || !kb) return new Response("no current validator with NodeID " + (ka ? b : a), { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
     const [A, B] = await Promise.all([buildNode(snap, ka), buildNode(snap, kb)]);
-    return new Response(comparePage(A, B, snap.avaxUsd, site), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=120" } });
+    return new Response(comparePage(A, B, snap.avaxUsd, site), { headers: htmlHeaders(120) });
   }
   if (url.pathname.startsWith("/v/")) {
-    const nodeID = decodeURIComponent(url.pathname.slice(3)).trim();
+    let nodeID = "";
+    try { nodeID = decodeURIComponent(url.pathname.slice(3)).trim(); } catch {}
     if (!/^NodeID-[A-Za-z0-9]+$/.test(nodeID)) return Response.redirect(site + "/p-chain", 302);
     let snap = null;
     try { snap = await getSnapshot(); } catch {}
     if (!snap || snap.pending || !snap.byNode || !snap.byNode[nodeID]) return Response.redirect(site + "/p-chain", 302);
     const nd = await buildNode(snap, nodeID);
-    return new Response(profilePage(nd, snap.avaxUsd, site), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=60" } });
+    return new Response(profilePage(nd, snap.avaxUsd, site), { headers: htmlHeaders(60) });
   }
 
   if (!url.pathname.startsWith("/api/")) {
-    return new Response(page(site), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=60" } });
+    // the shell carries no data: let the CDN hold it (deploys purge it), browsers still revalidate after 60s
+    return new Response(page(site), { headers: htmlHeaders(60, { "netlify-cdn-cache-control": "public, durable, max-age=3600, stale-while-revalidate=86400" }) });
   }
 
   let snap;
   try { snap = await getSnapshot(); }
-  catch (e) { return json({ error: "p-chain unavailable", reason: String((e && e.message) || e) }, 503); }
+  catch { return json({ error: "p-chain unavailable" }, 503); }
   if (snap && snap.pending) return json({ pending: true, retryAfter: 5 }, 202, { "retry-after": "5" });
 
   if (url.searchParams.get("pick")) {
@@ -838,7 +853,7 @@ var validators_default = async (req) => {
     page: { total: p.total, offset: p.offset, limit: p.limit, sort: p.sort, dir: p.dir, q: p.q },
     avaxUsd: snap.avaxUsd,
     asOf: snap.asOf
-  });
+  }, 200, { "cache-control": "public, max-age=60" }); // the snapshot only turns over every 5 minutes
 };
 
 function comparePage(A, B, px, site) {
@@ -865,6 +880,8 @@ function comparePage(A, B, px, site) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="color-scheme" content="dark">
 <title>${esc2(title)}</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
@@ -942,6 +959,8 @@ function page(site) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="color-scheme" content="dark">
 <title>${title}</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
@@ -999,7 +1018,7 @@ function page(site) {
       <button class="btn" id="lookup">Look up</button>
     </div>
     <div class="recent" id="recent"></div>
-    <div class="msg" id="lmsg"></div>
+    <div class="msg" id="lmsg" role="status"></div>
     <div class="detail" id="detail"></div>
   </section>
 
@@ -1026,13 +1045,13 @@ function page(site) {
     </div>
     <div class="tablewrap"><table class="vtable">
       <thead><tr>
-        <th>Node</th>
-        <th data-sort="stake" class="act">Stake</th>
-        <th data-sort="delegated">Delegated</th>
-        <th data-sort="delegators">Delegs</th>
-        <th data-sort="uptime">Uptime</th>
-        <th data-sort="apr">Est APR</th>
-        <th data-sort="remaining">Ends</th>
+        <th scope="col">Node</th>
+        <th scope="col" data-sort="stake" class="act">Stake</th>
+        <th scope="col" data-sort="delegated">Delegated</th>
+        <th scope="col" data-sort="delegators">Delegs</th>
+        <th scope="col" data-sort="uptime">Uptime</th>
+        <th scope="col" data-sort="apr">Est APR</th>
+        <th scope="col" data-sort="remaining">Ends</th>
       </tr></thead>
       <tbody id="rows"><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr class="skr"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr></tbody>
     </table></div>
@@ -1137,7 +1156,7 @@ function page(site) {
 
   function rowHtml(r){
     var dot='<span class="dot'+(r.connected?" on":"")+'"></span> ';
-    return '<tr data-node="'+esc(r.nodeID)+'">'+
+    return '<tr tabindex="0" data-node="'+esc(r.nodeID)+'">'+
       '<td class="node">'+dot+esc(shortNode(r.nodeID))+'</td>'+
       '<td>'+nf(r.stake)+'</td>'+
       '<td class="'+(r.delegated>0?"":"off")+'">'+nf(r.delegated)+'</td>'+
@@ -1148,12 +1167,13 @@ function page(site) {
     '</tr>';
   }
 
+  var REDUCE=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   function bindRows(){
     var trs=$("rows").querySelectorAll("tr[data-node]");
     for(var i=0;i<trs.length;i++){ trs[i].onclick=function(){
       var n=this.getAttribute("data-node"); $("nid").value=n; lookup();
-      var d=$("detail"); window.scrollTo({top:Math.max(0,d.getBoundingClientRect().top+window.pageYOffset-90),behavior:"smooth"});
-    }; }
+      var d=$("detail"); window.scrollTo({top:Math.max(0,d.getBoundingClientRect().top+window.pageYOffset-90),behavior:REDUCE?"auto":"smooth"});
+    }; trs[i].onkeydown=function(e){ if(e.key==="Enter") this.click(); }; }
   }
 
   // fetch with one automatic retry — CDN/cold-start blips shouldn't surface as a dead page
@@ -1165,14 +1185,16 @@ function page(site) {
     $("stats").innerHTML='<div class="cell full"><div class="k">network staking</div><div class="v" style="font-size:14px;color:var(--red)">no response from the p-chain — <a href="#" id="statsretry">retry</a></div></div>';
     var b=$("statsretry"); if(b) b.onclick=function(e){ e.preventDefault(); $("stats").innerHTML=SK_STATS; load(true); };
   }
+  var fails=0;
+  function retry(reset){ if(++fails<=5) setTimeout(function(){load(reset);},5000); else $("count").textContent="p-chain unavailable — reload to retry"; }
   function load(reset){
     if(reset){ state.offset=0; $("rows").innerHTML=SK_ROWS; }
     var u=API+"?sort="+state.sort+"&dir="+state.dir+"&limit="+state.limit+"&offset="+state.offset+"&q="+encodeURIComponent(state.q);
     $("count").textContent="loading…";
     apiGet(u,1).then(function(j){
       if(j.pending){ $("count").textContent="warming up the p-chain snapshot…"; setTimeout(function(){load(reset);},2500); return; }
-      if(j.error){ if(state.offset===0) statsError(); $("count").textContent="p-chain unavailable — retrying…"; setTimeout(function(){load(reset);},5000); return; }
-      px=j.avaxUsd; asOf=j.asOf;
+      if(j.error){ if(state.offset===0) statsError(); $("count").textContent="p-chain unavailable — retrying…"; retry(reset); return; }
+      fails=0; px=j.avaxUsd; asOf=j.asOf;
       if(state.offset===0){
         renderStats(j.stats);
         $("asof").textContent=asOf? ("snapshot "+new Date(asOf).toISOString().replace("T"," ").slice(0,19)+" UTC \xB7 refreshes ~5 min") : "";
@@ -1184,17 +1206,17 @@ function page(site) {
       $("count").textContent=nf(state.offset)+" of "+nf(total)+" validators";
       $("more").style.display= state.offset<total ? "" : "none";
       bindRows();
-    }).catch(function(){ if(state.offset===0) statsError(); $("count").textContent="network error — retrying…"; setTimeout(function(){load(reset);},5000); });
+    }).catch(function(){ if(state.offset===0) statsError(); $("count").textContent="network error — retrying…"; retry(reset); });
   }
 
   var ths=document.querySelectorAll(".vtable th[data-sort]");
-  function setActive(){ for(var i=0;i<ths.length;i++){ ths[i].classList.toggle("act", ths[i].getAttribute("data-sort")===state.sort); } }
+  function setActive(){ for(var i=0;i<ths.length;i++){ var on=ths[i].getAttribute("data-sort")===state.sort; ths[i].classList.toggle("act", on); if(on) ths[i].setAttribute("aria-sort",state.dir==="asc"?"ascending":"descending"); else ths[i].removeAttribute("aria-sort"); } }
   for(var i=0;i<ths.length;i++){ (function(th){ th.onclick=function(){
     var s=th.getAttribute("data-sort");
     if(state.sort===s){ state.dir=state.dir==="desc"?"asc":"desc"; }
     else { state.sort=s; state.dir=(s==="remaining")?"asc":"desc"; }
     setActive(); load(true);
-  }; })(ths[i]); }
+  }; th.tabIndex=0; th.onkeydown=function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); th.click(); } }; })(ths[i]); }
 
   var qt;
   $("q").oninput=function(){ clearTimeout(qt); var v=this.value; qt=setTimeout(function(){ state.q=v.trim(); load(true); },300); };
