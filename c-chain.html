@@ -33,9 +33,9 @@
   :root{
     --bg:#0a0a0a;
     --ink:#f2f2f2;
-    --dim:#7a7a7a;
+    --dim:#8e8e8e;
     --faint:#2a2a2a;
-    --red:#e92733;
+    --red:#e92733;--body:#bdbdbd;
     --mono:ui-monospace,"SF Mono","Cascadia Mono","JetBrains Mono",Menlo,Consolas,monospace;
   }
   *{margin:0;padding:0;box-sizing:border-box}
@@ -58,7 +58,7 @@
   .logo{font-weight:700;letter-spacing:.08em;display:flex;align-items:center;gap:9px}
   /* one nav on every page: the same three places in the same words, the current one marked */
   .sitenav{display:inline-flex;gap:18px;align-items:center;margin-left:auto;margin-right:22px}
-  .nav{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);text-decoration:none}
+  .nav{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);text-decoration:none}
   .nav:hover{color:var(--red)}
   .nav.on{color:var(--ink);box-shadow:0 2px 0 var(--red)}
   @media(max-width:700px){.hbar{flex-wrap:wrap;height:auto!important;padding-top:14px}#netstatus{margin-left:auto}.sitenav{order:3;width:100%;margin:12px 0 0;justify-content:space-between;border-top:1px solid var(--faint);padding:11px 0}}
@@ -66,7 +66,7 @@
   section[id]{scroll-margin-top:96px}
   .logo b{color:var(--red)}
   .logo-mark{width:24px;height:24px;display:block;flex:none}
-  #netstatus{font-size:11px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+  #netstatus{font-size:12px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;display:flex;align-items:center;gap:8px}
   #netdot{width:7px;height:7px;background:var(--dim);display:inline-block}
   #netdot.live{background:var(--red);animation:blink 1.6s steps(2) infinite}
   @keyframes blink{50%{opacity:.25}}
@@ -78,22 +78,22 @@
 
   /* hero */
   .hero{padding:72px 0 56px;border-bottom:1px solid var(--faint)}
-  .eyebrow{font-size:11px;font-weight:400;letter-spacing:.24em;color:var(--dim);text-transform:uppercase;margin-bottom:28px}
-  .eyebrow b{color:var(--red);font-weight:400}
+  .eyebrow{font-size:16px;font-weight:700;letter-spacing:.01em;color:var(--ink);margin-bottom:22px}
+  .eyebrow b{color:var(--red);font-weight:700}
 
-  .odo{display:flex;align-items:stretch;gap:.04em;font-weight:700;font-size:clamp(34px,8.5vw,104px);line-height:1;user-select:none}
+  .odo{display:flex;align-items:stretch;gap:.04em;font-weight:700;font-size:clamp(40px,11vw,104px);line-height:1;user-select:none}
   .digit{position:relative;overflow:hidden;height:1em}
   .digit .reel{display:flex;flex-direction:column;transition:transform .45s cubic-bezier(.2,.9,.2,1)}
   .digit .reel span{height:1em;display:block}
   .digit.sep{color:var(--dim);align-self:flex-end}
-  .odo-label{margin-top:18px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+  .odo-label{margin-top:18px;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
   .odo-label b{color:var(--ink);font-weight:400}
-  .hero-what{margin-top:18px;max-width:62ch;color:var(--dim);font-size:12px;line-height:1.7;letter-spacing:.02em}
+  .hero-what{margin-top:18px;max-width:62ch;color:var(--body);font-size:14px;line-height:1.7}
 
   .progress{margin-top:44px}
   .bar{height:10px;border:1px solid var(--faint);position:relative}
   .bar .fill{position:absolute;inset:1px auto 1px 1px;background:var(--red);width:0%;transition:width 1s linear}
-  .bar-meta{display:flex;justify-content:space-between;margin-top:10px;font-size:11px;color:var(--dim);letter-spacing:.1em}
+  .bar-meta{display:flex;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--dim);letter-spacing:.1em}
   .bar-meta .pct{color:var(--ink)}
   /* narrow screens: the genesis date drops out so the three labels stop touching, and the
      eyebrow breaks between its two phrases instead of leaving a dot hanging at the line end */
@@ -101,26 +101,26 @@
 
   .hero-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--faint);border:1px solid var(--faint);margin-top:44px}
   .stat{background:var(--bg);padding:18px 16px}
-  .stat .k{font-size:10px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
+  .stat .k{font-size:11px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
   .stat .v{font-size:20px;font-weight:700;margin-top:6px;overflow-wrap:anywhere}
-  .stat .v small{font-size:11px;color:var(--dim);font-weight:400}
+  .stat .v small{font-size:12px;color:var(--dim);font-weight:400}
   @media(max-width:640px){.hero-grid{grid-template-columns:1fr}}
 
   /* sections */
   section{padding:64px 0;border-bottom:1px solid var(--faint)}
-  h2{font-size:13px;letter-spacing:.24em;text-transform:uppercase;color:var(--red);font-weight:700;margin-bottom:8px}
-  .sub{color:var(--dim);max-width:56ch;margin-bottom:32px}
+  h2{font-size:20px;line-height:1.25;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:10px}@media(max-width:560px){h2{font-size:18px}}
+  .sub{color:var(--body);max-width:60ch;margin-bottom:32px}
 
   /* checker */
   .check-row{display:flex;gap:0;max-width:720px}
   #addr{flex:1;background:transparent;border:1px solid var(--faint);border-right:none;color:var(--ink);font-family:var(--mono);font-size:14px;padding:14px 16px;outline:none}
   #addr:focus{border-color:var(--dim)}
   #addr::placeholder{color:var(--dim)}
-  #checkbtn{background:var(--red);color:#000;border:1px solid var(--red);font-family:var(--mono);font-weight:700;font-size:13px;letter-spacing:.12em;padding:14px 26px;cursor:pointer;text-transform:uppercase}
+  #checkbtn{background:var(--red);color:#000;border:1px solid var(--red);font-family:var(--mono);font-weight:700;font-size:14px;letter-spacing:.12em;padding:14px 26px;cursor:pointer;text-transform:uppercase}
   #checkbtn:hover{background:var(--ink);border-color:var(--ink)}
   #checkbtn:focus-visible,#addr:focus-visible,#callin:focus-visible,button:focus-visible{outline:2px solid var(--red);outline-offset:2px}
   @media(pointer:coarse){#permalink-copy{position:relative}#permalink-copy::after{content:"";position:absolute;inset:-10px -4px}}
-  #checkmsg{margin-top:14px;font-size:12px;color:var(--dim);min-height:1.5em}
+  #checkmsg{margin-top:14px;font-size:13px;color:var(--dim);min-height:1.5em}
   #checkmsg.err{color:var(--red)}
   @media(max-width:560px){.check-row{flex-direction:column}#addr{border-right:1px solid var(--faint);border-bottom:none}}
 
@@ -128,13 +128,13 @@
   .result.show{display:grid}
   @media(max-width:860px){.result.show{grid-template-columns:1fr}}
   .r-rows{border-top:1px solid var(--faint)}
-  .r-row{display:flex;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--faint);font-size:13px}
-  .r-row .k{color:var(--dim);letter-spacing:.08em;text-transform:uppercase;font-size:11px;padding-top:2px}
+  .r-row{display:flex;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--faint);font-size:14px}
+  .r-row .k{color:var(--dim);letter-spacing:.08em;text-transform:uppercase;font-size:12px;padding-top:2px}
   .r-row .v{text-align:right;overflow-wrap:anywhere}
   .r-row .v.big{font-size:18px;font-weight:700;color:var(--red)}
   #card{width:100%;border:1px solid var(--faint);display:block}
   .card-actions{display:flex;gap:10px;margin-top:12px}
-  .card-actions button{flex:1;background:transparent;border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:11px 8px;cursor:pointer}
+  .card-actions button{flex:1;background:transparent;border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:11px 8px;cursor:pointer}
   .card-actions button:hover{border-color:var(--red);color:var(--red)}
 
   /* timeline */
@@ -143,24 +143,24 @@
   .tl-item:last-child{padding-bottom:0}
   .tl-item::before{content:"";position:absolute;left:-6px;top:6px;width:11px;height:11px;background:var(--bg);border:1px solid var(--dim)}
   .tl-item.red::before{background:var(--red);border-color:var(--red)}
-  .tl-date{font-size:11px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase}
+  .tl-date{font-size:12px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
   .tl-title{font-size:16px;font-weight:700;margin:4px 0 4px}
   .tl-item.red .tl-title{color:var(--red)}
-  .tl-body{color:var(--dim);max-width:60ch;font-size:13px}
+  .tl-body{color:var(--body);max-width:60ch;font-size:14px}
 
   /* census */
   .census-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:40px}
   @media(max-width:860px){.census-grid{grid-template-columns:1fr}}
-  .c-title{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--faint);padding-bottom:8px;margin-bottom:14px}
-  .c-row{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;align-items:center;gap:10px;padding:5px 0;font-size:12px}
+  .c-title{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--faint);padding-bottom:8px;margin-bottom:14px}
+  .c-row{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;align-items:center;gap:10px;padding:5px 0;font-size:13px}
   .c-k{color:var(--ink);text-transform:lowercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .c-bar{height:8px;border:1px solid var(--faint);position:relative}
   .c-bar i{position:absolute;inset:1px auto 1px 1px;background:var(--red);display:block}
   .c-n{color:var(--dim);font-variant-numeric:tabular-nums;min-width:3ch;text-align:right}
-  .c-total{margin-top:28px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+  .c-total{margin-top:28px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
   .c-total b{color:var(--red);font-weight:700}
 
-  footer{padding:48px 0 72px;color:var(--dim);font-size:12px;display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+  footer{padding:48px 0 72px;color:var(--dim);font-size:13px;display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
   footer .tag{letter-spacing:.14em;text-transform:uppercase}
   footer a{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--faint)}
   footer a:hover{color:var(--red);border-color:var(--red)}
@@ -173,25 +173,25 @@
   .call-row input{width:120px;background:transparent;border:1px solid var(--faint);border-right:none;color:var(--ink);font-family:var(--mono);font-size:16px;font-weight:700;padding:12px 14px;outline:none;text-align:center;-moz-appearance:textfield}
   .call-row input::-webkit-outer-spin-button,.call-row input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
   .call-row input:focus{border-color:var(--dim)}
-  .call-row .lbl{align-self:center;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-left:14px}
-  #callbtn{background:var(--red);color:#000;border:1px solid var(--red);font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:.12em;padding:12px 20px;cursor:pointer;text-transform:uppercase}
+  .call-row .lbl{align-self:center;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-left:14px}
+  #callbtn{background:var(--red);color:#000;border:1px solid var(--red);font-family:var(--mono);font-weight:700;font-size:13px;letter-spacing:.12em;padding:12px 20px;cursor:pointer;text-transform:uppercase}
   #callbtn:hover{background:var(--ink);border-color:var(--ink)}
   #callbtn:disabled{background:var(--faint);border-color:var(--faint);color:var(--dim);cursor:default}
   .call-live{padding:0 16px 18px;display:none}
   .call-live .meter{height:8px;border:1px solid var(--faint);position:relative;margin:6px 0 12px}
   .call-live .meter i{position:absolute;inset:1px auto 1px 1px;background:var(--red);width:0%}
   .call-live .meter b{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
-  .call-live .nums{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+  .call-live .nums{display:flex;justify-content:space-between;font-size:13px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
   .call-live .nums b{color:var(--ink);font-size:16px}
   .call-live .nums .t{color:var(--red)}
   .call-res{padding:16px;border-top:1px solid var(--faint);display:none}
   .call-res .big{font-size:22px;font-weight:700}
   .call-res .big.hit{color:var(--red)}
-  .call-res .line{font-size:12px;color:var(--dim);margin-top:6px;letter-spacing:.04em}
+  .call-res .line{font-size:13px;color:var(--dim);margin-top:6px;letter-spacing:.04em}
   .call-res .acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
-  .call-res .acts button,.call-res .acts a{background:transparent;border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:9px 14px;cursor:pointer;text-decoration:none}
+  .call-res .acts button,.call-res .acts a{background:transparent;border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:9px 14px;cursor:pointer;text-decoration:none}
   .call-res .acts button:hover,.call-res .acts a:hover{border-color:var(--red);color:var(--red)}
-  #callmsg{margin-top:12px;font-size:12px;color:var(--dim);min-height:1.5em}
+  #callmsg{margin-top:12px;font-size:13px;color:var(--dim);min-height:1.5em}
   @media(max-width:560px){.call-top{grid-template-columns:1fr 1fr 1fr}.call-top .stat{padding:12px 10px}.call-top .stat .v{font-size:16px}}
 </style>
 </head>
@@ -253,15 +253,15 @@
           <div class="r-row"><span class="k">arrived in the first</span><span class="v big" id="r-early">—</span></div>
         </div>
         <div>
-          <canvas id="card" width="1080" height="1350" aria-label="survivor card — click to open your page" role="link" tabindex="0" style="cursor:pointer" title="open your page"></canvas>
+          <canvas id="card" width="1080" height="1350" aria-label="survivor card, click to open your page" role="link" tabindex="0" style="cursor:pointer" title="open your page"></canvas>
           <div class="card-actions">
-            <a id="openpage" href="#" target="_blank" rel="noopener" style="display:none;background:var(--red);border:1px solid var(--red);color:#0a0a0a;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:10px 16px;cursor:pointer;text-decoration:none;text-align:center">Open your page →</a>
+            <a id="openpage" href="#" target="_blank" rel="noopener" style="display:none;background:var(--red);border:1px solid var(--red);color:#0a0a0a;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:10px 16px;cursor:pointer;text-decoration:none;text-align:center">Open your page →</a>
             <button id="dl">Download card</button>
             <button id="share">Share on X</button>
           </div>
-          <div id="permalink" style="display:none;margin-top:12px;font-size:11px;color:var(--dim);letter-spacing:.06em;word-break:break-all">
+          <div id="permalink" style="display:none;margin-top:12px;font-size:12px;color:var(--dim);letter-spacing:.06em;word-break:break-all">
             your page: <a id="permalink-url" href="#" target="_blank" rel="noopener" style="color:var(--ink);text-decoration:underline;text-decoration-color:var(--faint)"></a>
-            <button id="permalink-copy" style="background:transparent;border:1px solid var(--faint);color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;margin-left:8px;cursor:pointer">copy</button>
+            <button id="permalink-copy" style="background:transparent;border:1px solid var(--faint);color:var(--dim);font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;margin-left:8px;cursor:pointer">copy</button>
           </div>
         </div>
       </div>
@@ -309,7 +309,7 @@
 
     <section id="records" style="display:none">
       <h2>the record books</h2>
-      <p class="sub">Biggest ever checked here. Set by whoever ran a check — no names, no addresses, just the number, the token, and the era of the wallet that did it. <a href="#checker" style="color:var(--dim)">think yours beats these? →</a></p>
+      <p class="sub">Biggest ever checked here. Set by whoever ran a check: no names, no addresses, just the number, the token, and the era of the wallet that did it. <a href="#checker" style="color:var(--dim)">think yours beats these? →</a></p>
       <div id="rec-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--faint);border:1px solid var(--faint)"></div>
     </section>
 
@@ -350,12 +350,12 @@
         <div class="tl-item">
           <div class="tl-date">Dec 2024</div>
           <div class="tl-title">Avalanche9000</div>
-          <div class="tl-body">The Etna upgrade. Largest network change since genesis — L1s replace subnets, validation costs drop ~99%.</div>
+          <div class="tl-body">The Etna upgrade. Largest network change since genesis. L1s replace subnets, validation costs drop ~99%.</div>
         </div>
         <div class="tl-item red">
           <div class="tl-date">Jan – May 2025</div>
           <div class="tl-title">Presale szn</div>
-          <div class="tl-body">KET opens the door — 720x from presale. WINK follows with 8,000 applicants, then BLUB and its ShameFi wallets. The Arena takes over the summer.</div>
+          <div class="tl-body">KET opens the door: 720x from presale. WINK follows with 8,000 applicants, then BLUB and its ShameFi wallets. The Arena takes over the summer.</div>
         </div>
         <div class="tl-item">
           <div class="tl-date">2025</div>
@@ -381,11 +381,11 @@
       </details>
       <details style="border-bottom:1px solid var(--faint);padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">what is the daily call?</summary>
-        <p style="color:var(--dim);margin:10px 0 0">a 60-second game on the live block feed. call how many blocks the c-chain will produce in the next minute, then watch it count. within 3 is a hit. one call per utc day counts toward a streak; extra calls are practice. the streak lives only in your browser &mdash; nothing is sent anywhere.</p>
+        <p style="color:var(--dim);margin:10px 0 0">a 60-second game on the live block feed. call how many blocks the c-chain will produce in the next minute, then watch it count. within 3 is a hit. one call per utc day counts toward a streak; extra calls are practice. the streak lives only in your browser. nothing is sent anywhere.</p>
       </details>
       <details style="border-bottom:1px solid var(--faint);padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">what does the wallet checker do?</summary>
-        <p style="color:var(--dim);margin:10px 0 0">paste any avalanche address or .avax name and get its history: first transaction, era, how early it arrived, badges, and realized dex p&amp;l &mdash; biggest win, biggest loss, roundtrips, and what it sold too early. read-only. no connect, no signature.</p>
+        <p style="color:var(--dim);margin:10px 0 0">paste any avalanche address or .avax name and get its history: first transaction, era, how early it arrived, badges, and realized dex p&amp;l: biggest win, biggest loss, roundtrips, and what it sold too early. read-only. no connect, no signature.</p>
       </details>
       <details style="border-bottom:1px solid var(--faint);padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">is the page-claim signature safe?</summary>
@@ -548,12 +548,12 @@
         var v=(e.v<0?"-":"+")+"$"+Math.abs(e.v).toLocaleString("en-US");
         var d=e.t?new Date(e.t).toLocaleDateString("en-US",{month:"short",year:"numeric"}).toLowerCase():"";
         return '<div style="display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--faint)">'
-          +'<span style="color:var(--dim);font-size:10px;letter-spacing:.15em">#'+(i+1)+'</span>'
+          +'<span style="color:var(--dim);font-size:11px;letter-spacing:.15em">#'+(i+1)+'</span>'
           +'<span style="color:'+(cd[0]==="w"?"var(--ink)":"var(--red)")+';font-weight:700">'+v+'</span>'
-          +'<span style="color:var(--dim);font-size:12px">$'+escHtml(e.sym)+(e.era?" \u00b7 "+escHtml(e.era.toLowerCase()):"")+(d?" \u00b7 "+escHtml(d):"")+'</span>'
+          +'<span style="color:var(--dim);font-size:13px">$'+escHtml(e.sym)+(e.era?" \u00b7 "+escHtml(e.era.toLowerCase()):"")+(d?" \u00b7 "+escHtml(d):"")+'</span>'
           +'</div>';
       }).join("");
-      return '<div style="background:var(--bg);padding:18px 16px"><div style="font-size:10px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase;margin-bottom:8px">'+cd[1]+'</div>'+(rows||'<div style="color:var(--dim);font-size:12px">unclaimed. run a check.</div>')+'</div>';
+      return '<div style="background:var(--bg);padding:18px 16px"><div style="font-size:11px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;margin-bottom:8px">'+cd[1]+'</div>'+(rows||'<div style="color:var(--dim);font-size:13px">unclaimed. run a check.</div>')+'</div>';
     }).join("");
     if(!any) return;
     document.getElementById("rec-grid").innerHTML=html;
@@ -751,7 +751,7 @@
       if(lastDraw && avvyName){ lastDraw.name = avvyName; drawCard(lastDraw); }
     }).catch(function(){
       btn.disabled = false;
-      msg.className="err"; msg.textContent="couldn't reach the chain explorer — try again in a moment.";
+      msg.className="err"; msg.textContent="couldn't reach the chain explorer. try again in a moment.";
     });
   }
   btn.addEventListener("click",check);
@@ -929,7 +929,7 @@
         navigator.clipboard.write([new ClipboardItem({"image/png":
           new Promise(function(res){ c.toBlob(res,"image/png"); })
         })]).then(function(){
-          msg.className=""; msg.textContent="card copied — paste it (ctrl+v) into your post.";
+          msg.className=""; msg.textContent="card copied. paste it (ctrl+v) into your post.";
         }).catch(function(){});
       }catch(e){}
     }
@@ -981,7 +981,7 @@
   function paintTop(){
     $("call-streak").textContent=st.streak||0; $("call-best").textContent=st.best||0;
     var open=st.lastDay!==day();
-    $("call-today").textContent= open ? "today's call is open" : (st.lastResult==="hit" ? "today: hit \u2014 practice mode" : "today: miss \u2014 practice mode");
+    $("call-today").textContent= open ? "today's call is open" : (st.lastResult==="hit" ? "today: hit, practice mode" : "today: miss, practice mode");
     var bt=$("blocktime"); var sec=bt? parseFloat(bt.textContent) : NaN;
     if(isFinite(sec)&&sec>0){ var pace=Math.round(60/sec); $("call-pace").innerHTML=pace+' <small>/min</small>'; $("callin").placeholder=pace; }
   }
@@ -995,7 +995,7 @@
     running=true; $("callbtn").disabled=true; $("callmsg").textContent="reading the chain\u2026";
     rpc("eth_blockNumber").then(function(start){
       var counted = st.lastDay!==day();
-      $("callmsg").textContent= counted ? "this one counts." : "practice \u2014 today's call is already in.";
+      $("callmsg").textContent= counted ? "this one counts." : "practice. today's call is already in.";
       $("call-res").style.display="none"; $("call-live").style.display="block";
       $("call-start").textContent=start.toLocaleString("en-US"); $("call-guess").textContent=g; $("call-sofar").textContent="0";
       var scale=Math.max(g*1.6, 20); $("call-mark").style.display="block"; $("call-mark").style.left=Math.min(100,g/scale*100)+"%";
@@ -1016,21 +1016,21 @@
           var actual=Math.max(0,end-start), diff=Math.abs(actual-g), hit=diff<=TOL, perfect=diff===0;
           $("call-live").style.display="none"; $("call-res").style.display="block";
           var v=$("call-verdict"); v.className="big"+(hit?" hit":"");
-          v.textContent= perfect ? "PERFECT \u2014 "+actual+" blocks" : hit ? "HIT \u2014 "+actual+" blocks, you said "+g : "MISS \u2014 "+actual+" blocks, you said "+g;
+          v.textContent= perfect ? "PERFECT: "+actual+" blocks" : hit ? "HIT: "+actual+" blocks, you said "+g : "MISS: "+actual+" blocks, you said "+g;
           if(counted){
             st.lastDay=day(); st.lastResult=hit?"hit":"miss";
             if(hit){ st.streak=(st.streak||0)+1; st.lastHit=day(); st.best=Math.max(st.best||0, st.streak); } else { st.streak=0; }
             st.calls=(st.calls||0)+1; st.hits=(st.hits||0)+(hit?1:0); save(st);
           }
-          $("call-line").textContent=(counted? (hit? "streak "+st.streak+(st.streak===st.best?" \u00B7 personal best":"") : "streak reset") : "practice \u2014 not counted")+" \u00B7 "+(st.hits||0)+"/"+(st.calls||0)+" lifetime";
-          var txt=(perfect?"PERFECT call":"I called "+g)+" \u2014 the C-Chain did "+actual+" blocks in 60s."+(st.streak? " streak "+st.streak+".":"")+" try yours \u2192 avax100m.xyz/c-chain#call";
+          $("call-line").textContent=(counted? (hit? "streak "+st.streak+(st.streak===st.best?" \u00B7 personal best":"") : "streak reset") : "practice, not counted")+" \u00B7 "+(st.hits||0)+"/"+(st.calls||0)+" lifetime";
+          var txt=(perfect?"PERFECT call":"I called "+g)+": the C-Chain did "+actual+" blocks in 60s."+(st.streak? " streak "+st.streak+".":"")+" try yours \u2192 avax100m.xyz/c-chain#call";
           $("call-share").href="https://twitter.com/intent/tweet?text="+encodeURIComponent(txt);
           lastCall={g:g,actual:actual,hit:hit,perfect:perfect,start:start,end:end,counted:counted,streak:st.streak||0,best:st.best||0};
           drawCallCard(lastCall);
           paintTop(); running=false; $("callbtn").disabled=false; $("callmsg").textContent="";
         });
       }
-    }).catch(function(){ running=false; $("callbtn").disabled=false; $("callmsg").textContent="could not reach the c-chain rpc \u2014 try again."; });
+    }).catch(function(){ running=false; $("callbtn").disabled=false; $("callmsg").textContent="could not reach the c-chain rpc. try again."; });
   }
   // result card: 1200x630, same brutalist frame as the server-rendered cards
   var lastCall=null;

@@ -258,7 +258,7 @@ document.addEventListener("focusin",function(e){ fitTip(tipHost(e)); });
 </script>`;
 
 // Shared stylesheet for the /p-chain page and the /v/ profile page (one source).
-var STYLE = `:root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e92733;
+var STYLE = `:root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#8e8e8e;--faint:#2a2a2a;--red:#e92733;--body:#bdbdbd;
 --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6}
@@ -275,46 +275,46 @@ header{border-bottom:1px solid var(--faint)}
 .logo{font-weight:700;letter-spacing:.08em;text-decoration:none;display:inline-flex;align-items:center;gap:9px;color:var(--ink)}
 .logo b{color:var(--red)}
 .logo img{display:block}
-.nav{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);text-decoration:none}
+.nav{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);text-decoration:none}
 .nav:hover{color:var(--red)}
 .hero{padding:56px 0 36px;border-bottom:1px solid var(--faint)}
-.eyebrow{font-size:11px;letter-spacing:.24em;color:var(--dim);text-transform:uppercase;margin-bottom:14px}
-.eyebrow b{color:var(--red)}
+.crumbs{font-size:13px;color:var(--dim);margin-bottom:18px;display:flex;flex-wrap:wrap;gap:0 9px;overflow-wrap:anywhere}.crumbs a{color:var(--dim);text-decoration:none}.crumbs a:hover{color:var(--red)}.crumbs span{color:var(--ink)}.crumbs i{font-style:normal;color:var(--dim)}
+
 h1{font-size:clamp(34px,7vw,66px);line-height:1;color:var(--red);letter-spacing:-.01em;overflow-wrap:anywhere}
 @media(max-width:480px){h1{font-size:26px;line-height:1.15}}
 .sitenav{display:inline-flex;gap:18px;align-items:center}
 .nav.on{color:var(--ink);box-shadow:0 2px 0 var(--red)}
 @media(max-width:560px){.hbar{flex-wrap:wrap;height:auto;padding-top:14px}.sitenav{width:100%;justify-content:space-between;border-top:1px solid var(--faint);margin-top:12px;padding:11px 0}}
-.tagline{color:var(--dim);margin-top:12px;max-width:660px}
-.primer{color:var(--dim);font-size:12px;line-height:1.7;max-width:660px;margin-top:12px}
-.cell .g{font-size:10px;color:var(--dim);letter-spacing:.04em;line-height:1.4;margin-top:7px}
-.swipe{display:none;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 8px}
+.tagline{color:var(--body);margin-top:14px;max-width:62ch;font-size:15px}
+.primer{color:var(--dim);font-size:14px;line-height:1.7;max-width:62ch;margin-top:12px}
+.cell .g{font-size:11px;color:var(--dim);letter-spacing:.04em;line-height:1.4;margin-top:7px}
+.swipe{display:none;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 8px}
 @media(max-width:760px){.swipe{display:block}}
-.vc-sum{padding:12px 14px;border-bottom:1px solid var(--faint);font-size:12px;line-height:1.7;color:var(--dim)}
-.vc-sum .k{display:block;font-size:10px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:3px}
+.vc-sum{padding:12px 14px;border-bottom:1px solid var(--faint);font-size:13px;line-height:1.7;color:var(--dim)}
+.vc-sum .k{display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:3px}
 .vc-sum b{color:var(--ink)}.vc-sum .warn{color:var(--red)}
-.vc-more summary{cursor:pointer;list-style:none;padding:10px 14px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);border-top:1px solid var(--faint)}
+.vc-more summary{cursor:pointer;list-style:none;padding:10px 14px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);border-top:1px solid var(--faint)}
 .vc-more summary::-webkit-details-marker{display:none}.vc-more summary::before{content:"+ "}.vc-more[open] summary::before{content:"- "}
 .vc-more summary:hover,.vc-more summary:focus-visible{color:var(--red)}
 .vc-more .r-row:first-of-type{border-top:1px solid var(--faint)}
 section{padding:40px 0;border-bottom:1px solid var(--faint)}
-h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red);font-weight:700;margin-bottom:8px}
-.sub{color:var(--dim);margin-bottom:22px;max-width:700px}
+h2{font-size:20px;line-height:1.25;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:10px}@media(max-width:560px){h2{font-size:18px}}
+.sub{color:var(--body);margin-bottom:24px;max-width:62ch}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--faint);border:1px solid var(--faint)}
 /* a short last row stretches to the edge: no grey filler cell where the grid runs out of items */
 @media(min-width:761px){.grid>:last-child:nth-child(3n+1){grid-column:1/-1}.grid>:last-child:nth-child(3n+2){grid-column:span 2}}
 @media(max-width:760px){.grid{grid-template-columns:repeat(2,1fr)}.grid>:last-child:nth-child(odd){grid-column:1/-1}}
 .cell{background:var(--bg);padding:16px 14px;min-height:84px}
-.cell .k{font-size:10px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase}
+.cell .k{font-size:11px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
 .cell .v{font-size:22px;font-weight:700;margin-top:6px;word-break:break-word}
 .cell .v.red{color:var(--red)}
-.cell .v small{font-size:11px;color:var(--dim);font-weight:400}
+.cell .v small{font-size:12px;color:var(--dim);font-weight:400}
 .cell.full{grid-column:1/-1;min-height:84px;display:flex;flex-direction:column;justify-content:center}
 .cell.full a{color:var(--red);border-bottom:1px solid var(--red);text-decoration:none}
 .check-row{display:flex;gap:10px;flex-wrap:wrap}
 .check-row input{flex:1;min-width:240px;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:14px;padding:11px 13px}
 .check-row input:focus{outline:none;border-color:var(--red)}
-.btn{background:var(--red);border:1px solid var(--red);color:#000;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:11px 20px;cursor:pointer;text-decoration:none;display:inline-block}
+.btn{background:var(--red);border:1px solid var(--red);color:#000;font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:11px 20px;cursor:pointer;text-decoration:none;display:inline-block}
 .btn:hover{background:var(--ink);border-color:var(--ink)}
 .btn.primary{background:var(--red);border-color:var(--red);color:#000}
 .btn.ghost{background:transparent;color:var(--dim);border-color:var(--faint);font-weight:400}
@@ -323,11 +323,11 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .pclaim{margin-top:26px;border-top:1px solid var(--faint);padding-top:22px}
 .pembed{margin-top:16px}
 .frow2{display:flex;gap:12px;align-items:center;margin-bottom:10px}
-.frow2 label{width:110px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);flex:none}
-.frow2 input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px}
+.frow2 label{width:110px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);flex:none}
+.frow2 input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:14px;padding:9px 11px}
 .frow2 input:focus{outline:none;border-color:var(--red)}
 @media(max-width:600px){.frow2{flex-direction:column;align-items:stretch;gap:4px}.frow2 label{width:auto}}
-.msg{margin-top:14px;font-size:12px;color:var(--dim);min-height:18px;letter-spacing:.04em}
+.msg{margin-top:14px;font-size:13px;color:var(--dim);min-height:18px;letter-spacing:.04em}
 .sk{display:block;height:12px;background:linear-gradient(90deg,var(--faint) 25%,#3a3a3a 50%,var(--faint) 75%);background-size:200% 100%;animation:sk 1.4s linear infinite}
 @keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
 @media(prefers-reduced-motion:reduce){.sk{animation:none;background:var(--faint)}.vc-next .nb span{transition:none}}
@@ -337,28 +337,28 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .vcard.sk-card .vc-head .sk{width:180px;height:16px}.vcard.sk-card .vc-head .sk.s{width:260px;height:10px;margin-top:8px}
 .vcard.sk-card .vc-badges .sk{width:40px;height:40px}.vcard.sk-card .vc-strip .sk.k{width:40%;height:9px}.vcard.sk-card .vc-strip .sk.v{width:65%;height:16px;margin-top:9px}
 .pick-form{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:10px;align-items:end;max-width:900px}
-.pick-form label{display:flex;flex-direction:column;gap:6px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.pick-form label{display:flex;flex-direction:column;gap:6px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
 .pick-form input,.pick-form select{background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:14px;padding:10px 12px;min-width:0;width:100%;-webkit-appearance:none;appearance:none;border-radius:0}
 .pick-form input:focus,.pick-form select:focus{outline:none;border-color:var(--red)}
 .pick-form .btn{height:42px}
 @media(max-width:760px){.pick-form{grid-template-columns:1fr 1fr}.pick-form .btn{grid-column:1/-1}}
-.pick-note{margin-top:14px;font-size:12px;color:var(--dim);letter-spacing:.04em;min-height:18px}
+.pick-note{margin-top:14px;font-size:13px;color:var(--dim);letter-spacing:.04em;min-height:18px}
 .pick-list{list-style:none;margin-top:18px;border:1px solid var(--faint)}
 .pick-list li{display:grid;grid-template-columns:34px 1fr auto;gap:12px;padding:12px 14px;border-bottom:1px solid var(--faint);align-items:center}
 .pick-list li:last-child{border-bottom:none}
 .pick-list .n{font-size:18px;font-weight:700;color:var(--dim)}.pick-list li:first-child .n{color:var(--red)}
 .pick-list .who a{color:var(--ink);font-weight:700;text-decoration:none}.pick-list .who a:hover{color:var(--red)}
-.pick-list .why{font-size:11px;color:var(--dim);margin-top:3px;letter-spacing:.02em}
+.pick-list .why{font-size:12px;color:var(--dim);margin-top:3px;letter-spacing:.02em}
 .pick-list .nums{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pick-list .nums b{display:block;font-size:18px;color:var(--red)}
-.pick-list .nums small{font-size:10px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
-.pick-list .meta{font-size:11px;color:var(--dim);margin-top:2px}
+.pick-list .nums small{font-size:11px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+.pick-list .meta{font-size:12px;color:var(--dim);margin-top:2px}
 @media(max-width:560px){.pick-list li{grid-template-columns:28px 1fr}.pick-list .nums{grid-column:2;text-align:left}.pick-list .nums b{display:inline;margin-right:8px}}
 .recent{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:0}
-.recent .lbl{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
-.recent .chip{font-size:11px;border:1px solid var(--faint);padding:4px 9px;cursor:pointer;color:var(--ink);background:transparent;font-family:var(--mono);letter-spacing:.02em;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recent .lbl{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.recent .chip{font-size:12px;border:1px solid var(--faint);padding:4px 9px;cursor:pointer;color:var(--ink);background:transparent;font-family:var(--mono);letter-spacing:.02em;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .recent .chip:hover{border-color:var(--red);color:var(--red)}
-.recent .clr{font-size:10px;color:var(--dim);cursor:pointer;background:none;border:none;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase}
+.recent .clr{font-size:11px;color:var(--dim);cursor:pointer;background:none;border:none;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase}
 .recent .clr:hover{color:var(--red)}
 .detail{margin-top:18px;display:none}
 .vcard{border:1px solid var(--faint)}
@@ -367,18 +367,18 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .vc-pfp svg,.vc-pfp img{display:block;width:100%;height:100%;object-fit:cover}
 .vc-id{min-width:0}
 .vc-handle{font-size:18px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap;word-break:break-all}
-.vc-node{margin-top:5px;font-size:11px;color:var(--dim);display:flex;align-items:center;gap:9px;flex-wrap:wrap;word-break:break-all}
+.vc-node{margin-top:5px;font-size:12px;color:var(--dim);display:flex;align-items:center;gap:9px;flex-wrap:wrap;word-break:break-all}
 .vc-node .mono{color:var(--ink)}
-.tier{font-size:10px;font-weight:700;letter-spacing:.1em;padding:2px 8px;border:1px solid;text-transform:uppercase;flex:none}
+.tier{font-size:11px;font-weight:700;letter-spacing:.1em;padding:2px 8px;border:1px solid;text-transform:uppercase;flex:none}
 .tier.A{color:#e8b341;border-color:#e8b341}
 .tier.B{color:#c9c9c9;border-color:#c9c9c9}
 .tier.C{color:#c8813f;border-color:#c8813f}
-.copy{background:transparent;border:1px solid var(--faint);color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:3px 9px;cursor:pointer}
+.copy{background:transparent;border:1px solid var(--faint);color:var(--dim);font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:3px 9px;cursor:pointer}
 .copy:hover{border-color:var(--red);color:var(--red)}
 /* touch only: grow the hit area of the small controls, not their look */
 @media(pointer:coarse){.copy,.recent .clr,.nav{position:relative}.copy::after,.recent .clr::after,.nav::after{content:"";position:absolute;inset:-10px -4px}}
 .vc-badges{display:flex;flex-wrap:wrap;gap:8px;padding:14px;border-bottom:1px solid var(--faint)}
-.vc-badges .empty{color:var(--dim);font-size:11px;letter-spacing:.08em}
+.vc-badges .empty{color:var(--dim);font-size:12px;letter-spacing:.08em}
 .btile{position:relative;width:40px;height:40px;border:1px solid var(--faint);display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--ink);cursor:default;outline:none}
 .btile:hover,.btile:focus-visible{border-color:var(--red)}
 .btile svg{width:22px;height:22px;display:block}
@@ -386,85 +386,85 @@ h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red)
 .btile .rn{position:absolute;bottom:1px;right:3px;font-size:9px;color:var(--dim);letter-spacing:.04em}
 .btile.medal{background:var(--red);border-color:var(--red);color:#0a0a0a}
 .btile.medal .rn{color:#0a0a0a}
-.btile.fresh::after{content:"new";position:absolute;top:-7px;right:-7px;background:var(--red);color:#0a0a0a;font-size:7px;letter-spacing:.12em;text-transform:uppercase;padding:1px 4px;font-weight:700}
+.btile.fresh::after{content:"new";position:absolute;top:-7px;right:-7px;background:var(--red);color:#0a0a0a;font-size:7px;letter-spacing:.08em;text-transform:uppercase;padding:1px 4px;font-weight:700}
 .r-row .v .up{color:#3ddc84}.r-row .v .dn{color:var(--red)}
 .mgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.3fr);gap:24px}@media(max-width:640px){.mgrid{grid-template-columns:minmax(0,1fr);gap:28px}}
-.mgrid h3{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);font-weight:700;margin-bottom:8px}
+.mgrid h3{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:700;margin-bottom:8px}
 .mlist{list-style:none;counter-reset:m}.mlist li{counter-increment:m;padding:7px 0;border-bottom:1px solid var(--faint);font-size:13px;display:flex;justify-content:space-between;gap:10px}
 .mlist li::before{content:counter(m);color:var(--dim);margin-right:10px;flex:none}.mlist li>span:first-of-type{flex:0 1 auto;min-width:9ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mlist a{color:var(--ink)}.mlist a:hover{color:var(--red)}.mlist .d{color:#3ddc84;flex:1;min-width:0;text-align:right;font-variant-numeric:tabular-nums}.mlist .d .bg{white-space:nowrap}.mlist .dim{color:var(--dim);font-size:11px}
-.mlist .empty{color:var(--dim);font-size:12px;letter-spacing:.04em}
-.mline{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:22px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}.mline b{color:var(--ink)}
+.mlist a{color:var(--ink)}.mlist a:hover{color:var(--red)}.mlist .d{color:#3ddc84;flex:1;min-width:0;text-align:right;font-variant-numeric:tabular-nums}.mlist .d .bg{white-space:nowrap}.mlist .dim{color:var(--dim);font-size:12px}
+.mlist .empty{color:var(--dim);font-size:13px;letter-spacing:.04em}
+.mline{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:22px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}.mline b{color:var(--ink)}.mline a{text-transform:none;letter-spacing:.02em}
 .btile .tip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:220px;z-index:9;background:var(--bg);border:1px solid var(--red);padding:9px 11px;text-align:left;white-space:normal}
 .btile:hover .tip,.btile:focus-visible .tip{display:block}
 @media(max-width:760px){.btile .tip{left:-1px;transform:none}}
-.btile .tl{color:var(--red);letter-spacing:.2em;font-size:10px;display:block;margin-bottom:3px;text-transform:uppercase}
-.btile .tn{font-size:11px;font-weight:700;color:var(--ink);display:block}
-.btile .tr{font-size:10px;color:var(--dim);letter-spacing:.06em;display:block;margin:2px 0 5px}
-.btile .tv{font-size:10px;color:var(--dim);line-height:1.5;display:block}
+.btile .tl{color:var(--red);letter-spacing:.14em;font-size:11px;display:block;margin-bottom:3px;text-transform:uppercase}
+.btile .tn{font-size:12px;font-weight:700;color:var(--ink);display:block}
+.btile .tr{font-size:11px;color:var(--dim);letter-spacing:.06em;display:block;margin:2px 0 5px}
+.btile .tv{font-size:11px;color:var(--dim);line-height:1.5;display:block}
 .btile .tv b{color:var(--ink)}
 .vc-next{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:1px;background:var(--faint);border-bottom:1px solid var(--faint)}
 .vc-next .n{background:var(--bg);padding:10px 14px;min-width:0}
-.vc-next .nk{font-size:10px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;display:flex;justify-content:space-between;gap:8px}
+.vc-next .nk{font-size:11px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;display:flex;justify-content:space-between;gap:8px}
 .vc-next .nk b{color:var(--ink);font-weight:700;letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vc-next .nb{height:4px;background:var(--faint);margin:7px 0 6px}
 .vc-next .nb span{display:block;height:100%;background:var(--red);transition:width .6s ease}
-.vc-next .nv{font-size:10px;color:var(--dim);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vc-next .nv{font-size:11px;color:var(--dim);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vc-next .nv b{color:var(--ink)}
 @media(max-width:640px){.vc-next{grid-auto-flow:row}}
 .vc-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--faint)}
 .vc-strip .s{background:var(--bg);padding:12px 14px}
-.vc-strip .s .k{font-size:10px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+.vc-strip .s .k{font-size:11px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
 .vc-strip .s .v{font-size:16px;font-weight:700;margin-top:3px;word-break:break-word}
-.vc-strip .s .v small{font-size:10px;color:var(--dim);font-weight:400}
+.vc-strip .s .v small{font-size:11px;color:var(--dim);font-weight:400}
 .vc-strip .s .v small.tp{color:var(--red);letter-spacing:.1em;text-transform:uppercase;font-weight:700;display:block;margin-top:2px}
 @media(max-width:480px){.vc-strip{grid-template-columns:1fr}.vc-strip .s{padding:10px 14px}}
 .cmp-form{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
-.cmp-form input{flex:1;min-width:220px;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:10px 12px}
+.cmp-form input{flex:1;min-width:220px;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:14px;padding:10px 12px}
 .cmp-form input:focus{outline:none;border-color:var(--red)}
-.cmp-form .lbl{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+.cmp-form .lbl{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
 .cmp-heads{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;border:1px solid var(--faint);border-bottom:none}
 .cmp-heads .ch{padding:16px 14px;min-width:0}
 .cmp-heads .ch.b{text-align:right}
 .cmp-heads .ch .nm{font-size:18px;font-weight:700;word-break:break-all;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .cmp-heads .ch.b .nm{justify-content:flex-end}
-.cmp-heads .ch .nid{font-size:11px;color:var(--dim);margin-top:4px;word-break:break-all}
+.cmp-heads .ch .nid{font-size:12px;color:var(--dim);margin-top:4px;word-break:break-all}
 .cmp-heads .ch .nm a{text-decoration:none}.cmp-heads .ch .nm a:hover{color:var(--red)}
-.cmp-heads .vs{font-size:11px;letter-spacing:.24em;color:var(--red);font-weight:700;text-transform:uppercase}
+.cmp-heads .vs{font-size:12px;letter-spacing:.16em;color:var(--red);font-weight:700;text-transform:uppercase}
 .cmp-heads .pf{width:44px;height:44px;flex:none;border:1px solid var(--faint);overflow:hidden;background:#141414}
 .cmp-heads .pf svg,.cmp-heads .pf img{display:block;width:100%;height:100%;object-fit:cover}
 .cmp-badges{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--faint);border:1px solid var(--faint);border-bottom:none}
 .cmp-badges .cb{background:var(--bg);padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px}
 .cmp-badges .cb.b{justify-content:flex-end}
-.cmp-badges .cb .empty{color:var(--dim);font-size:11px;letter-spacing:.08em}
+.cmp-badges .cb .empty{color:var(--dim);font-size:12px;letter-spacing:.08em}
 .cmp-table{width:100%;border:1px solid var(--faint);border-collapse:collapse}
 .cmp-table td{padding:10px 14px;border-bottom:1px solid var(--faint);font-variant-numeric:tabular-nums;vertical-align:middle}
 .cmp-table tr:last-child td{border-bottom:none}
 .cmp-table td.a{text-align:left;width:38%}.cmp-table td.b{text-align:right;width:38%}
-.cmp-table td.k{text-align:center;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.cmp-table td.k{text-align:center;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
 .cmp-table td.win{color:var(--red);font-weight:700}
 .cmp-table td.a.win::before{content:"\\25B6";font-size:8px;margin-right:8px;vertical-align:middle}
 .cmp-table td.b.win::after{content:"\\25C0";font-size:8px;margin-left:8px;vertical-align:middle}
 .cmp-tally{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border:1px solid var(--faint);border-top:none;padding:14px}
 .cmp-tally .sc{font-size:26px;font-weight:700;letter-spacing:.04em}
 .cmp-tally .sc b{color:var(--red)}
-.cmp-tally .verdict{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);text-align:right}
+.cmp-tally .verdict{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);text-align:right}
 .cmp-tally .verdict b{color:var(--ink)}
 @media(max-width:520px){.cmp-heads{grid-template-columns:1fr}.cmp-heads .vs{text-align:center;padding:2px 0}.cmp-heads .ch.b{text-align:left}.cmp-heads .ch.b .nm{justify-content:flex-start;flex-direction:row-reverse}.cmp-heads .ch{padding:12px 14px}}
-@media(max-width:640px){.cmp-table td.k{font-size:9px;letter-spacing:.08em;white-space:normal}.cmp-table td{padding:9px 8px;font-size:12px}.cmp-heads .ch .nm{font-size:15px}.cmp-tally{flex-direction:column;align-items:flex-start}.cmp-tally .verdict{text-align:left}}
-.vc-socials{display:flex;gap:16px;padding:12px 14px;flex-wrap:wrap;font-size:11px;border-top:1px solid var(--faint)}
+@media(max-width:640px){.cmp-table td.k{font-size:9px;letter-spacing:.08em;white-space:normal}.cmp-table td{padding:9px 8px;font-size:13px}.cmp-heads .ch .nm{font-size:15px}.cmp-tally{flex-direction:column;align-items:flex-start}.cmp-tally .verdict{text-align:left}}
+.vc-socials{display:flex;gap:16px;padding:12px 14px;flex-wrap:wrap;font-size:12px;border-top:1px solid var(--faint)}
 .vc-socials a,.vc-socials span{color:var(--dim)}
 .vc-socials a{border-bottom:1px solid var(--faint);text-decoration:none}
 .vc-socials a:hover{color:var(--red);border-color:var(--red)}
 .vc-rows{border-top:1px solid var(--faint)}
 .r-row{display:flex;justify-content:space-between;gap:16px;padding:10px 14px;border-bottom:1px solid var(--faint)}
 .r-row:last-child{border-bottom:none}
-.r-row .k{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.r-row .k{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
 .r-row .v{text-align:right;overflow-wrap:anywhere}
 .r-row .v b{color:var(--red)}
 .tablewrap{overflow-x:auto;border:1px solid var(--faint)}
-table.vtable{width:100%;border-collapse:collapse;font-size:12px;min-width:660px}
-.vtable th{text-align:right;padding:10px 12px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--faint);white-space:nowrap;user-select:none}
+table.vtable{width:100%;border-collapse:collapse;font-size:13px;min-width:660px}
+.vtable th{text-align:right;padding:10px 12px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--faint);white-space:nowrap;user-select:none}
 .vtable th[data-sort]{cursor:pointer}
 .vtable th:first-child{text-align:left}
 .vtable th[data-sort]:hover{color:var(--red)}
@@ -476,10 +476,10 @@ table.vtable{width:100%;border-collapse:collapse;font-size:12px;min-width:660px}
 .vtable .node{color:var(--ink)}
 .vtable .off{color:var(--dim)}
 .morerow{display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap}
-.count{font-size:11px;color:var(--dim);letter-spacing:.06em}
+.count{font-size:12px;color:var(--dim);letter-spacing:.06em}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--faint);vertical-align:middle}
 .dot.on{background:#3fb950}
-footer{padding:36px 0 64px;color:var(--dim);font-size:12px}
+footer{padding:36px 0 64px;color:var(--dim);font-size:13px}
 footer .frow{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
 footer a{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--faint)}
 footer a:hover{color:var(--red);border-color:var(--red)}`;
@@ -639,13 +639,13 @@ function profilePage(nd, px, site) {
 </div></header>
 <main class="wrap">
   <div class="hero">
-    <div class="eyebrow">avalanche <b>p-chain</b> \xB7 validator</div>
+    <nav class="crumbs" aria-label="breadcrumb"><a href="${site}/p-chain">p-chain</a><i>/</i><a href="${site}/p-chain#directory">validators</a><i>/</i><span>${esc2(handle)}</span></nav>
     <h1>${esc2(handle)}</h1>
   </div>
   <section>
     ${serverCard(nd, px)}
     <div class="pshare">
-      <button class="btn" id="pcopy">copy link</button>
+      <button class="btn ghost" id="pcopy">copy link</button>
       <a class="btn primary" id="pshare" href="https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(pageUrl)}" target="_blank" rel="noopener">share on x</a>
       <a class="btn ghost" href="${img}" target="_blank" rel="noopener">view card image</a>
     </div>
@@ -654,7 +654,7 @@ function profilePage(nd, px, site) {
       <div id="embedbox" style="display:none;margin-top:14px">
         <img src="${site}/badge/${encodeURIComponent(d.nodeID)}.svg" width="420" height="96" alt="live validator badge" style="display:block;max-width:100%;height:auto;border:0">
         <p class="sub" style="margin:12px 0 8px">Live from the P-Chain, refreshes every few minutes, links back here. Paste into a README or any page:</p>
-        <textarea id="embedmd" aria-label="embed markdown" readonly rows="2" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:11px;padding:9px 11px;resize:vertical">[![${esc2(handle)} \u00B7 p-chain validator](${site}/badge/${encodeURIComponent(d.nodeID)}.svg)](${pageUrl})</textarea>
+        <textarea id="embedmd" aria-label="embed markdown" readonly rows="2" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:12px;padding:9px 11px;resize:vertical">[![${esc2(handle)} \u00B7 p-chain validator](${site}/badge/${encodeURIComponent(d.nodeID)}.svg)](${pageUrl})</textarea>
         <div class="pshare" style="margin-top:10px"><button class="btn ghost" id="embedcopy">copy markdown</button><button class="btn ghost" id="embedhtml">copy html</button></div>
       </div>
     </div>
@@ -666,7 +666,7 @@ function profilePage(nd, px, site) {
     <div class="pclaim">
       <button class="btn ghost" id="editbtn">${p && p.owner ? "edit this validator" : "claim &amp; customize"} →</button>
       <div id="editform" style="display:none;margin-top:16px">
-        <p class="sub" style="margin-bottom:16px">Prove you run this node by signing with the wallet that owns its staking rewards — then set your handle, avatar and socials. No transaction, no fees, no approvals.</p>
+        <p class="sub" style="margin-bottom:16px">Prove you run this node by signing with the wallet that owns its staking rewards, then set your handle, avatar and socials. No transaction, no fees, no approvals.</p>
         <div class="frow2"><label for="f-handle">handle</label><input id="f-handle" maxlength="24" spellcheck="false" placeholder="your name" value="${p && p.handle ? esc2(p.handle) : ""}"></div>
         <div class="frow2"><label for="f-pfp">avatar url</label><input id="f-pfp" spellcheck="false" placeholder="https://…/avatar.png" value="${p && p.pfp ? esc2(p.pfp) : ""}"></div>
         <div class="frow2"><label for="f-x">x / twitter</label><input id="f-x" spellcheck="false" placeholder="@handle" value="${p && p.socials && p.socials.x ? esc2(p.socials.x) : ""}"></div>
@@ -701,13 +701,13 @@ function profilePage(nd, px, site) {
   function api(body){ return fetch("/api/vclaim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}).then(function(r){return r.json();}); }
   var sb=$("signbtn"); if(sb) sb.onclick=async function(){
     var cm=$("cmsg");
-    if(!window.ethereum){ cm.textContent="no wallet detected — install Core or MetaMask, then reload."; return; }
+    if(!window.ethereum){ cm.textContent="no wallet detected. install Core or MetaMask, then reload."; return; }
     var vals={node:NODE, handle:$("f-handle").value, pfp:$("f-pfp").value, x:$("f-x").value, discord:$("f-discord").value, site:$("f-site").value};
     sb.disabled=true; cm.textContent="preparing…";
     try{
       var prep=await api(vals);
       if(prep.error){ cm.textContent=prep.error; sb.disabled=false; return; }
-      cm.textContent="approve the signature in your wallet — it must be the reward-owner ("+((prep.owners&&prep.owners[0])||"")+")";
+      cm.textContent="approve the signature in your wallet. it must be the reward-owner ("+((prep.owners&&prep.owners[0])||"")+")";
       var acct=(await window.ethereum.request({method:"eth_requestAccounts"}))[0];
       var sig=await window.ethereum.request({method:"personal_sign",params:[prep.message, acct]});
       cm.textContent="verifying…";
@@ -739,7 +739,7 @@ function cohortPage(c, site) {
     : '<p class="empty">—</p>';
   const board = c.scoredCount
     ? '<div class="tablewrap"><table class="vtable"><thead><tr><th scope="col">#</th><th scope="col">Validator</th><th scope="col">Score</th><th scope="col">Uptime</th><th scope="col">Δ cycle</th></tr></thead><tbody>' + c.top20.map(boardRow).join("") + '</tbody></table></div>'
-    : '<p class="empty">No scored validators yet — the leaderboard fills in once the cohort portal syncs scores.</p>';
+    : '<p class="empty">No scored validators yet. The leaderboard fills in once the cohort portal syncs scores.</p>';
   const rising = (c.rising && c.rising.length)
     ? '<div class="tablewrap"><table class="vtable"><thead><tr><th scope="col">Validator</th><th scope="col">Tier</th><th scope="col">+ this cycle</th></tr></thead><tbody>'
       + c.rising.map((r) => '<tr><td class="node">' + nodeLink({ nodeID: r.nodeID, handle: r.handle }) + '</td><td>' + (r.tier || "—") + '</td><td>+' + nfmt(r.scoreDelta) + '</td></tr>').join("") + '</tbody></table></div>'
@@ -773,9 +773,9 @@ function cohortPage(c, site) {
 </div></header>
 <main class="wrap">
   <div class="hero">
-    <div class="eyebrow">avalanche <b>p-chain</b> \xB7 validator cohort</div>
+    <nav class="crumbs" aria-label="breadcrumb"><a href="${site}/p-chain">p-chain</a><i>/</i><span>cohort</span></nav>
     <h1>the cohort</h1>
-    <div class="tagline">Recognition for the validators who secure Avalanche and give back — shipping tooling, teaching, running events, and supporting other operators. Tiers &amp; scores are set by the cohort program; badges and stats are live.</div>
+    <div class="tagline">Recognition for the validators who secure Avalanche and give back: shipping tooling, teaching, running events, and supporting other operators. Tiers &amp; scores are set by the cohort program; badges and stats are live.</div>
   </div>
 
   <section>
@@ -799,9 +799,9 @@ function cohortPage(c, site) {
     <h2>category leaders</h2>
     <p class="sub">Top contributors by lane.</p>
     <div class="catgrid">
-      <div><div class="k" style="color:var(--red);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">top builder</div>${catList(c.categories && c.categories.builder)}</div>
-      <div><div class="k" style="color:var(--red);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">top educator</div>${catList(c.categories && c.categories.educator)}</div>
-      <div><div class="k" style="color:var(--red);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">top support</div>${catList(c.categories && c.categories.support)}</div>
+      <div><div class="k" style="color:var(--red);font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">top builder</div>${catList(c.categories && c.categories.builder)}</div>
+      <div><div class="k" style="color:var(--red);font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">top educator</div>${catList(c.categories && c.categories.educator)}</div>
+      <div><div class="k" style="color:var(--red);font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">top support</div>${catList(c.categories && c.categories.support)}</div>
     </div>
   </section>
 
@@ -815,7 +815,7 @@ function cohortPage(c, site) {
   <span>avax100m \xB7 validator cohort</span>
   <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> \xB7 <a href="${site}/p-chain">validators</a> \xB7 data: avalanche p-chain rpc + data api \xB7 unofficial community page</span>
 </div></footer>
-<style>.catgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}@media(max-width:640px){.catgrid{grid-template-columns:1fr;gap:28px}}.clist{list-style:none;counter-reset:c}.clist li{counter-increment:c;padding:7px 0;border-bottom:1px solid var(--faint);font-size:13px}.clist li::before{content:counter(c);color:var(--dim);margin-right:10px}.clist a{color:var(--ink)}.clist a:hover{color:var(--red)}.clist .dim{color:var(--dim);font-size:11px}.empty{color:var(--dim);font-size:12px;letter-spacing:.04em}.vtable td.node a{color:var(--ink)}.vtable td.node a:hover{color:var(--red)}</style>
+<style>.catgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}@media(max-width:640px){.catgrid{grid-template-columns:1fr;gap:28px}}.clist{list-style:none;counter-reset:c}.clist li{counter-increment:c;padding:7px 0;border-bottom:1px solid var(--faint);font-size:14px}.clist li::before{content:counter(c);color:var(--dim);margin-right:10px}.clist a{color:var(--ink)}.clist a:hover{color:var(--red)}.clist .dim{color:var(--dim);font-size:12px}.empty{color:var(--dim);font-size:13px;letter-spacing:.04em}.vtable td.node a{color:var(--ink)}.vtable td.node a:hover{color:var(--red)}</style>
 ${TIPFIT}
 </body>
 </html>`;
@@ -953,7 +953,7 @@ function comparePage(A, B, px, site) {
 </div></header>
 <main class="wrap">
   <div class="hero">
-    <div class="eyebrow">avalanche <b>p-chain</b> \xB7 head to head</div>
+    <nav class="crumbs" aria-label="breadcrumb"><a href="${site}/p-chain">p-chain</a><i>/</i><span>head to head</span></nav>
     <h1>${esc2(ha)} <span style="color:var(--red)">vs</span> ${esc2(hb)}</h1>
   </div>
   <section>
@@ -961,11 +961,11 @@ function comparePage(A, B, px, site) {
     <div class="cmp-badges"><div class="cb a">${tiles(A)}</div><div class="cb b">${tiles(B)}</div></div>
     <table class="cmp-table"><tbody>${rows}</tbody></table>
     <div class="cmp-tally">
-      <span class="sc"><b>${c.tally.a}</b> \u2013 <b>${c.tally.b}</b>${c.tally.ties ? ' <span style="font-size:11px;color:var(--dim);font-weight:400;letter-spacing:.1em">\xB7 ' + c.tally.ties + ' tie' + (c.tally.ties === 1 ? "" : "s") + '</span>' : ""}</span>
+      <span class="sc"><b>${c.tally.a}</b> \u2013 <b>${c.tally.b}</b>${c.tally.ties ? ' <span style="font-size:12px;color:var(--dim);font-weight:400;letter-spacing:.1em">\xB7 ' + c.tally.ties + ' tie' + (c.tally.ties === 1 ? "" : "s") + '</span>' : ""}</span>
       <span class="verdict">${c.leader ? '<b>' + esc2(c.leader === "a" ? ha : hb) + '</b> leads across ' + c.rows.length + ' metrics' : '<b>dead heat</b> across ' + c.rows.length + ' metrics'}</span>
     </div>
     <div class="pshare">
-      <button class="btn" id="pcopy">copy link</button>
+      <button class="btn ghost" id="pcopy">copy link</button>
       <a class="btn primary" href="https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(pageUrl)}" target="_blank" rel="noopener">share on x</a>
       <a class="btn ghost" href="${img}" target="_blank" rel="noopener">view card image</a>
       <a class="btn ghost" href="${site}/v/${encodeURIComponent(idb)}/vs/${encodeURIComponent(ida)}">swap sides</a>
@@ -1033,9 +1033,8 @@ function page(site) {
 
 <main class="wrap">
   <div class="hero">
-    <div class="eyebrow">avalanche <b>p-chain</b> \xB7 validators</div>
     <h1>the validators</h1>
-    <div class="tagline">Who secures Avalanche. Live from the P-Chain — every primary-network validator, what they stake, what they earn, and the health of the staking set. No connect. Just a read.</div>
+    <div class="tagline">Who secures Avalanche. Live from the P-Chain: every primary-network validator, what they stake, what they earn, and the health of the staking set. No connect. Just a read.</div>
     <p class="primer">Validators are the computers that run Avalanche. They lock up AVAX (their stake) and earn rewards for staying online. Delegating means adding your AVAX to a validator’s stake and sharing its rewards, minus its fee.</p>
   </div>
 
@@ -1055,7 +1054,7 @@ function page(site) {
 
   <section>
     <h2>validator lookup</h2>
-    <p class="sub">Paste a NodeID for its full card — stake, delegations, uptime, badges, and lifetime history &amp; rewards.</p>
+    <p class="sub">Paste a NodeID for its full card: stake, delegations, uptime, badges, and lifetime history &amp; rewards.</p>
     <div class="check-row">
       <input id="nid" type="text" spellcheck="false" autocomplete="off" placeholder="NodeID-…" aria-label="Validator NodeID">
       <button class="btn" id="lookup">Look up</button>
@@ -1077,10 +1076,10 @@ function page(site) {
     </form>
     <div class="pick-note" id="pk-note"></div>
     <ol class="pick-list" id="pk-list" style="display:none"></ol>
-    <p class="sub" style="margin-top:16px;font-size:12px">A shortlist, not advice. Net yield is the current period's staking rate minus the fee; the chain pays nothing if the validator drops under 80% uptime. Delegate from your own wallet \u2014 this page never asks you to connect.</p>
+    <p class="sub" style="margin-top:16px;font-size:13px">A shortlist, not advice. Net yield is the current period's staking rate minus the fee; the chain pays nothing if the validator drops under 80% uptime. Delegate from your own wallet; this page never asks you to connect.</p>
   </section>
 
-  <section>
+  <section id="directory">
     <h2>validator directory</h2>
     <p class="sub">Every current primary-network validator. Click a column to sort, click a row to inspect.</p>
     <div class="check-row" style="margin-bottom:16px">
@@ -1110,15 +1109,15 @@ function page(site) {
     <div style="max-width:720px">
       <details style="border-bottom:1px solid var(--faint);padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">what is the p-chain?</summary>
-        <p style="color:var(--dim);margin:10px 0 0">avalanche's platform chain &mdash; it coordinates validators, staking, and l1s/subnets. this page reads it live: every primary-network validator, what they stake, what they earn, and how reliably they run.</p>
+        <p style="color:var(--dim);margin:10px 0 0">avalanche's platform chain: it coordinates validators, staking, and l1s/subnets. this page reads it live: every primary-network validator, what they stake, what they earn, and how reliably they run.</p>
       </details>
       <details style="border-bottom:1px solid var(--faint);padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">what does a validator card show?</summary>
-        <p style="color:var(--dim);margin:10px 0 0">paste a NodeID (or click a row) for its live stake, delegations, uptime, delegation fee, rewards and est. apr &mdash; plus on-chain badges and lifetime history. read-only, no connect, no signature.</p>
+        <p style="color:var(--dim);margin:10px 0 0">paste a NodeID (or click a row) for its live stake, delegations, uptime, delegation fee, rewards and est. apr, plus on-chain badges and lifetime history. read-only, no connect, no signature.</p>
       </details>
       <details style="border-bottom:1px solid var(--faint);padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">what are the badges?</summary>
-        <p style="color:var(--dim);margin:10px 0 0">cosmetic achievements auto-derived from public p-chain data &mdash; uptime, stake rank, delegators, delegation-cap filled, minimum fee, tenure, self-funded, and more. each shows how rare it is across the whole validator set. nothing is manually granted.</p>
+        <p style="color:var(--dim);margin:10px 0 0">cosmetic achievements auto-derived from public p-chain data: uptime, stake rank, delegators, delegation-cap filled, minimum fee, tenure, self-funded, and more. each shows how rare it is across the whole validator set. nothing is manually granted.</p>
       </details>
       <details style="border-bottom:1px solid var(--faint);padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">how does &ldquo;find a fit&rdquo; rank validators?</summary>
@@ -1134,11 +1133,11 @@ function page(site) {
       </details>
       <details style="border-bottom:1px solid var(--faint);padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">can i claim my validator?</summary>
-        <p style="color:var(--dim);margin:10px 0 0">yes &mdash; on a validator&rsquo;s page you can set a handle, avatar and socials by signing one plain-text message with the wallet that owns its staking reward. it proves you run the node without any on-chain action: not a transaction, nothing moves, nothing is approved, it costs nothing. no token approvals or transfers, ever.</p>
+        <p style="color:var(--dim);margin:10px 0 0">yes. on a validator&rsquo;s page you can set a handle, avatar and socials by signing one plain-text message with the wallet that owns its staking reward. it proves you run the node without any on-chain action: not a transaction, nothing moves, nothing is approved, it costs nothing. no token approvals or transfers, ever.</p>
       </details>
       <details style="padding:14px 0">
         <summary style="cursor:pointer;font-weight:700">where does the data come from?</summary>
-        <p style="color:var(--dim);margin:10px 0 0">live from the avalanche p-chain public rpc (<span style="color:var(--ink)">platform.getCurrentValidators</span>) for the current set, and the avalanche data api for historical periods and paid rewards. avax/usd via binance with a coingecko fallback. cached briefly and refreshed. unofficial community page &mdash; <a href="https://github.com/alf444-dev/avax100m" target="_blank" rel="noopener">open source</a>.</p>
+        <p style="color:var(--dim);margin:10px 0 0">live from the avalanche p-chain public rpc (<span style="color:var(--ink)">platform.getCurrentValidators</span>) for the current set, and the avalanche data api for historical periods and paid rewards. avax/usd via binance with a coingecko fallback. cached briefly and refreshed. unofficial community page. <a href="https://github.com/alf444-dev/avax100m" target="_blank" rel="noopener">open source</a>.</p>
       </details>
     </div>
   </section>
@@ -1226,18 +1225,18 @@ function page(site) {
       .catch(function(err){ if(tries>0) return new Promise(function(res){setTimeout(res,1200);}).then(function(){return apiGet(u,tries-1);}); throw err; });
   }
   function statsError(){
-    $("stats").innerHTML='<div class="cell full"><div class="k">network staking</div><div class="v" style="font-size:14px;color:var(--red)">no response from the p-chain — <a href="#" id="statsretry">retry</a></div></div>';
+    $("stats").innerHTML='<div class="cell full"><div class="k">network staking</div><div class="v" style="font-size:14px;color:var(--red)">no response from the p-chain. <a href="#" id="statsretry">retry</a></div></div>';
     var b=$("statsretry"); if(b) b.onclick=function(e){ e.preventDefault(); $("stats").innerHTML=SK_STATS; load(true); };
   }
   var fails=0;
-  function retry(reset){ if(++fails<=5) setTimeout(function(){load(reset);},5000); else $("count").textContent="p-chain unavailable — reload to retry"; }
+  function retry(reset){ if(++fails<=5) setTimeout(function(){load(reset);},5000); else $("count").textContent="p-chain unavailable. reload to retry"; }
   function load(reset){
     if(reset){ state.offset=0; $("rows").innerHTML=SK_ROWS; }
     var u=API+"?sort="+state.sort+"&dir="+state.dir+"&limit="+state.limit+"&offset="+state.offset+"&q="+encodeURIComponent(state.q);
     $("count").textContent="loading…";
     apiGet(u,1).then(function(j){
       if(j.pending){ $("count").textContent="warming up the p-chain snapshot…"; setTimeout(function(){load(reset);},2500); return; }
-      if(j.error){ if(state.offset===0) statsError(); $("count").textContent="p-chain unavailable — retrying…"; retry(reset); return; }
+      if(j.error){ if(state.offset===0) statsError(); $("count").textContent="p-chain unavailable, retrying…"; retry(reset); return; }
       fails=0; px=j.avaxUsd; asOf=j.asOf;
       if(state.offset===0){
         renderStats(j.stats);
@@ -1250,7 +1249,7 @@ function page(site) {
       $("count").textContent=nf(state.offset)+" of "+nf(total)+" validators";
       $("more").style.display= state.offset<total ? "" : "none";
       bindRows();
-    }).catch(function(){ if(state.offset===0) statsError(); $("count").textContent="network error — retrying…"; retry(reset); });
+    }).catch(function(){ if(state.offset===0) statsError(); $("count").textContent="network error, retrying…"; retry(reset); });
   }
 
   var ths=document.querySelectorAll(".vtable th[data-sort]");
@@ -1415,7 +1414,7 @@ function page(site) {
       if(p.error) throw 0;
       if(p.avaxUsd!=null) px=p.avaxUsd;
       var l=$("pk-list");
-      if(!p.rows.length){ l.style.display="none"; $("pk-note").textContent="no validator fits \u2014 loosen the fee or uptime, or shorten the period. "+nf(p.considered)+" checked."; return; }
+      if(!p.rows.length){ l.style.display="none"; $("pk-note").textContent="no validator fits. loosen the fee or uptime, or shorten the period. "+nf(p.considered)+" checked."; return; }
       $("pk-note").textContent="top "+p.rows.length+" of "+nf(p.matched)+" that fit "+nf(p.amount)+" AVAX for "+p.days+"+ days \xB7 "+nf(p.considered)+" checked";
       var yr=function(r){ return p.amount*r.netApr; };
       l.innerHTML=p.rows.map(function(r){
@@ -1427,7 +1426,7 @@ function page(site) {
           '<span class="nums"><b>'+pct(r.netApr,2)+'</b><small>net apr \xB7 '+nf(r.fee,0)+'% fee</small><div class="meta">\u2248 '+nf(earn,1)+' AVAX/yr'+(eu?" \xB7 "+eu:"")+'</div></span></li>';
       }).join("");
       l.style.display="";
-    }).catch(function(){ $("pk-go").disabled=false; $("pk-note").textContent="could not rank right now \u2014 try again."; });
+    }).catch(function(){ $("pk-go").disabled=false; $("pk-note").textContent="could not rank right now. try again."; });
   }
   $("pk-go").onclick=runPick;
   $("pk-amount").addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); runPick(); } });
@@ -1441,8 +1440,8 @@ function page(site) {
   var currentMovers=null;
   function renderMovers(m){
     currentMovers=m;
-    if(m.since==null){ $("mgrid").innerHTML='<div class="empty" style="color:var(--dim);font-size:12px">first capture lands with the next snapshot \u2014 check back tomorrow.</div>'; $("mline").innerHTML=""; return; }
-    if(!(m.days>=1)){ $("mgrid").innerHTML='<div class="empty" style="color:var(--dim);font-size:12px">baseline captured today \u2014 movers appear from tomorrow.</div>'; $("mline").innerHTML='<span>tracking <b>'+nf(m.tracked)+'</b> validators</span>'; return; }
+    if(m.since==null){ $("mgrid").innerHTML='<div class="empty" style="color:var(--dim);font-size:13px">first capture lands with the next snapshot. check back tomorrow.</div>'; $("mline").innerHTML=""; return; }
+    if(!(m.days>=1)){ $("mgrid").innerHTML='<div class="empty" style="color:var(--dim);font-size:13px">baseline captured today. movers appear from tomorrow.</div>'; $("mline").innerHTML='<span>tracking <b>'+nf(m.tracked)+'</b> validators</span>'; return; }
     var h="";
     h+=moverList("delegator gainers", m.delegatorGainers, function(x){ return "+"+nf(x.delta)+' <span class="dim">\xB7 '+nf(x.now)+'</span>'; });
     h+=moverList("stake gainers", m.stakeGainers, function(x){ return "+"+nf(x.delta)+' <span class="dim">avax</span>'; });
@@ -1458,13 +1457,13 @@ function page(site) {
     apiGet(API+"?movers=1",1).then(function(j){
       if(j.pending){ if((tries||0)<8) setTimeout(function(){loadMovers((tries||0)+1);},3000); return; }
       if(j.error) throw 0; renderMovers(j);
-    }).catch(function(){ $("mgrid").innerHTML='<div class="empty" style="color:var(--dim);font-size:12px">movers unavailable right now.</div>'; });
+    }).catch(function(){ $("mgrid").innerHTML='<div class="empty" style="color:var(--dim);font-size:13px">movers unavailable right now.</div>'; });
   }
 
   function lookup(){
     var n=$("nid").value.trim();
     if(!n){ $("lmsg").textContent="enter a NodeID."; return; }
-    $("lmsg").textContent = n.indexOf("NodeID-")===0 ? "looking up…" : "a NodeID looks like NodeID-… — looking anyway…";
+    $("lmsg").textContent = n.indexOf("NodeID-")===0 ? "looking up…" : "a NodeID looks like NodeID-…, looking anyway…";
     $("detail").innerHTML=SK_CARD; $("detail").style.display="block";
     apiGet(API+"?node="+encodeURIComponent(n),1).then(function(j){
       if(j.pending){ $("lmsg").textContent="warming up…"; setTimeout(lookup,2500); return; }
@@ -1472,7 +1471,7 @@ function page(site) {
       if(j.avaxUsd!=null) px=j.avaxUsd;
       $("lmsg").textContent=""; renderDetail(j.node, j);
       recentAdd(j.node.nodeID, j.profile&&j.profile.handle);
-    }).catch(function(){ $("lmsg").textContent="could not reach the p-chain — try again."; $("detail").style.display="none"; });
+    }).catch(function(){ $("lmsg").textContent="could not reach the p-chain. try again."; $("detail").style.display="none"; });
   }
   $("lookup").onclick=lookup;
   renderRecent();

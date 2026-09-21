@@ -187,7 +187,7 @@ ${w.claimed ? "" : '<meta name="robots" content="noindex,follow">'}
 <meta name="twitter:description" content="${esc(desc)}">
 <meta name="twitter:image" content="${img}">
 <style>
-:root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e92733;
+:root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#8e8e8e;--faint:#2a2a2a;--red:#e92733;--body:#bdbdbd;
 --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6}
@@ -205,24 +205,25 @@ header{border-bottom:1px solid var(--faint)}
 .logo b{color:var(--red)}
 .milli-mark{width:24px;height:24px;flex:none;display:block}
 .milli-mark path{fill:var(--red)}
-.hbar .nav{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);text-decoration:none}
+.hbar .nav{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);text-decoration:none}
 .hbar .nav:hover{color:var(--red)}
 .sitenav{display:inline-flex;gap:18px;align-items:center}
 .nav.on{color:var(--ink);box-shadow:0 2px 0 var(--red)}
 @media(max-width:560px){.hbar{flex-wrap:wrap;height:auto;padding-top:14px}.sitenav{width:100%;justify-content:space-between;border-top:1px solid var(--faint);margin-top:12px;padding:11px 0}}
 .hero{padding:64px 0 40px;border-bottom:1px solid var(--faint)}
-.eyebrow{font-size:11px;letter-spacing:.24em;color:var(--dim);text-transform:uppercase;margin-bottom:14px}
+.crumbs{font-size:13px;color:var(--dim);margin-bottom:18px;display:flex;flex-wrap:wrap;gap:0 9px;overflow-wrap:anywhere}.crumbs a{color:var(--dim);text-decoration:none}.crumbs a:hover{color:var(--red)}.crumbs span{color:var(--ink)}.crumbs i{font-style:normal;color:var(--dim)}
 h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:-.01em}
-.tagline{color:var(--dim);margin-top:10px}
-.what{color:var(--dim);font-size:12px;line-height:1.7;letter-spacing:.02em;max-width:62ch;margin-top:16px}
+.tagline{color:var(--ink);margin-top:12px;font-size:16px}
+.what{color:var(--body);font-size:14px;line-height:1.7;max-width:62ch;margin-top:16px}
 .what b{color:var(--ink);font-weight:700}
 .what a{color:var(--ink)}
-.cell .g{font-size:10px;color:var(--dim);letter-spacing:.04em;line-height:1.4;margin-top:4px}
-.addrline{margin-top:26px;font-size:12px;color:var(--dim);word-break:break-all;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.cell .g{font-size:11px;color:var(--dim);letter-spacing:.04em;line-height:1.4;margin-top:4px}
+.addrline{margin-top:26px;font-size:13px;color:var(--dim);word-break:break-all;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .addrline .a{color:var(--ink)}
 .badges{display:flex;flex-wrap:wrap;gap:10px}
-.brack{position:absolute;top:50%;transform:translateY(-50%);right:0;display:grid;grid-template-columns:repeat(5,38px);gap:8px;justify-content:end;max-width:270px}
-.brack-label{grid-column:1/-1;text-align:right;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
+/* badges sit in the reading flow, after the story and before the actions, at every width */
+.brack{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0 4px}
+.brack-label{width:100%;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
 .brack-label b{color:var(--red);font-weight:700}
 .brack-label .hint{color:var(--dim)}
 @media(hover:none){.brack-label .hint::before{content:"tap"}}
@@ -233,34 +234,33 @@ h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:
 .btile.medal{background:var(--red);border-color:var(--red)}
 .btile.medal .g-ink,.btile.medal .g-red{fill:#0a0a0a}
 .btile.medal .s-ink,.btile.medal .s-red{stroke:#0a0a0a}
-.btile .tip{display:none;position:absolute;top:calc(100% + 8px);right:-1px;width:264px;z-index:9;background:var(--bg);border:1px solid var(--red);padding:10px 12px;text-align:left;cursor:default}
+.btile .tip{display:none;position:absolute;top:calc(100% + 8px);left:-1px;width:264px;z-index:9;background:var(--bg);border:1px solid var(--red);padding:10px 12px;text-align:left;cursor:default}
 .btile:hover .tip,.btile:focus-visible .tip{display:block}
-.btile .tip .tn{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+.btile .tip .tn{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
 .btile .tip .tn .bt{color:var(--red)}
 .btile.medal .tip .tn,.btile.medal .tip .tr,.btile.medal .tip .tv{color:var(--ink)}
-.btile .tip .tr{display:block;font-size:10px;color:var(--dim);letter-spacing:.1em;margin:3px 0 7px}
-.btile .tip .tv{font-size:10px;color:var(--dim);letter-spacing:.05em;line-height:1.55}
+.btile .tip .tr{display:block;font-size:11px;color:var(--dim);letter-spacing:.1em;margin:3px 0 7px}
+.btile .tip .tv{font-size:12px;color:var(--body);line-height:1.55}
 .btile .tip .tv b{color:var(--ink)}
-.btile .tip .tl{color:var(--red);letter-spacing:.2em;font-size:10px;display:block;margin-bottom:3px}
-@media(max-width:760px){.brack{position:static;transform:none;display:flex;flex-wrap:wrap;justify-content:flex-start;max-width:none;margin:22px 0 4px}.btile .tip{right:auto;left:-1px}.brack-label{width:100%;text-align:left}}
+.btile .tip .tl{color:var(--red);letter-spacing:.14em;font-size:11px;display:block;margin-bottom:3px}
 .bdg{position:relative;border:1px solid var(--faint);padding:8px 13px 7px;display:flex;align-items:center;gap:9px;outline:none;cursor:default}
 .bdg:hover,.bdg:focus-visible{border-color:var(--red)}
 .bdg svg{width:16px;height:16px;flex:none;display:block}
-.bdg .bn{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}
-.bdg .br{display:block;font-size:10px;color:var(--dim);letter-spacing:.08em;font-weight:400}
+.bdg .bn{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}
+.bdg .br{display:block;font-size:11px;color:var(--dim);letter-spacing:.08em;font-weight:400}
 .bdg .bt{color:var(--red)}
 .bdg.medal{background:var(--red);border-color:var(--red)}
 .bdg.medal .bn,.bdg.medal .br{color:#0a0a0a}
 .bdg.medal .g-ink,.bdg.medal .g-red{fill:#0a0a0a}
 .bdg.medal .s-ink,.bdg.medal .s-red{stroke:#0a0a0a}
-.bdg .ev{display:none;position:absolute;left:-1px;top:calc(100% + 4px);min-width:230px;max-width:320px;z-index:5;background:var(--bg);border:1px solid var(--red);padding:8px 11px;font-size:10px;color:var(--dim);letter-spacing:.05em;line-height:1.55;white-space:normal}
+.bdg .ev{display:none;position:absolute;left:-1px;top:calc(100% + 4px);min-width:230px;max-width:320px;z-index:5;background:var(--bg);border:1px solid var(--red);padding:8px 11px;font-size:11px;color:var(--dim);letter-spacing:.05em;line-height:1.55;white-space:normal}
 .bdg .ev b{color:var(--ink)}
-.bdg .ev .evl{color:var(--red);letter-spacing:.2em;font-size:10px;display:block;margin-bottom:3px}
+.bdg .ev .evl{color:var(--red);letter-spacing:.14em;font-size:11px;display:block;margin-bottom:3px}
 .bdg:hover .ev,.bdg:focus-visible .ev{display:block}
 .g-ink{fill:var(--ink)}.g-red{fill:var(--red)}
 .s-ink{stroke:var(--ink);fill:none;stroke-width:2}.s-red{stroke:var(--red);fill:none;stroke-width:2}.s-thin{stroke-width:1.5}
 input:focus-visible,textarea:focus-visible,.btn:focus-visible,#copy-addr:focus-visible{outline:2px solid var(--red);outline-offset:2px}
-.btn{background:transparent;border:1px solid var(--faint);color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:6px 12px;cursor:pointer}
+.btn{background:transparent;border:1px solid var(--faint);color:var(--dim);font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:6px 12px;cursor:pointer}
 .btn:hover{border-color:var(--red);color:var(--red)}
 /* touch only: grow the hit area, not the look */
 @media(pointer:coarse){.btn{position:relative}.btn::after{content:"";position:absolute;inset:-9px -2px}}
@@ -269,27 +269,28 @@ input:focus-visible,textarea:focus-visible,.btn:focus-visible,#copy-addr:focus-v
 section{padding:44px 0;border-bottom:1px solid var(--faint)}
 .next{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:1px;background:var(--faint);border:1px solid var(--faint);margin-top:18px}
 .next .n{background:var(--bg);padding:10px 14px;min-width:0}
-.next .nk{font-size:10px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;display:flex;justify-content:space-between;gap:8px}
+.next .nk{font-size:11px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;display:flex;justify-content:space-between;gap:8px}
 .next .nk b{color:var(--ink);font-weight:700;letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .next .nb{height:4px;background:var(--faint);margin:7px 0 6px}
 .next .nb span{display:block;height:100%;background:var(--red)}
-.next .nv{font-size:10px;color:var(--dim);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.next .nv{font-size:11px;color:var(--dim);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .next .nv b{color:var(--ink)}
 @media(max-width:640px){.next{grid-auto-flow:row}}
-h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red);font-weight:700;margin-bottom:22px}
+h2{font-size:20px;line-height:1.25;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);font-weight:700;margin-bottom:22px}@media(max-width:560px){h2{font-size:18px}}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--faint);border:1px solid var(--faint)}
 @media(max-width:760px){.grid{grid-template-columns:repeat(2,1fr)}}
 .cell{background:var(--bg);padding:16px 14px;min-height:86px}
-.cell .k{font-size:10px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase}
+.cell .k{font-size:11px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
 .cell .v{font-size:19px;font-weight:700;margin-top:6px;word-break:break-word}
 .cell .v.red{color:var(--red)}
-.cell .v small{font-size:11px;color:var(--dim);font-weight:400}
-.note{margin-top:14px;font-size:11px;color:var(--dim);letter-spacing:.06em}
+.cell .v small{font-size:12px;color:var(--dim);font-weight:400}
+.note{margin-top:14px;font-size:13px;color:var(--dim)}
+.note.down{border:1px solid var(--faint);padding:16px 18px;color:var(--body)}
 .toolrow{display:flex;gap:44px;border-bottom:1px solid var(--faint)}
 .toolrow section{flex:1;border-bottom:none;min-width:0}
-.toolrow h2{font-size:11px;color:var(--dim)}
+.toolrow h2{font-size:16px}
 @media(max-width:760px){.toolrow{flex-direction:column;gap:0}.toolrow section{border-bottom:1px solid var(--faint)}.toolrow section:last-child{border-bottom:none}}
-footer{padding:36px 0 64px;color:var(--dim);font-size:12px}
+footer{padding:36px 0 64px;color:var(--dim);font-size:13px}
 footer .frow{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
 footer a{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--faint)}
 footer a:hover{color:var(--red);border-color:var(--red)}
@@ -303,14 +304,14 @@ footer a:hover{color:var(--red);border-color:var(--red)}
 
 <main class="wrap">
   <div class="hero" style="position:relative">
-    <div class="eyebrow">avalanche c-chain \xB7 wallet profile</div>
+    <nav class="crumbs" aria-label="breadcrumb"><a href="${site}/c-chain">c-chain</a><i>/</i><a href="${site}/c-chain#checker">wallets</a><i>/</i><span>${esc(short)}</span></nav>
     <h1>${esc(w.rank[1])}</h1>
     <div class="tagline">${esc(w.rank[2])}</div>
     <p class="what">the public history of one avalanche wallet: when it arrived, how long it has lasted, what its trades made or lost. read straight from the chain, nobody logged in to make this. <b>${esc(w.rank[1].toLowerCase())}</b> is rank ${rankPos(w.rank[1])} of ${RANKS.length}, by days on mainnet. <a href="#check">check your own ↓</a></p>
-    <div id="proof" style="display:none;margin-top:14px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)"></div>
+    <div id="proof" style="display:none;margin-top:14px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)"></div>
     <div id="status-line" style="display:none;margin-top:20px;font-size:15px;color:var(--ink);letter-spacing:.02em">\u201C<span id="status-text"></span>\u201D</div>
     <div id="avvy" style="display:none;margin-top:24px;font-size:20px;font-weight:700;color:var(--ink);letter-spacing:.02em"></div>
-    <!-- desktop pins this to the right of the title; on narrow screens it flows here, after the name and before the actions -->
+    <!-- badges flow here, after the story and before the actions -->
     <div id="brack" class="brack" aria-label="badges"></div>
     <div class="addrline">
       <span class="a" id="copy-addr" role="button" tabindex="0" aria-label="copy address" title="click to copy address" style="cursor:pointer;border-bottom:1px dotted var(--faint)">${esc(short)}</span>
@@ -318,19 +319,19 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       <button class="btn primary" id="share-x">share on x</button>
       <button class="btn" id="claim-btn" style="display:none" title="right-click for the hardware-wallet route">claim this page</button>
       <button class="btn" id="status-btn" style="display:none">customize</button>
-      <span id="settled" style="display:none;font-size:10px;color:var(--dim);letter-spacing:.08em"></span>
+      <span id="settled" style="display:none;font-size:11px;color:var(--dim);letter-spacing:.08em"></span>
     </div>
-    <div id="claim-why" style="display:none;font-size:11px;color:var(--dim);margin-top:10px;letter-spacing:.05em">claim to set a status, pick a theme, build your top 8, wake the oracle.</div>
-    <div id="claim-msg" style="display:none;font-size:11px;color:var(--dim);margin-top:10px;letter-spacing:.05em"></div>
+    <div id="claim-why" style="display:none;font-size:12px;color:var(--dim);margin-top:10px;letter-spacing:.05em">claim to set a status, pick a theme, build your top 8, wake the oracle.</div>
+    <div id="claim-msg" style="display:none;font-size:12px;color:var(--dim);margin-top:10px;letter-spacing:.05em"></div>
     <div id="cust" style="display:none;margin-top:18px;border:1px solid var(--faint);padding:16px 18px;max-width:560px">
-      <div style="font-size:10px;color:var(--red);letter-spacing:.25em;text-transform:uppercase;margin-bottom:12px">customize \xB7 the owner\u2019s signature saves everything</div>
-      <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">status \xB7 100 chars \xB7 no links</div>
-      <input id="cust-status" aria-label="status" maxlength="100" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px;letter-spacing:.02em" placeholder="never selling. ask my roundtrip.">
-      <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">accent</div>
+      <div style="font-size:11px;color:var(--red);letter-spacing:.16em;text-transform:uppercase;margin-bottom:12px">customize \xB7 the owner\u2019s signature saves everything</div>
+      <div style="font-size:11px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">status \xB7 100 chars \xB7 no links</div>
+      <input id="cust-status" aria-label="status" maxlength="100" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:14px;padding:9px 11px;letter-spacing:.02em" placeholder="never selling. ask my roundtrip.">
+      <div style="font-size:11px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">accent</div>
       <div id="cust-themes" style="display:flex;gap:8px"></div>
-      <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">top 8 \xB7 one address or name.avax per line</div>
-      <textarea id="cust-top8" aria-label="top 8 addresses, one per line" rows="4" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:12px;padding:9px 11px;resize:vertical" placeholder="gribbly.avax&#10;0x1234\u2026"></textarea>
-      <div style="font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">badges on your card \xB7 pick up to 3</div>
+      <div style="font-size:11px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">top 8 \xB7 one address or name.avax per line</div>
+      <textarea id="cust-top8" aria-label="top 8 addresses, one per line" rows="4" spellcheck="false" style="width:100%;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px;resize:vertical" placeholder="gribbly.avax&#10;0x1234\u2026"></textarea>
+      <div style="font-size:11px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px">badges on your card \xB7 pick up to 3</div>
       <div id="cust-badges" style="display:flex;flex-wrap:wrap;gap:6px"></div>
       <div style="display:flex;gap:10px;margin-top:16px">
         <button class="btn primary" id="cust-save">sign &amp; save</button>
@@ -340,7 +341,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
   </div>
 
   ${nextStrip(w)}
-  <div id="ticker" style="display:none;border:1px solid var(--faint);padding:11px 16px;margin-top:18px;font-size:11px;color:var(--dim);letter-spacing:.08em" aria-live="off"><span style="color:var(--red)">\u25B8</span> <span id="ticker-t" style="transition:opacity .45s ease"></span></div>
+  <div id="ticker" style="display:none;border:1px solid var(--faint);padding:11px 16px;margin-top:18px;font-size:12px;color:var(--dim);letter-spacing:.08em" aria-live="off"><span style="color:var(--red)">\u25B8</span> <span id="ticker-t" style="transition:opacity .45s ease"></span></div>
 
 
   <section>
@@ -348,7 +349,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     <div class="grid">
       <div class="cell"><div class="k">era of arrival</div><div class="v red">${esc(w.era[1])}</div></div>
       <div class="cell"><div class="k">first seen</div><div class="v">${esc(w.dateStr)}<br><small>#${w.blk.toLocaleString("en-US")}</small></div></div>
-      <div class="cell"><div class="k">${esc(w.mv.key.toLowerCase())}</div><div class="v">${esc(w.mv.val)}</div><div id="holding" style="font-size:11px;color:var(--dim);margin-top:4px"></div></div>
+      <div class="cell"><div class="k">${esc(w.mv.key.toLowerCase())}</div><div class="v">${esc(w.mv.val)}</div><div id="holding" style="font-size:12px;color:var(--dim);margin-top:4px"></div></div>
       <div class="cell"><div class="k">arrived in the first</div><div class="v red">${esc(w.earlyStr)}</div></div>
       <div class="cell"><div class="k">days on mainnet</div><div class="v">${w.days.toLocaleString("en-US")}</div></div>
       <div class="cell"><div class="k">mainnet survived</div><div class="v">${w.pct.toFixed(1)}%</div></div>
@@ -367,17 +368,17 @@ footer a:hover{color:var(--red);border-color:var(--red)}
       <div class="cell"><div class="k">biggest roundtrip</div><div class="g">was up, gave it all back</div><div class="v" id="pnl-rt"><small style="color:var(--dim);font-weight:400">scanning\u2026</small></div></div>
       <div class="cell"><div class="k">sold too early</div><div class="g">what it would be worth if held</div><div class="v" id="pnl-ste"><small style="color:var(--dim);font-weight:400">scanning\u2026</small></div></div>
     </div>
-    <div class="note" id="pnl-summary" style="display:none;font-size:13px;color:var(--ink)"></div>
+    <div class="note" id="pnl-summary" style="display:none;font-size:14px;color:var(--ink)"></div>
     <div class="note" id="pnl-note">syncing trade history\u2026</div>
     <button class="btn" id="ledger-toggle" style="display:none;margin-top:16px">full ledger \u2192</button>
     <button class="btn" id="pnl-deeper" style="display:none;margin-top:16px;margin-left:8px">dig deeper</button>
     <button class="btn primary" id="pnl-gen" style="display:none;margin-top:16px;margin-left:8px">generate p&amp;l card \u2192</button>
     <div id="ledger" style="display:none;margin-top:22px">
       <div class="grid" style="grid-template-columns:repeat(4,1fr)">
-        <div class="cell"><div class="k">top wins</div><div id="lg-w" style="font-size:12px;margin-top:8px"></div></div>
-        <div class="cell"><div class="k">top losses</div><div id="lg-l" style="font-size:12px;margin-top:8px"></div></div>
-        <div class="cell"><div class="k">roundtrips</div><div id="lg-rt" style="font-size:12px;margin-top:8px"></div></div>
-        <div class="cell"><div class="k">sold too early</div><div id="lg-ste" style="font-size:12px;margin-top:8px"></div></div>
+        <div class="cell"><div class="k">top wins</div><div id="lg-w" style="font-size:13px;margin-top:8px"></div></div>
+        <div class="cell"><div class="k">top losses</div><div id="lg-l" style="font-size:13px;margin-top:8px"></div></div>
+        <div class="cell"><div class="k">roundtrips</div><div id="lg-rt" style="font-size:13px;margin-top:8px"></div></div>
+        <div class="cell"><div class="k">sold too early</div><div id="lg-ste" style="font-size:13px;margin-top:8px"></div></div>
       </div>
     </div>
     <div id="pnl-card-wrap" style="display:none;margin-top:22px">
@@ -414,7 +415,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
   <section id="lookup-sec">
     <h2>token lookup</h2>
     <div style="display:flex;gap:10px;max-width:560px">
-      <input id="tok-q" aria-label="token symbol or contract" spellcheck="false" placeholder="$COQ or 0x contract" style="flex:1;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px">
+      <input id="tok-q" aria-label="token symbol or contract" spellcheck="false" placeholder="$COQ or 0x contract" style="flex:1;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:14px;padding:9px 11px">
       <button class="btn primary" id="tok-go">look up</button>
     </div>
     <div id="tok-out" style="margin-top:18px"></div>
@@ -426,7 +427,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     <h2>check a wallet</h2>
     <div class="note" style="margin:0 0 14px">every avalanche wallet has a page like this one. paste yours, or anyone’s. nothing to connect, nothing to sign.</div>
     <form id="go-form" style="display:flex;gap:10px;max-width:640px">
-      <input id="go-addr" aria-label="wallet address or .avax name" spellcheck="false" autocomplete="off" placeholder="0x… or name.avax" style="flex:1;min-width:0;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px">
+      <input id="go-addr" aria-label="wallet address or .avax name" spellcheck="false" autocomplete="off" placeholder="0x… or name.avax" style="flex:1;min-width:0;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:14px;padding:9px 11px">
       <button class="btn primary" type="submit" id="go-btn">check</button>
     </form>
     <div class="note" id="go-msg" role="status"></div>
@@ -539,10 +540,11 @@ function updDeeper(s){
   var db=document.getElementById("pnl-deeper"); if(!db) return;
   db.style.display="none";
 }
-function pnlDash(){ ["pnl-w","pnl-l","pnl-rt","pnl-ste"].forEach(function(id){ document.getElementById(id).textContent="\u2014"; }); }
+// nothing to show: the four empty cells go, and the note alone carries the state
+function pnlDash(){ ["pnl-w","pnl-l","pnl-rt","pnl-ste"].forEach(function(id){ document.getElementById(id).textContent="\u2014"; }); var g=document.getElementById("pnl-grid"); if(g) g.style.display="none"; document.getElementById("pnl-note").classList.add("down"); }
 function loadPnl(force){
  fetch(SITE+"/api/pnl?addr="+D.addr+(force?"&refresh=1":"")).then(function(r){return r.json();}).then(function(p){
-  var note=document.getElementById("pnl-note");
+  var note=document.getElementById("pnl-note"); note.classList.remove("down"); var pg=document.getElementById("pnl-grid"); if(pg) pg.style.display="";
   if(p && p.pending && pnlBootTries<4){
     pnlBootTries++; note.textContent="reading every trade this wallet made\u2026 can take ~30s";
     setTimeout(function(){loadPnl(false);},Math.max(2000,Math.min(15000,(p.retryAfter||5)*1000)));
@@ -557,7 +559,7 @@ function loadPnl(force){
     pnlTries++; setTimeout(function(){loadPnl(true);},3000);
     return;
   }
-  if(s.partial){ note.textContent=s.quality&&s.quality.ledgerComplete===false?"partial provider coverage \u2014 excluded or unpriced assets are not counted.":"core p&l is ready; optional token stories are still syncing."; return; }
+  if(s.partial){ note.textContent=s.quality&&s.quality.ledgerComplete===false?"partial provider coverage: excluded or unpriced assets are not counted.":"core p&l is ready; optional token stories are still syncing."; return; }
   updDeeper(s);
   if(p.stale){
     fetch(SITE+"/api/pnl?addr="+D.addr+"&refresh=1").then(function(r){return r.json();})
@@ -590,7 +592,7 @@ function renderPnl(s){
     var RC={w:"pnl-w",l:"pnl-l",rt:"pnl-rt"};
     s.records.forEach(function(h){
       var el=document.getElementById(RC[h.cat]); if(!el) return;
-      el.innerHTML+=' <span style="color:var(--red);font-size:10px;letter-spacing:.12em;text-transform:uppercase">\u2605 #'+h.pos+' all-time</span>';
+      el.innerHTML+=' <span style="color:var(--red);font-size:11px;letter-spacing:.12em;text-transform:uppercase">\u2605 #'+h.pos+' all-time</span>';
       tickAdd("record books: #"+h.pos+" all-time "+(h.cat==="w"?"w":h.cat==="l"?"l":"roundtrip")+" on this site");
     });
   }
@@ -606,7 +608,7 @@ function renderPnl(s){
   document.getElementById("pnl-note").textContent = quality.provider==="zerion"
     ? "fifo accounting \xB7 avalanche only \xB7 "+(s.tokens||0)+" priced assets"+(quality.excludedAssets?" \xB7 "+quality.excludedAssets+" unpriced excluded":"")
     : (s.thin
-      ? "thin dex history \u2014 provider coverage is incomplete; values are estimates."
+      ? "thin dex history: provider coverage is incomplete; values are estimates."
       : "weighted-average dex estimate \xB7 "+(s.tokens||0)+" tokens tracked");
   function list(id, arr){
     var el=document.getElementById(id);
@@ -766,12 +768,12 @@ function withSig(buildMsg, done){
   if(!window.ethereum){ cmsg("no wallet detected. hardware-wallet route: ask on x @Alf444_ for the self-send flow.",1); return; }
   window.ethereum.request({method:"eth_requestAccounts"}).then(function(accs){
     var acc=(accs&&accs[0]||"").toLowerCase();
-    if(acc!==D.addr){ cmsg("connected wallet is "+acc.slice(0,8)+"\u2026 \u2014 this page belongs to "+D.addr.slice(0,8)+"\u2026. switch accounts.",1); return; }
+    if(acc!==D.addr){ cmsg("connected wallet is "+acc.slice(0,8)+"\u2026; this page belongs to "+D.addr.slice(0,8)+"\u2026. switch accounts.",1); return; }
     fetch(SITE+"/api/claim?addr="+D.addr).then(function(r){return r.json();}).then(function(n){
       if(!n||!n.nonce){ cmsg("couldn't get a nonce. try again.",1); return; }
       var msg=buildMsg(n.nonce);
       window.ethereum.request({method:"personal_sign",params:[msg,acc]}).then(function(sig){ done(sig); })
-        .catch(function(){ cmsg("signature declined. no signature, no ownership \u2014 that's the whole system.",1); });
+        .catch(function(){ cmsg("signature declined. no signature, no ownership. that's the whole system.",1); });
     });
   }).catch(function(){ cmsg("wallet connection declined.",1); });
 }
@@ -781,13 +783,13 @@ function hwClaim(){
   HWMODE=true;
   fetch(SITE+"/api/claim?addr="+D.addr).then(function(r){return r.json();}).then(function(n){
     if(!n||!n.nonce){ cmsg("couldn't get a code. try again.",1); return; }
-    cmsg("hardware route: send a 0 avax transaction from this wallet TO ITSELF with this code in the data field: 0x"+n.nonce+" \u2014 then click the claim button again to verify.");
+    cmsg("hardware route: send a 0 avax transaction from this wallet TO ITSELF with this code in the data field: 0x"+n.nonce+", then click the claim button again to verify.");
     document.getElementById("claim-btn").textContent="verify transaction";
     document.getElementById("claim-btn").onclick=function(){
       fetch(SITE+"/api/claim",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({addr:D.addr,method:"tx"})})
         .then(function(r){return r.json();}).then(function(j){
           if(j&&j.ok){ cmsg("verified on-chain. page claimed."); location.reload(); }
-          else cmsg((j&&j.error)||"not found yet \u2014 give it a minute.",1);
+          else cmsg((j&&j.error)||"not found yet. give it a minute.",1);
         });
     };
   });
@@ -831,7 +833,7 @@ document.getElementById("status-btn").addEventListener("click",function(){
       if(i>-1){ CUR.cardBadges.splice(i,1); b.style.borderColor=""; b.style.color=""; }
       else if(CUR.cardBadges.length<3){ CUR.cardBadges.push(id); b.style.borderColor="var(--red)"; b.style.color="var(--red)"; }
     });});
-  } else { bd.innerHTML='<span style="font-size:10px;color:var(--dim)">badges are still computing \u2014 come back in a minute.</span>'; }
+  } else { bd.innerHTML='<span style="font-size:11px;color:var(--dim)">badges are still computing. come back in a minute.</span>'; }
   p.style.display="block";
 });
 document.getElementById("cust-cancel").addEventListener("click",function(){ document.getElementById("cust").style.display="none"; });
@@ -863,27 +865,27 @@ document.getElementById("cust-save").addEventListener("click",function(){
 });
 
 /* ---- token lookup ---- */
-function tokRow(k,v){ return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--faint);padding:7px 0;font-size:12px"><span style="color:var(--dim);letter-spacing:.08em;text-transform:uppercase;font-size:10px">'+k+'</span><span style="color:var(--ink)">'+v+'</span></div>'; }
+function tokRow(k,v){ return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--faint);padding:7px 0;font-size:13px"><span style="color:var(--dim);letter-spacing:.08em;text-transform:uppercase;font-size:11px">'+k+'</span><span style="color:var(--ink)">'+v+'</span></div>'; }
 function tokLookup(){
   var q=(document.getElementById("tok-q").value||"").trim();
   if(!q) return;
   var out=document.getElementById("tok-out");
-  out.innerHTML='<span style="font-size:11px;color:var(--dim)">interrogating the chain\u2026</span>';
+  out.innerHTML='<span style="font-size:12px;color:var(--dim)">interrogating the chain\u2026</span>';
   fetch(SITE+"/api/token?addr="+D.addr+"&q="+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(t){
-    if(t.locked){ out.innerHTML='<span style="font-size:11px;color:var(--dim)">claim the page to use the lookup.</span>'; return; }
-    if(t.pending){ out.innerHTML='<span style="font-size:11px;color:var(--dim)">this token is already being indexed\u2026</span>'; setTimeout(tokLookup,Math.max(2000,(t.retryAfter||3)*1000)); return; }
-    if(t.partial){ out.innerHTML='<span style="font-size:11px;color:var(--dim)">token history is temporarily incomplete. try again shortly.</span>'; return; }
+    if(t.locked){ out.innerHTML='<span style="font-size:12px;color:var(--dim)">claim the page to use the lookup.</span>'; return; }
+    if(t.pending){ out.innerHTML='<span style="font-size:12px;color:var(--dim)">this token is already being indexed\u2026</span>'; setTimeout(tokLookup,Math.max(2000,(t.retryAfter||3)*1000)); return; }
+    if(t.partial){ out.innerHTML='<span style="font-size:12px;color:var(--dim)">token history is temporarily incomplete. try again shortly.</span>'; return; }
     if(t.ambiguous){
-      out.innerHTML='<div style="font-size:11px;color:var(--dim);margin-bottom:8px">several tokens wear that symbol \u2014 pick the contract:</div>'
+      out.innerHTML='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">several tokens wear that symbol. pick the contract:</div>'
         +t.ambiguous.map(function(m){return '<button class="btn" style="margin:0 6px 6px 0" onclick="document.getElementById(&quot;tok-q&quot;).value=&quot;'+m.contract+'&quot;;tokLookup()">$'+pnlEsc(m.sym)+' \xB7 '+m.contract.slice(0,10)+'\u2026</button>';}).join("");
       return;
     }
     if(t.none){
-      out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:14px;color:var(--ink)">no history with '+pnlEsc(q.startsWith("0x")?q.slice(0,10)+"\u2026":q.toLowerCase())+'.</div><div style="font-size:11px;color:var(--dim);margin-top:6px">clean hands. the chain confirms you dodged this one.</div></div>';
+      out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:14px;color:var(--ink)">no history with '+pnlEsc(q.startsWith("0x")?q.slice(0,10)+"\u2026":q.toLowerCase())+'.</div><div style="font-size:12px;color:var(--dim);margin-top:6px">clean hands. the chain confirms you dodged this one.</div></div>';
       return;
     }
     if(t.incomplete){
-      out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:14px;color:var(--ink)">history source is incomplete.</div><div style="font-size:11px;color:var(--dim);margin-top:6px">nothing was calculated from a capped ledger. try again in a minute.</div></div>';
+      out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:14px;color:var(--ink)">history source is incomplete.</div><div style="font-size:12px;color:var(--dim);margin-top:6px">nothing was calculated from a capped ledger. try again in a minute.</div></div>';
       return;
     }
     var rows="";
@@ -908,16 +910,16 @@ function tokLookup(){
     }
     rows+=tokRow("holding now",t.holdingDust?"dust \xB7 &lt;$0.01":t.holdingNow?("yes"+(t.holdingUsd!==null?" \xB7 $"+Math.round(t.holdingUsd).toLocaleString("en-US"):"")):"no");
     if(t.verdict) rows+=tokRow("verdict",'<b style="color:var(--red)">'+t.verdict+'</b>');
-    if(t.synth) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">trade totals reconstructed from on-chain legs \u2014 this token\u2019s venue isn\u2019t covered by standard indexers'+(t.synthPartial?'. swaps settled in native avax may be missing':'')+'.</div>';
-    if(t.pnlUnavailable) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">'+t.pnlUnavailable+'. the app will not invent realized p&l from transfer values or write an estimate into your records.</div>';
-    if(t.recvUsd) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">most of this bag arrived by transfer, already worth \u2248$'+t.recvUsd.toLocaleString("en-US")+'. the p&l measures what happened to it after \u2014 not what was paid for it.</div>';
-    else if(t.recvTk||t.lp&&t.lp.removes) rows+='<div style="font-size:10px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">p&l values transferred-in tokens at their arrival price. sold \u2212 invested is just the swaps.</div>';
+    if(t.synth) rows+='<div style="font-size:11px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">trade totals reconstructed from on-chain legs; this token\u2019s venue isn\u2019t covered by standard indexers'+(t.synthPartial?'. swaps settled in native avax may be missing':'')+'.</div>';
+    if(t.pnlUnavailable) rows+='<div style="font-size:11px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">'+t.pnlUnavailable+'. the app will not invent realized p&l from transfer values or write an estimate into your records.</div>';
+    if(t.recvUsd) rows+='<div style="font-size:11px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">most of this bag arrived by transfer, already worth \u2248$'+t.recvUsd.toLocaleString("en-US")+'. the p&l measures what happened to it after, not what was paid for it.</div>';
+    else if(t.recvTk||t.lp&&t.lp.removes) rows+='<div style="font-size:11px;color:var(--dim);padding:8px 0;border-bottom:1px solid var(--faint)">p&l values transferred-in tokens at their arrival price. sold \u2212 invested is just the swaps.</div>';
     var srcName=function(s){return s==="llama"?"defillama":s==="cg"?"coingecko":null;};
     var ps=srcName(t.priceSrc), qs2=srcName(t.peakSrc);
     var srcTxt=ps?("priced via "+ps+(qs2&&qs2!==ps?" \xB7 peak via "+qs2:"")):"";
     var srcFoot=srcTxt?'<div style="font-size:9px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;padding-top:9px">'+srcTxt+'</div>':"";
     out.innerHTML='<div style="border:1px solid var(--faint);padding:16px 18px;max-width:560px"><div style="font-size:16px;font-weight:700;letter-spacing:.06em;margin-bottom:10px">$'+pnlEsc(t.sym)+'</div>'+rows+srcFoot+'</div>';
-  }).catch(function(){ out.innerHTML='<span style="font-size:11px;color:var(--red)">lookup failed. try again.</span>'; });
+  }).catch(function(){ out.innerHTML='<span style="font-size:12px;color:var(--red)">lookup failed. try again.</span>'; });
 }
 document.getElementById("tok-go").addEventListener("click",tokLookup);
 document.getElementById("tok-q").addEventListener("keydown",function(e){ if(e.key==="Enter") tokLookup(); });
@@ -935,7 +937,7 @@ function renderTop8(list,in8){
   g.innerHTML=(list||[]).map(function(e,i){
     var label=e.indexOf(".avax")>-1?e:(e.slice(0,8)+"\u2026"+e.slice(-6));
     var href=e.indexOf(".avax")>-1?"#":(SITE+"/w/"+e);
-    return '<a data-e="'+e+'" href="'+href+'" '+(href==="#"?'':'target="_blank" rel="noopener" ')+'style="border:1px solid var(--faint);padding:6px 12px;text-decoration:none;color:var(--ink);display:inline-flex;gap:8px;align-items:baseline;font-size:12px"><span style="color:var(--red);font-size:10px;letter-spacing:.15em">#'+(i+1)+'</span>'+label+'</a>';
+    return '<a data-e="'+e+'" href="'+href+'" '+(href==="#"?'':'target="_blank" rel="noopener" ')+'style="border:1px solid var(--faint);padding:6px 12px;text-decoration:none;color:var(--ink);display:inline-flex;gap:8px;align-items:baseline;font-size:13px"><span style="color:var(--red);font-size:11px;letter-spacing:.15em">#'+(i+1)+'</span>'+label+'</a>';
   }).join("");
   // resolve .avax entries to live links
   g.querySelectorAll("a[href='#']").forEach(function(a){
@@ -1141,7 +1143,7 @@ function drawPnlCard(s){
     var isMobile=/android|iphone|ipad|ipod/i.test(navigator.userAgent);
     if(!isMobile && window.ClipboardItem && navigator.clipboard && navigator.clipboard.write){
       try{ navigator.clipboard.write([new ClipboardItem({"image/png":new Promise(function(res){c.toBlob(res,"image/png");})})])
-        .then(function(){ document.getElementById("pnl-note").textContent="card copied \u2014 paste it (ctrl+v) into your post."; }).catch(function(){}); }catch(e){}
+        .then(function(){ document.getElementById("pnl-note").textContent="card copied. paste it (ctrl+v) into your post."; }).catch(function(){}); }catch(e){}
     } else if(isMobile){ document.getElementById("pnl-note").textContent="tip: download the card, then attach it in your post."; }
     window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(t)+"&url="+encodeURIComponent(PAGE),"_blank");
   };
