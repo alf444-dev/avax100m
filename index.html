@@ -42,6 +42,8 @@ a{color:inherit;text-decoration:none}
 .p .big{color:var(--ink)}
 .desc{margin-top:22px;color:var(--dim);font-size:13px;letter-spacing:.04em;line-height:1.7}
 .desc span{display:block;white-space:nowrap}
+/* the first line says in plain words what is behind the door */
+.desc .lead{color:var(--ink);letter-spacing:.14em;text-transform:uppercase;font-size:11px;margin-bottom:6px}
 /* both doors reserve the same two pulse rows, so the two titles sit on one baseline */
 .pulse{margin-top:26px;min-height:50px;align-content:flex-start;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);
   display:flex;gap:14px;justify-content:center;flex-wrap:wrap;opacity:0;transition:opacity .5s ease}
@@ -112,19 +114,19 @@ a{color:inherit;text-decoration:none}
 <main class="split">
   <a class="pane c" href="/c-chain" aria-label="Enter the C-Chain: block 100,000,000 countdown, wallet history and realized P&L">
     <div class="big">C&#8209;CHAIN</div>
-    <div class="desc"><span>the countdown to block 100,000,000</span><span>wallet history · realized P&amp;L</span><span>survivor cards</span></div>
+    <div class="desc"><span class="lead">wallets + the countdown</span><span>any wallet’s history and realized P&amp;L</span><span>a shareable card for any wallet</span><span>the live count to block 100,000,000</span></div>
     <div class="pulse" id="pulse-c" aria-live="off"></div>
-    <span class="enter">enter <i aria-hidden="true">→</i></span>
+    <span class="enter">enter the c-chain <i aria-hidden="true">→</i></span>
   </a>
   <a class="pane p" href="/p-chain" aria-label="Enter the P-Chain: live validators, staking and rewards">
     <div class="big">P&#8209;CHAIN</div>
-    <div class="desc"><span>who secures avalanche</span><span>every validator</span><span>staking, delegations &amp; rewards</span></div>
+    <div class="desc"><span class="lead">validators + staking</span><span>who secures avalanche</span><span>every validator, live</span><span>staking, delegations &amp; rewards</span></div>
     <div class="pulse" id="pulse-p" aria-live="off"></div>
-    <span class="enter">enter <i aria-hidden="true">→</i></span>
+    <span class="enter">enter the p-chain <i aria-hidden="true">→</i></span>
   </a>
 </main>
 
-<div class="foot">two chains · one page · no connect, just a read</div>
+<div class="foot">live avalanche data · no connect, just a read</div>
 
 <script>
 (function(){

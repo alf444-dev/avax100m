@@ -286,6 +286,17 @@ h1{font-size:clamp(34px,7vw,66px);line-height:1;color:var(--red);letter-spacing:
 .nav.on{color:var(--ink);box-shadow:0 2px 0 var(--red)}
 @media(max-width:560px){.hbar{flex-wrap:wrap;height:auto;padding-top:14px}.sitenav{width:100%;justify-content:space-between;border-top:1px solid var(--faint);margin-top:12px;padding:11px 0}}
 .tagline{color:var(--dim);margin-top:12px;max-width:660px}
+.primer{color:var(--dim);font-size:12px;line-height:1.7;max-width:660px;margin-top:12px}
+.cell .g{font-size:10px;color:var(--dim);letter-spacing:.04em;line-height:1.4;margin-top:7px}
+.swipe{display:none;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 8px}
+@media(max-width:760px){.swipe{display:block}}
+.vc-sum{padding:12px 14px;border-bottom:1px solid var(--faint);font-size:12px;line-height:1.7;color:var(--dim)}
+.vc-sum .k{display:block;font-size:10px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:3px}
+.vc-sum b{color:var(--ink)}.vc-sum .warn{color:var(--red)}
+.vc-more summary{cursor:pointer;list-style:none;padding:10px 14px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);border-top:1px solid var(--faint)}
+.vc-more summary::-webkit-details-marker{display:none}.vc-more summary::before{content:"+ "}.vc-more[open] summary::before{content:"- "}
+.vc-more summary:hover,.vc-more summary:focus-visible{color:var(--red)}
+.vc-more .r-row:first-of-type{border-top:1px solid var(--faint)}
 section{padding:40px 0;border-bottom:1px solid var(--faint)}
 h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red);font-weight:700;margin-bottom:8px}
 .sub{color:var(--dim);margin-bottom:22px;max-width:700px}
@@ -483,6 +494,18 @@ var shortNodeOf = (id) => { id = String(id || ""); return id.length > 20 ? id.sl
 function hashStrS(s) { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function identiconOf(id, size) { size = size || 56; const h = hashStrS(id), cells = 5, cs = size / cells, ce = Math.ceil(cs); let rects = ""; for (let y = 0; y < cells; y++) for (let xx = 0; xx < 3; xx++) if ((h >>> ((y * 3 + xx) % 29)) & 1) { const mm = cells - 1 - xx; rects += '<rect x="' + (xx * cs) + '" y="' + (y * cs) + '" width="' + ce + '" height="' + ce + '"/>'; if (mm !== xx) rects += '<rect x="' + (mm * cs) + '" y="' + (y * cs) + '" width="' + ce + '" height="' + ce + '"/>'; } return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '"><rect width="' + size + '" height="' + size + '" fill="#141414"/><g fill="var(--red)">' + rects + '</g></svg>'; }
 function badgeTileS(b, i) { const name = VNAMES[b.id] || b.id, glyph = VGLYPH[b.id] || "", roman = ["", "i", "ii", "iii"][b.tier] || ""; const rar = (b.rarity ? ('<span class="tr">' + nfmt(b.rarity.count) + " of " + nfmt(b.rarity.total) + " validators" + (b.since ? " \xB7 unlocked " + new Date(b.since).toISOString().slice(0, 10) : "") + "</span>") : (b.since ? '<span class="tr">unlocked ' + new Date(b.since).toISOString().slice(0, 10) + '</span>' : "")); return '<span class="btile' + (i === 0 ? " medal" : "") + (b.fresh ? " fresh" : "") + '" tabindex="0">' + glyph + (roman ? '<span class="rn">' + roman + '</span>' : '') + '<span class="tip"><span class="tl">badge</span><span class="tn">' + esc2(name) + '</span>' + rar + '<span class="tv">' + b.ev + '</span></span></span>'; }
+// The four facts that decide a delegation, in one sentence, before the full ledger.
+function delegateLineS(d, capFree) {
+  const bits = [];
+  if (d.feePct != null) bits.push("fee <b>" + nfmt(d.feePct, 2) + "%</b>");
+  bits.push(capFree >= 25 ? "room for <b>" + nfmt(capFree) + "</b> AVAX" : '<span class="warn">no room left for delegations</span>');
+  if (Number.isFinite(d.remainingDays)) bits.push(d.remainingDays >= 14
+    ? "this staking period ends in <b>" + nfmt(d.remainingDays) + "</b> days"
+    : '<span class="warn">period ends in ' + nfmt(Math.max(0, d.remainingDays)) + " days, under the 14-day minimum to delegate</span>");
+  if (d.uptime != null) bits.push("uptime <b>" + pctOf(d.uptime, 2) + "</b> (the chain pays nothing under 80%)");
+  return '<div class="vc-sum"><span class="k">if you delegate here</span>' + bits.join(" \xB7 ") + "</div>";
+}
+
 function nextStripS(next) {
   if (!next || !next.length) return "";
   const roman = ["", "i", "ii", "iii"];
@@ -533,6 +556,7 @@ function serverCard(nd, px) {
   const tiles = badges.map(badgeTileS).join("") + granted.map(grantTileS).join("");
   h += '<div class="vc-badges">' + (tiles || '<span class="empty">no badges yet</span>') + '</div>';
   h += nextStripS(nd.next);
+  h += delegateLineS(d, capFree);
   const pc = d.pctl || {}, tp = (k) => { const t = topPct(pc[k], nd.count); return t ? ' <small class="tp">' + t + '</small>' : ""; };
   h += '<div class="vc-strip">'
     + '<div class="s"><div class="k">uptime</div><div class="v">' + (d.uptime != null ? pctOf(d.uptime, 2) : "—") + tp("uptime") + '</div></div>'
@@ -560,14 +584,14 @@ function serverCard(nd, px) {
   r += drow("own stake", nfmt(d.stake) + " AVAX" + (u(d.stake) ? " \xB7 " + u(d.stake) : ""));
   r += drow("total stake", nfmt(d.stake + d.delegated) + " AVAX");
   r += drow("delegation space", nfmt(d.delegated) + " / " + nfmt(maxDeleg) + " AVAX " + dim("\xB7 " + nfmt(capFree) + " free") + bar(pCap));
-  r += drow("reward rate", nfmt(perDay, 2) + " AVAX/day");
-  r += drow("earned so far (est.)", "<b>" + nfmt(earned, 2) + " AVAX</b>" + (u(earned) ? " \xB7 " + u(earned) : ""));
+  let m = drow("reward rate", nfmt(perDay, 2) + " AVAX/day");
+  m += drow("earned so far (est.)", "<b>" + nfmt(earned, 2) + " AVAX</b>" + (u(earned) ? " \xB7 " + u(earned) : ""));
   if (hist && hist.lifetimeRewards > 0) r += drow("lifetime rewards", "<b>" + nfmt(hist.lifetimeRewards, 2) + " AVAX</b>" + (u(hist.lifetimeRewards) ? " \xB7 " + u(hist.lifetimeRewards) : "") + " " + dim("\xB7 across " + nfmt(hist.completedCount) + (hist.completedCount === 1 ? " season" : " seasons")));
-  r += drow("potential reward \xB7 full period", nfmt(d.potentialReward, 2) + " AVAX" + (u(d.potentialReward) ? " \xB7 " + u(d.potentialReward) : ""));
+  m += drow("potential reward \xB7 full period", nfmt(d.potentialReward, 2) + " AVAX" + (u(d.potentialReward) ? " \xB7 " + u(d.potentialReward) : ""));
   r += drow("est. apr", d.estApr ? pctOf(d.estApr, 2) : "—");
-  r += drow("stake period", day(d.startTime) + " → " + day(d.endTime) + " " + dim("\xB7 " + nfmt(periodDays) + "d"));
-  r += drow("period progress", nfmt(elapsed) + " / " + nfmt(periodDays) + " days" + bar(pElapsed));
-  h += '<div class="vc-rows">' + r + '</div></div>';
+  m += drow("stake period", day(d.startTime) + " → " + day(d.endTime) + " " + dim("\xB7 " + nfmt(periodDays) + "d"));
+  m += drow("period progress", nfmt(elapsed) + " / " + nfmt(periodDays) + " days" + bar(pElapsed));
+  h += '<div class="vc-rows">' + r + '<details class="vc-more"><summary>this staking period: rewards and dates</summary>' + m + '</details></div></div>';
   return h;
 }
 
@@ -1012,6 +1036,7 @@ function page(site) {
     <div class="eyebrow">avalanche <b>p-chain</b> \xB7 validators</div>
     <h1>the validators</h1>
     <div class="tagline">Who secures Avalanche. Live from the P-Chain — every primary-network validator, what they stake, what they earn, and the health of the staking set. No connect. Just a read.</div>
+    <p class="primer">Validators are the computers that run Avalanche. They lock up AVAX (their stake) and earn rewards for staying online. Delegating means adding your AVAX to a validator’s stake and sharing its rewards, minus its fee.</p>
   </div>
 
   <section>
@@ -1061,12 +1086,13 @@ function page(site) {
     <div class="check-row" style="margin-bottom:16px">
       <input id="q" type="text" spellcheck="false" autocomplete="off" placeholder="filter by NodeID…" aria-label="Filter validators">
     </div>
+    <div class="swipe">swipe the table sideways for uptime, apr and end date →</div>
     <div class="tablewrap"><table class="vtable">
       <thead><tr>
         <th scope="col">Node</th>
         <th scope="col" data-sort="stake" class="act">Stake</th>
         <th scope="col" data-sort="delegated">Delegated</th>
-        <th scope="col" data-sort="delegators">Delegs</th>
+        <th scope="col" data-sort="delegators">Delegators</th>
         <th scope="col" data-sort="uptime">Uptime</th>
         <th scope="col" data-sort="apr">Est APR</th>
         <th scope="col" data-sort="remaining">Ends</th>
@@ -1139,7 +1165,7 @@ function page(site) {
   function pct(f,d){ if(f==null||!isFinite(f)) return "—"; return nf(f*100,d==null?1:d)+"%"; }
   function shortNode(id){ id=String(id||""); return id.length>20? id.slice(0,13)+"…"+id.slice(-4): id; }
   function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-  function cell(k,v,red){ return '<div class="cell"><div class="k">'+k+'</div><div class="v'+(red?" red":"")+'">'+v+'</div></div>'; }
+  function cell(k,v,red,g){ return '<div class="cell"><div class="k">'+k+'</div><div class="v'+(red?" red":"")+'">'+v+'</div>'+(g?'<div class="g">'+g+'</div>':"")+'</div>'; }
   var SK_STATS="<div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div><div class=\\"cell\\"><span class=\\"sk k\\"></span><span class=\\"sk v\\"></span></div>", SK_ROWS="<tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr><tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr><tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr><tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr><tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr><tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr><tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr><tr class=\\"skr\\"><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td><td><span class=\\"sk\\"></span></td></tr>";
   var SK_CARD='<div class="vcard sk-card"><div class="vc-head"><div class="vc-pfp"></div><div class="vc-id"><span class="sk"></span><span class="sk s"></span></div></div>'+
     '<div class="vc-badges"><span class="sk"></span><span class="sk"></span><span class="sk"></span></div>'+
@@ -1160,14 +1186,14 @@ function page(site) {
     if(!s){ $("stats").innerHTML=""; return; }
     var stakedUsd=usd(s.totalStaked), activeUsd=usd(s.totalActive);
     var h="";
-    h+=cell("total staked", nf(s.totalStaked)+' <small>AVAX'+(stakedUsd?" \xB7 "+stakedUsd:"")+'</small>', true);
+    h+=cell("validator stake", nf(s.totalStaked)+' <small>AVAX'+(stakedUsd?" \xB7 "+stakedUsd:"")+'</small>', true, "locked by the validators themselves");
     h+=cell("validators", nf(s.validatorCount)+' <small>'+nf(s.connectedCount)+' connected</small>');
     h+=cell("delegators", nf(s.delegatorCount));
-    h+=cell("delegated", nf(s.totalDelegated)+' <small>AVAX</small>');
-    h+=cell("staking ratio", s.stakingRatio!=null?pct(s.stakingRatio,1):"—", true);
+    h+=cell("delegated", nf(s.totalDelegated)+' <small>AVAX</small>', false, "added by delegators");
+    h+=cell("staking ratio", s.stakingRatio!=null?pct(s.stakingRatio,1):"—", true, "share of all avax that is staked");
     h+=cell("est. staking apr", s.estApr!=null?pct(s.estApr,2):"—");
     h+=cell("avg uptime", s.avgUptime!=null?pct(s.avgUptime,2):"—");
-    h+=cell("total active stake", nf(s.totalActive)+' <small>AVAX'+(activeUsd?" \xB7 "+activeUsd:"")+'</small>');
+    h+=cell("total stake", nf(s.totalActive)+' <small>AVAX'+(activeUsd?" \xB7 "+activeUsd:"")+'</small>', false, "validator stake + delegated");
     h+=cell("largest validator", nf(s.maxStake)+' <small>AVAX</small>');
     $("stats").innerHTML=h;
   }
