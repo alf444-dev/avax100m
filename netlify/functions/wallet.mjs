@@ -171,6 +171,11 @@ ${w.claimed ? "" : '<meta name="robots" content="noindex,follow">'}
 body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6}
 a{color:var(--ink)}
 ::selection{background:var(--red);color:#000}
+/* the parts the browser draws: caret, native controls, scrollbars, underlines */
+html{color-scheme:dark;scrollbar-color:var(--faint) var(--bg);scrollbar-width:thin;accent-color:var(--red);caret-color:var(--red)}
+a{text-underline-offset:.22em;text-decoration-thickness:1px}
+h1,h2,h3{text-wrap:balance}p{text-wrap:pretty}
+button:active,.btn:active{transform:translateY(1px)}
 .wrap{max-width:900px;margin:0 auto;padding:0 20px}
 header{border-bottom:1px solid var(--faint)}
 .hbar{display:flex;justify-content:space-between;align-items:center;height:52px}

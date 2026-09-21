@@ -34,14 +34,16 @@ a{color:inherit;text-decoration:none}
 
 .split{display:flex;height:100dvh;min-height:580px}
 .pane{flex:1;position:relative;display:flex;flex-direction:column;justify-content:center;align-items:center;
-  text-align:center;padding:48px 28px;outline:none;transition:background .18s ease,color .18s ease}
+  text-align:center;padding:48px 28px;outline:none;overflow:hidden}
+.pane>*{position:relative;z-index:1}
 .pane.c{border-right:1px solid var(--faint)}
-.eyebrow{font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--dim);margin-bottom:22px}
 .big{font-size:clamp(42px,7vw,92px);line-height:.96;letter-spacing:-.01em;font-weight:700}
 .c .big{color:var(--red)}
 .p .big{color:var(--ink)}
-.desc{margin-top:22px;color:var(--dim);font-size:13px;letter-spacing:.04em;max-width:320px;line-height:1.7}
-.pulse{margin-top:26px;min-height:18px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);
+.desc{margin-top:22px;color:var(--dim);font-size:13px;letter-spacing:.04em;line-height:1.7}
+.desc span{display:block;white-space:nowrap}
+/* both doors reserve the same two pulse rows, so the two titles sit on one baseline */
+.pulse{margin-top:26px;min-height:50px;align-content:flex-start;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);
   display:flex;gap:14px;justify-content:center;flex-wrap:wrap;opacity:0;transition:opacity .5s ease}
 .pulse.on{opacity:1}
 .pulse b{font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
@@ -50,14 +52,21 @@ a{color:inherit;text-decoration:none}
 .pulse .mv i{font-style:normal}
 .pulse .live{display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;vertical-align:middle;margin-right:6px;animation:blink 2.2s ease-in-out infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
-@media(prefers-reduced-motion:reduce){.pulse .live{animation:none}.pane,.enter{transition:none}}
+@media(prefers-reduced-motion:reduce){.pulse .live{animation:none}.pane::before,.pane *,.enter,.enter i,.brand,.foot,.brand svg path{transition:none!important}}
 .enter{margin-top:36px;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);
-  border:1px solid var(--faint);padding:11px 20px;display:inline-block;transition:border-color .18s,color .18s}
+  border:1px solid var(--faint);padding:11px 20px;display:inline-block}
+.enter i{font-style:normal;display:inline-block;transition:transform .32s cubic-bezier(.16,1,.3,1)}
 .pane:hover .enter,.pane:focus-visible .enter{border-color:currentColor;color:currentColor}
+.pane:hover .enter i,.pane:focus-visible .enter i{transform:translateX(5px)}
 
-/* hover / focus washes — each door lights up in its own colour */
-.pane.c:hover,.pane.c:focus-visible{background:var(--red)}
-.pane.p:hover,.pane.p:focus-visible{background:var(--ink)}
+/* the one authored moment: each door floods with its own colour from the floor up,
+   and the type flips to black as the colour passes it */
+.pane::before{content:"";position:absolute;inset:0;z-index:0;transform:scaleY(0);transform-origin:50% 100%;
+  transition:transform .34s cubic-bezier(.16,1,.3,1)}
+.pane.c::before{background:var(--red)}
+.pane.p::before{background:var(--ink)}
+.pane:hover::before,.pane:focus-visible::before,.pane:active::before{transform:scaleY(1)}
+.pane *{transition:color .16s ease .05s,border-color .16s ease .05s}
 .pane.c:hover *,.pane.c:focus-visible *,.pane.p:hover *,.pane.p:focus-visible *{color:#0a0a0a!important;border-color:#0a0a0a!important}
 
 /* brand + footer float above both panes and stay legible over any wash */
@@ -68,12 +77,30 @@ a{color:inherit;text-decoration:none}
 .foot{position:fixed;bottom:18px;left:0;right:0;text-align:center;font-size:10px;letter-spacing:.18em;
   text-transform:uppercase;z-index:5;pointer-events:none;mix-blend-mode:difference;color:#fff}
 
+/* blend-mode difference turns white into cyan over the red door. Where :has() exists, knock the
+   brand and footer out instead: each half takes the colour that reads on the door beneath it. */
+@property --l{syntax:"<color>";inherits:true;initial-value:#fff}
+@property --r{syntax:"<color>";inherits:true;initial-value:#fff}
+@supports selector(:has(a)){
+  .brand,.foot{mix-blend-mode:normal;color:transparent;transition:--l .16s ease .05s,--r .16s ease .05s;
+    background:linear-gradient(90deg,var(--l) 50%,var(--r) 50%);-webkit-background-clip:text;background-clip:text}
+  .brand svg path{fill:var(--l);transition:fill .16s ease .05s}
+  body:has(.pane.c:hover,.pane.c:focus-visible){--l:#0a0a0a}
+  body:has(.pane.p:hover,.pane.p:focus-visible){--r:#0a0a0a}
+}
+
 @media(max-width:720px){
+  /* stacked doors: the brand sits on the c-chain door, the footer on the p-chain door */
+  body:has(.pane.c:hover,.pane.c:focus-visible) .brand{--r:#0a0a0a}
+  body:has(.pane.c:hover,.pane.c:focus-visible) .foot{--l:#fff}
+  body:has(.pane.p:hover,.pane.p:focus-visible) .foot{--l:#0a0a0a}
+  body:has(.pane.p:hover,.pane.p:focus-visible) .brand{--r:#fff}
   .split{flex-direction:column}
   .pane{padding:40px 24px}
   .pane.c{border-right:none;border-bottom:1px solid var(--faint)}
   .big{font-size:clamp(40px,13vw,72px)}
   .desc{margin-top:16px}
+  .pulse{min-height:18px}
   .enter{margin-top:26px}
 }
 </style>
@@ -84,18 +111,16 @@ a{color:inherit;text-decoration:none}
 
 <main class="split">
   <a class="pane c" href="/c-chain" aria-label="Enter the C-Chain: block 100,000,000 countdown, wallet history and realized P&L">
-    <div class="eyebrow">avalanche · c-chain</div>
     <div class="big">C&#8209;CHAIN</div>
-    <div class="desc">the countdown to block 100,000,000 · wallet history · realized P&amp;L · survivor cards</div>
+    <div class="desc"><span>the countdown to block 100,000,000</span><span>wallet history · realized P&amp;L</span><span>survivor cards</span></div>
     <div class="pulse" id="pulse-c" aria-live="off"></div>
-    <span class="enter">enter →</span>
+    <span class="enter">enter <i aria-hidden="true">→</i></span>
   </a>
   <a class="pane p" href="/p-chain" aria-label="Enter the P-Chain: live validators, staking and rewards">
-    <div class="eyebrow">avalanche · p-chain</div>
     <div class="big">P&#8209;CHAIN</div>
-    <div class="desc">who secures the network · every validator · staking, delegations &amp; rewards</div>
+    <div class="desc"><span>who secures avalanche</span><span>every validator</span><span>staking, delegations &amp; rewards</span></div>
     <div class="pulse" id="pulse-p" aria-live="off"></div>
-    <span class="enter">enter →</span>
+    <span class="enter">enter <i aria-hidden="true">→</i></span>
   </a>
 </main>
 

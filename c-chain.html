@@ -44,6 +44,11 @@
   body{background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
   a{color:var(--ink)}
   ::selection{background:var(--red);color:#000}
+  /* the parts the browser draws: caret, native controls, scrollbars, underlines */
+  html{color-scheme:dark;scrollbar-color:var(--faint) var(--bg);scrollbar-width:thin;accent-color:var(--red);caret-color:var(--red)}
+  a{text-underline-offset:.22em;text-decoration-thickness:1px}
+  h1,h2,h3{text-wrap:balance}p{text-wrap:pretty}
+  button:active{transform:translateY(1px)}
 
   .wrap{max-width:1100px;margin:0 auto;padding:0 20px}
 
@@ -81,6 +86,9 @@
   .bar .fill{position:absolute;inset:1px auto 1px 1px;background:var(--red);width:0%;transition:width 1s linear}
   .bar-meta{display:flex;justify-content:space-between;margin-top:10px;font-size:11px;color:var(--dim);letter-spacing:.1em}
   .bar-meta .pct{color:var(--ink)}
+  /* narrow screens: the genesis date drops out so the three labels stop touching, and the
+     eyebrow breaks between its two phrases instead of leaving a dot hanging at the line end */
+  @media(max-width:560px){.bar-meta .gd,.eyebrow .sep{display:none}.eyebrow b{display:block}}
 
   .hero-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--faint);border:1px solid var(--faint);margin-top:44px}
   .stat{background:var(--bg);padding:18px 16px}
@@ -194,14 +202,14 @@
   <div class="wrap">
 
     <div class="hero">
-      <h1 class="eyebrow">avalanche c-chain mainnet · <b>approaching block 100,000,000</b></h1>
+      <h1 class="eyebrow">avalanche c-chain mainnet<span class="sep"> · </span><b>approaching block 100,000,000</b></h1>
       <div class="odo" id="odo" role="img" aria-label="current block height"></div>
       <div class="odo-label">current block height · <b id="remaining">—</b> blocks remaining</div>
 
       <div class="progress">
         <div class="bar"><div class="fill" id="fill"></div></div>
         <div class="bar-meta">
-          <span>BLOCK 0 · SEP 21 2020</span>
+          <span>BLOCK 0<span class="gd"> · SEP 21 2020</span></span>
           <span class="pct" id="pct">—%</span>
           <span>BLOCK 100,000,000</span>
         </div>
