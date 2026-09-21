@@ -1,5 +1,6 @@
 import { getStore } from "@netlify/blobs";
 import { internalHeaders } from "./lib/ratelimit.mjs";
+import { tierOf } from "./lib/wallet-next.mjs";
 // upstream reads are bounded so a hung provider rejects into the existing fallbacks
 const bounded = () => ({ signal: AbortSignal.timeout(8e3) });
 // constant-time-ish compare so a wrong key can't be timed character by character
@@ -173,10 +174,11 @@ var badges_default = async (req, context) => {
   const push = (id, tier, ev) => earned.push({ id, tier: tier || 0, ev });
   if (w.rank && w.rank[1] === "PERMAFROST")
     push("permafrost", 0, "first touch <b>" + w.dateStr.toLowerCase() + "</b>, block #" + w.blk.toLocaleString("en-US") + " \u2014 in the first " + w.earlyStr + ".");
-  if (w.pct >= 75)
-    push("furniture", w.pct >= 95 ? 3 : w.pct >= 90 ? 2 : 1, "survived <b>" + w.pct.toFixed(1) + "%</b> of mainnet's existence.");
-  if (w.txc !== null && w.txc >= 1e3)
-    push("thousand", w.txc >= 1e4 ? 3 : w.txc >= 5e3 ? 2 : 1, "<b>" + w.txc.toLocaleString("en-US") + "</b> transactions sent.");
+  // floors live in lib/wallet-next.mjs, shared with the profile page's "next up" strip
+  if (tierOf("furniture", w.pct))
+    push("furniture", tierOf("furniture", w.pct), "survived <b>" + w.pct.toFixed(1) + "%</b> of mainnet's existence.");
+  if (w.txc !== null && tierOf("thousand", w.txc))
+    push("thousand", tierOf("thousand", w.txc), "<b>" + w.txc.toLocaleString("en-US") + "</b> transactions sent.");
   const mvVal = w.mv && w.mv.val || "";
   if (/bridged in from ethereum/i.test(mvVal))
     push("immigrant", 0, "first touch was a <b>bridge in from ethereum</b>. came here on purpose.");

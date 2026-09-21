@@ -1,4 +1,5 @@
 import { getStore } from "@netlify/blobs";
+import { nextUpWallet } from "./lib/wallet-next.mjs";
 // src/lib.js
 var GENESIS = Date.UTC(2020, 8, 21);
 var ERAS = [
@@ -129,6 +130,18 @@ async function fetchWallet(addr) {
   return { addr, ts, blk, days, pct, era: eraFor(ts), rank: rankFor(days), mv, txc, earlyStr, dateStr, claimed: await claimedP };
 }
 
+// "next up": the rank and tiered badges this wallet is closest to, same strip as the validator card
+var NEXT_NAMES = { furniture: "mainnet furniture", thousand: "thousand club" };
+function nextStrip(w) {
+  const next = nextUpWallet({ ts: w.ts, txc: w.txc, ranks: RANKS });
+  if (!next.length) return "";
+  const roman = ["", "i", "ii", "iii"];
+  return '<div class="next" aria-label="next up">' + next.map((n) => '<div class="n"><div class="nk"><span>' + (n.kind === "rank" ? "next rank" : "next up") + '</span><b>'
+    + esc(n.kind === "rank" ? n.name : NEXT_NAMES[n.id] + " " + roman[n.tier]) + '</b></div>'
+    + '<div class="nb"><span style="width:' + (n.frac * 100).toFixed(1) + '%"></span></div>'
+    + '<div class="nv"><b>' + esc(n.label) + '</b> \xB7 ' + Math.min(99, Math.round(n.frac * 100)) + '% there</div></div>').join("") + '</div>';
+}
+
 // src/wallet.js
 var esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 function page(w, site) {
@@ -238,6 +251,15 @@ input:focus-visible,textarea:focus-visible,.btn:focus-visible,#copy-addr:focus-v
 .btn.primary{background:var(--red);border-color:var(--red);color:#000;font-weight:700}
 .btn.primary:hover{background:var(--ink);border-color:var(--ink)}
 section{padding:44px 0;border-bottom:1px solid var(--faint)}
+.next{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:1px;background:var(--faint);border:1px solid var(--faint);margin-top:18px}
+.next .n{background:var(--bg);padding:10px 14px;min-width:0}
+.next .nk{font-size:10px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;display:flex;justify-content:space-between;gap:8px}
+.next .nk b{color:var(--ink);font-weight:700;letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.next .nb{height:4px;background:var(--faint);margin:7px 0 6px}
+.next .nb span{display:block;height:100%;background:var(--red)}
+.next .nv{font-size:10px;color:var(--dim);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.next .nv b{color:var(--ink)}
+@media(max-width:640px){.next{grid-auto-flow:row}}
 h2{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--red);font-weight:700;margin-bottom:22px}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--faint);border:1px solid var(--faint)}
 @media(max-width:760px){.grid{grid-template-columns:repeat(2,1fr)}}
@@ -303,6 +325,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     </div>
   </div>
 
+  ${nextStrip(w)}
   <div id="ticker" style="display:none;border:1px solid var(--faint);padding:11px 16px;margin-top:18px;font-size:11px;color:var(--dim);letter-spacing:.08em" aria-live="off"><span style="color:var(--red)">\u25B8</span> <span id="ticker-t" style="transition:opacity .45s ease"></span></div>
 
 
