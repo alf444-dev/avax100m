@@ -239,6 +239,18 @@ async function buildNode(snap, key) {
   };
 }
 
+// Shared by every page with badge tiles: a tooltip near the screen edge is nudged back inside it.
+var TIPFIT = `<script>
+(function(){
+function fitTip(t){ var tip=t&&t.querySelector&&t.querySelector(".tip"); if(!tip) return; tip.style.marginLeft="";
+  var r=tip.getBoundingClientRect(), vw=document.documentElement.clientWidth, pad=8, dx=0;
+  if(r.right>vw-pad) dx=vw-pad-r.right; if(r.left+dx<pad) dx=pad-r.left; if(dx) tip.style.marginLeft=Math.round(dx)+"px"; }
+function tipHost(e){ var n=e.target; while(n&&n!==document){ if(n.classList&&n.classList.contains("btile")) return n; n=n.parentNode; } return null; }
+document.addEventListener("mouseover",function(e){ fitTip(tipHost(e)); });
+document.addEventListener("focusin",function(e){ fitTip(tipHost(e)); });
+})();
+</script>`;
+
 // Shared stylesheet for the /p-chain page and the /v/ profile page (one source).
 var STYLE = `:root{--bg:#0a0a0a;--ink:#f2f2f2;--dim:#7a7a7a;--faint:#2a2a2a;--red:#e92733;
 --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace}
@@ -677,6 +689,7 @@ function profilePage(nd, px, site) {
   };
 })();
 </script>
+${TIPFIT}
 </body>
 </html>`;
 }
@@ -777,6 +790,7 @@ function cohortPage(c, site) {
   <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> \xB7 <a href="${site}/p-chain">validators</a> \xB7 data: avalanche p-chain rpc + data api \xB7 unofficial community page</span>
 </div></footer>
 <style>.catgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}@media(max-width:640px){.catgrid{grid-template-columns:1fr;gap:28px}}.clist{list-style:none;counter-reset:c}.clist li{counter-increment:c;padding:7px 0;border-bottom:1px solid var(--faint);font-size:13px}.clist li::before{content:counter(c);color:var(--dim);margin-right:10px}.clist a{color:var(--ink)}.clist a:hover{color:var(--red)}.clist .dim{color:var(--dim);font-size:11px}.empty{color:var(--dim);font-size:12px;letter-spacing:.04em}.vtable td.node a{color:var(--ink)}.vtable td.node a:hover{color:var(--red)}</style>
+${TIPFIT}
 </body>
 </html>`;
 }
@@ -953,6 +967,7 @@ function comparePage(A, B, px, site) {
   $("cmp-go").onclick=go; $("cmp-id").addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); go(); } });
 })();
 </script>
+${TIPFIT}
 </body>
 </html>`;
 }
@@ -1446,6 +1461,7 @@ function page(site) {
   loadMovers(0);
 })();
 </script>
+${TIPFIT}
 </body>
 </html>`;
 }

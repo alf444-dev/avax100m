@@ -422,6 +422,13 @@ var RANK=D.rank, ERA=D.era;
 var SITE=${JSON.stringify(site)};
 var PAGE=SITE+"/w/"+D.addr;
 
+/* a badge tooltip near the screen edge is nudged back inside it */
+function fitTip(t){ var tip=t&&t.querySelector&&t.querySelector(".tip"); if(!tip) return; tip.style.marginLeft="";
+  var r=tip.getBoundingClientRect(), vw=document.documentElement.clientWidth, pad=8, dx=0;
+  if(r.right>vw-pad) dx=vw-pad-r.right; if(r.left+dx<pad) dx=pad-r.left; if(dx) tip.style.marginLeft=Math.round(dx)+"px"; }
+function tipHost(e){ var n=e.target; while(n&&n!==document){ if(n.classList&&n.classList.contains("btile")) return n; n=n.parentNode; } return null; }
+document.addEventListener("mouseover",function(e){ fitTip(tipHost(e)); });
+document.addEventListener("focusin",function(e){ fitTip(tipHost(e)); });
 document.getElementById("copy-addr").addEventListener("click",function(){cp(D.addr,this);});
 document.getElementById("copy-addr").addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();cp(D.addr,this);}});
 document.getElementById("copy-link").addEventListener("click",function(){cp(PAGE,this);});
@@ -507,9 +514,10 @@ function loadPnl(force){
   if(!p || !p.available){ note.textContent="trade history sync coming soon."; pnlDash(); return; }
   var s=p.stats||{};
   renderPnl(s);
-  if(s.partial && s.quality && s.quality.retryable && pnlTries<3){
+  /* a cached partial result schedules no retry, so it must not claim to be digging */
+  if(s.partial && s.quality && s.quality.retryable && pnlTries<3 && !p.cached){
     note.textContent="still digging through your history\u2026";
-    if(!p.cached){ pnlTries++; setTimeout(function(){loadPnl(true);},3000); }
+    pnlTries++; setTimeout(function(){loadPnl(true);},3000);
     return;
   }
   if(s.partial){ note.textContent=s.quality&&s.quality.ledgerComplete===false?"partial provider coverage \u2014 excluded or unpriced assets are not counted.":"core p&l is ready; optional token stories are still syncing."; return; }
@@ -687,7 +695,8 @@ function applyTheme(t){
   redrawCard();
 }
 function claimInfo(){
-  fetch(SITE+"/api/claim?addr="+D.addr+"&info=1&view=1").then(function(r){return r.json();}).then(function(c){
+  var seen=1; try{ var vk="v:"+D.addr, today=new Date().toISOString().slice(0,10); if(localStorage.getItem(vk)===today) seen=0; else localStorage.setItem(vk,today); }catch(e){}
+  fetch(SITE+"/api/claim?addr="+D.addr+"&info=1&view="+seen).then(function(r){return r.json();}).then(function(c){
     CLAIMED=!!(c&&c.claimed);
     updDeeper(null);
     var pf=[];

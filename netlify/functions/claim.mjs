@@ -68,14 +68,16 @@ var claim_default = async (req) => {
       } catch {
       }
       let views = null;
-      if (c && url.searchParams.get("view") === "1") {
+      const viewParam = url.searchParams.get("view");
+      if (c && (viewParam === "1" || viewParam === "0")) {
         try {
           const wk = Math.floor(Date.now() / 6048e5);
           let v = await store.get("v/" + addr, { type: "json" }).catch(() => null);
           if (!v || v.w !== wk) v = { w: wk, n: 0 };
-          v.n++;
+          // view=0 reads the count without adding to it (the page already counted this visitor today)
+          if (viewParam === "1") v.n++;
           views = v.n;
-          await store.set("v/" + addr, JSON.stringify(v)).catch(() => {
+          if (viewParam === "1") await store.set("v/" + addr, JSON.stringify(v)).catch(() => {
           });
         } catch {
         }

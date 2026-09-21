@@ -93,7 +93,7 @@
   .hero-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--faint);border:1px solid var(--faint);margin-top:44px}
   .stat{background:var(--bg);padding:18px 16px}
   .stat .k{font-size:10px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
-  .stat .v{font-size:20px;font-weight:700;margin-top:6px;word-break:break-all}
+  .stat .v{font-size:20px;font-weight:700;margin-top:6px;overflow-wrap:anywhere}
   .stat .v small{font-size:11px;color:var(--dim);font-weight:400}
   @media(max-width:640px){.hero-grid{grid-template-columns:1fr}}
 
@@ -121,7 +121,7 @@
   .r-rows{border-top:1px solid var(--faint)}
   .r-row{display:flex;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--faint);font-size:13px}
   .r-row .k{color:var(--dim);letter-spacing:.08em;text-transform:uppercase;font-size:11px;padding-top:2px}
-  .r-row .v{text-align:right;word-break:break-all}
+  .r-row .v{text-align:right;overflow-wrap:anywhere}
   .r-row .v.big{font-size:18px;font-weight:700;color:var(--red)}
   #card{width:100%;border:1px solid var(--faint);display:block}
   .card-actions{display:flex;gap:10px;margin-top:12px}
@@ -326,7 +326,7 @@
         </div>
         <div class="tl-item">
           <div class="tl-date">2022</div>
-          <div class="tl-title">The winter</div>
+          <div class="tl-title">The long winter</div>
           <div class="tl-body">The cycle unwinds. Banff ships elastic subnets anyway. Blocks keep coming.</div>
         </div>
         <div class="tl-item red">
@@ -800,7 +800,7 @@
     var earlyStr=(early<0.01?"<0.01":early<1?early.toFixed(2):early.toFixed(1))+"% of all blocks";
     var era=eraFor(ts);
     var rank=rankFor(days);
-    var dateStr = d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}).toUpperCase();
+    var dateStr = d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"}).toUpperCase(); // UTC, same day the profile page shows
 
     document.getElementById("r-rank").textContent = rank[1];
     document.getElementById("r-date").textContent = dateStr;
