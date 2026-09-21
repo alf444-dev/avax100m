@@ -130,6 +130,9 @@ async function fetchWallet(addr) {
   return { addr, ts, blk, days, pct, era: eraFor(ts), rank: rankFor(days), mv, txc, earlyStr, dateStr, claimed: await claimedP };
 }
 
+// 1 = newest rank, RANKS.length = oldest
+function rankPos(name) { const i = RANKS.findIndex((r) => r[1] === name); return i < 0 ? 1 : RANKS.length - i; }
+
 // "next up": the rank and tiered badges this wallet is closest to, same strip as the validator card
 var NEXT_NAMES = { furniture: "mainnet furniture", thousand: "thousand club" };
 function nextStrip(w) {
@@ -202,6 +205,10 @@ header{border-bottom:1px solid var(--faint)}
 .eyebrow{font-size:11px;letter-spacing:.24em;color:var(--dim);text-transform:uppercase;margin-bottom:14px}
 h1{font-size:clamp(44px,9vw,84px);line-height:1;color:var(--red);letter-spacing:-.01em}
 .tagline{color:var(--dim);margin-top:10px}
+.what{color:var(--dim);font-size:12px;line-height:1.7;letter-spacing:.02em;max-width:62ch;margin-top:16px}
+.what b{color:var(--ink);font-weight:700}
+.what a{color:var(--ink)}
+.cell .g{font-size:10px;color:var(--dim);letter-spacing:.04em;line-height:1.4;margin-top:4px}
 .addrline{margin-top:26px;font-size:12px;color:var(--dim);word-break:break-all;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .addrline .a{color:var(--ink)}
 .badges{display:flex;flex-wrap:wrap;gap:10px}
@@ -293,6 +300,7 @@ footer a:hover{color:var(--red);border-color:var(--red)}
     <div class="eyebrow">avalanche c-chain \xB7 wallet profile</div>
     <h1>${esc(w.rank[1])}</h1>
     <div class="tagline">${esc(w.rank[2])}</div>
+    <p class="what">the public history of one avalanche wallet: when it arrived, how long it has lasted, what its trades made or lost. read straight from the chain, nobody logged in to make this. <b>${esc(w.rank[1].toLowerCase())}</b> is rank ${rankPos(w.rank[1])} of ${RANKS.length}, by days on mainnet. <a href="#check">check your own ↓</a></p>
     <div id="proof" style="display:none;margin-top:14px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)"></div>
     <div id="status-line" style="display:none;margin-top:20px;font-size:15px;color:var(--ink);letter-spacing:.02em">\u201C<span id="status-text"></span>\u201D</div>
     <div id="avvy" style="display:none;margin-top:24px;font-size:20px;font-weight:700;color:var(--ink);letter-spacing:.02em"></div>
@@ -346,11 +354,12 @@ footer a:hover{color:var(--red);border-color:var(--red)}
 
   <section>
     <h2>realized p&amp;l</h2>
+    <div class="note" style="margin:0 0 16px">profit and loss on tokens this wallet actually sold. tokens it still holds are not counted. cost basis: first in, first out.</div>
     <div class="grid" id="pnl-grid">
-      <div class="cell"><div class="k">biggest w</div><div class="v" id="pnl-w"><small style="color:var(--dim);font-weight:400">scanning\u2026</small></div></div>
-      <div class="cell"><div class="k">biggest l</div><div class="v" id="pnl-l"><small style="color:var(--dim);font-weight:400">scanning\u2026</small></div></div>
-      <div class="cell"><div class="k">biggest roundtrip</div><div class="v" id="pnl-rt"><small style="color:var(--dim);font-weight:400">scanning\u2026</small></div></div>
-      <div class="cell"><div class="k">sold too early</div><div class="v" id="pnl-ste"><small style="color:var(--dim);font-weight:400">scanning\u2026</small></div></div>
+      <div class="cell"><div class="k">biggest win</div><div class="v" id="pnl-w"><small style="color:var(--dim);font-weight:400">scanning\u2026</small></div></div>
+      <div class="cell"><div class="k">biggest loss</div><div class="v" id="pnl-l"><small style="color:var(--dim);font-weight:400">scanning\u2026</small></div></div>
+      <div class="cell"><div class="k">biggest roundtrip</div><div class="g">was up, gave it all back</div><div class="v" id="pnl-rt"><small style="color:var(--dim);font-weight:400">scanning\u2026</small></div></div>
+      <div class="cell"><div class="k">sold too early</div><div class="g">what it would be worth if held</div><div class="v" id="pnl-ste"><small style="color:var(--dim);font-weight:400">scanning\u2026</small></div></div>
     </div>
     <div class="note" id="pnl-summary" style="display:none;font-size:13px;color:var(--ink)"></div>
     <div class="note" id="pnl-note">syncing trade history\u2026</div>
@@ -407,10 +416,19 @@ footer a:hover{color:var(--red);border-color:var(--red)}
   </section>
   </div>
 
+  <section id="check">
+    <h2>check a wallet</h2>
+    <div class="note" style="margin:0 0 14px">every avalanche wallet has a page like this one. paste yours, or anyone’s. nothing to connect, nothing to sign.</div>
+    <form id="go-form" style="display:flex;gap:10px;max-width:640px">
+      <input id="go-addr" aria-label="wallet address or .avax name" spellcheck="false" autocomplete="off" placeholder="0x… or name.avax" style="flex:1;min-width:0;background:var(--bg);border:1px solid var(--faint);color:var(--ink);font-family:var(--mono);font-size:13px;padding:9px 11px">
+      <button class="btn primary" type="submit" id="go-btn">check</button>
+    </form>
+    <div class="note" id="go-msg" role="status"></div>
+  </section>
 </main>
 
 <footer><div class="wrap frow">
-  <span>no connect \xB7 no signature \xB7 computed live from the chain</span>
+  <span>viewing needs no wallet \xB7 claiming is one optional signature, never a transaction \xB7 computed live from the chain</span>
   <span>made by <a href="https://x.com/Alf444_" target="_blank" rel="noopener">@Alf444_</a> \xB7 <a href="${site}">avax100m.xyz</a></span>
 </div></footer>
 
@@ -422,6 +440,19 @@ var RANK=D.rank, ERA=D.era;
 var SITE=${JSON.stringify(site)};
 var PAGE=SITE+"/w/"+D.addr;
 
+/* check another wallet without leaving: a 0x address opens its page, a .avax name resolves first */
+document.getElementById("go-form").addEventListener("submit",function(e){
+  e.preventDefault();
+  var v=(document.getElementById("go-addr").value||"").trim().toLowerCase(), msg=document.getElementById("go-msg"), btn=document.getElementById("go-btn");
+  var hex=v.length===42&&v.slice(0,2)==="0x"&&!/[^0-9a-f]/.test(v.slice(2));
+  if(hex){ location.href=SITE+"/w/"+v; return; }
+  if(v.slice(-5)!==".avax"){ msg.textContent="that\u2019s not a c-chain address. 0x + 40 hex characters. (.avax names work too)"; return; }
+  btn.disabled=true; msg.textContent="resolving "+v+"\u2026";
+  fetch(SITE+"/api/resolve?name="+encodeURIComponent(v)).then(function(r){return r.json();}).then(function(j){
+    if(j&&j.addr){ location.href=SITE+"/w/"+String(j.addr).toLowerCase(); return; }
+    btn.disabled=false; msg.textContent="couldn\u2019t resolve "+v+". try the 0x address.";
+  }).catch(function(){ btn.disabled=false; msg.textContent="couldn\u2019t resolve "+v+". try the 0x address."; });
+});
 /* a badge tooltip near the screen edge is nudged back inside it */
 function fitTip(t){ var tip=t&&t.querySelector&&t.querySelector(".tip"); if(!tip) return; tip.style.marginLeft="";
   var r=tip.getBoundingClientRect(), vw=document.documentElement.clientWidth, pad=8, dx=0;
@@ -507,11 +538,11 @@ function loadPnl(force){
  fetch(SITE+"/api/pnl?addr="+D.addr+(force?"&refresh=1":"")).then(function(r){return r.json();}).then(function(p){
   var note=document.getElementById("pnl-note");
   if(p && p.pending && pnlBootTries<4){
-    pnlBootTries++; note.textContent="building your fifo ledger\u2026";
+    pnlBootTries++; note.textContent="reading every trade this wallet made\u2026 can take ~30s";
     setTimeout(function(){loadPnl(false);},Math.max(2000,Math.min(15000,(p.retryAfter||5)*1000)));
     return;
   }
-  if(!p || !p.available){ note.textContent="trade history sync coming soon."; pnlDash(); return; }
+  if(!p || !p.available){ note.textContent="couldn\u2019t load trade history right now. reload to retry."; pnlDash(); return; }
   var s=p.stats||{};
   renderPnl(s);
   /* a cached partial result schedules no retry, so it must not claim to be digging */
@@ -526,7 +557,7 @@ function loadPnl(force){
     fetch(SITE+"/api/pnl?addr="+D.addr+"&refresh=1").then(function(r){return r.json();})
       .then(function(p2){ if(p2 && p2.available){ renderPnl(p2.stats); updDeeper(p2.stats); } }).catch(function(){});
   }
- }).catch(function(){ document.getElementById("pnl-note").textContent="trade history sync coming soon."; pnlDash(); });
+ }).catch(function(){ document.getElementById("pnl-note").textContent="couldn\u2019t load trade history right now. reload to retry."; pnlDash(); });
 }
 loadPnl(false);
 (function(){
